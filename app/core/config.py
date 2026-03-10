@@ -1,5 +1,6 @@
 from pydantic import Field, MySQLDsn, BaseModel
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Database(BaseModel):
     url: MySQLDsn = Field(alias="DATABASE_URL")
@@ -9,4 +10,10 @@ class Database(BaseModel):
 
 
 class Settings(BaseSettings):
-    database: Database = Field(alias="DATABASE_URL")
+    model_config = SettingsConfigDict(env_nested_delimiter="_")
+
+    database: Database
+    debug: bool = Field(False, alias="DEBUG")
+
+
+settings = Settings()

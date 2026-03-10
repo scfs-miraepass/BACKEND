@@ -5,6 +5,8 @@ description = "순천미래과학고등학교 포인트 시스템, 미래 패스
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "aiomysql>=0.3.2",
     "fastapi[standard]>=0.135.1",
     "pydantic-settings>=2.13.1",
+    "sqlalchemy[asyncio]>=2.0.48",
 ]
