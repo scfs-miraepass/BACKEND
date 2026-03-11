@@ -10,9 +10,14 @@ class Database(BaseModel):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_nested_delimiter="_")
+    model_config = SettingsConfigDict(
+        case_sensitive=True,
+        env_nested_delimiter="_",
+        env_file='.env',
+        env_file_encoding='utf-8'
+    )
 
-    database: Database
+    database: Database = Field(alias="DATABASE")
     debug: bool = Field(False, alias="DEBUG")
 
 
