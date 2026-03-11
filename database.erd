@@ -4,7 +4,7 @@
   "settings": {
     "width": 2000,
     "height": 2000,
-    "scrollTop": -44,
+    "scrollTop": -33,
     "scrollLeft": 0,
     "zoomLevel": 1,
     "show": 511,
@@ -129,8 +129,8 @@
         "name": "type",
         "comment": "유저의 종류",
         "dataType": "ENUM('student', 'teacher', 'service')",
-        "default": "false",
-        "options": 13,
+        "default": "",
+        "options": 8,
         "ui": {
           "keys": 0,
           "widthName": 60,
@@ -139,7 +139,7 @@
           "widthDefault": 60
         },
         "meta": {
-          "updateAt": 1773237338723,
+          "updateAt": 1773238077145,
           "createAt": 1773236748026
         }
       },
@@ -186,7 +186,7 @@
       "t6mVB7E7WL3B20lOYTmH5": {
         "id": "t6mVB7E7WL3B20lOYTmH5",
         "tableId": "DLNWwjkwB8XbcICxzGcsc",
-        "name": "class",
+        "name": "number",
         "comment": "반",
         "dataType": "INT",
         "default": "",
@@ -199,7 +199,7 @@
           "widthDefault": 60
         },
         "meta": {
-          "updateAt": 1773237118098,
+          "updateAt": 1773238236670,
           "createAt": 1773237087249
         }
       },
