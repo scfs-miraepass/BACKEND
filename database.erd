@@ -4,7 +4,7 @@
   "settings": {
     "width": 2000,
     "height": 2000,
-    "scrollTop": -66,
+    "scrollTop": -47,
     "scrollLeft": 0,
     "zoomLevel": 1,
     "show": 511,
@@ -66,15 +66,15 @@
           "xWSNHELvlQYiUb7fBBAUS"
         ],
         "ui": {
-          "x": 116,
-          "y": 200,
+          "x": -275,
+          "y": 205,
           "zIndex": 2,
           "widthName": 60,
           "widthComment": 105,
           "color": ""
         },
         "meta": {
-          "updateAt": 1773239563120,
+          "updateAt": 1773239787524,
           "createAt": 1773236725737
         }
       },
@@ -309,19 +309,19 @@
         "id": "xWSNHELvlQYiUb7fBBAUS",
         "tableId": "DLNWwjkwB8XbcICxzGcsc",
         "name": "password",
-        "comment": "계정 비밀번호, 해시처리",
+        "comment": "계정 비밀번호, 해시처리. NULL 일경우 비밀번호는 ID(학번) 이며. 비밀번호 설정 페이지으로 이동",
         "dataType": "VARCHAR",
         "default": "",
-        "options": 8,
+        "options": 0,
         "ui": {
           "keys": 0,
           "widthName": 60,
-          "widthComment": 131,
+          "widthComment": 513,
           "widthDataType": 60,
           "widthDefault": 60
         },
         "meta": {
-          "updateAt": 1773239611367,
+          "updateAt": 1773239785077,
           "createAt": 1773239563119
         }
       }
