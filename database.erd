@@ -1,0 +1,386 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dineug/erd-editor/main/json-schema/schema.json",
+  "version": "3.0.0",
+  "settings": {
+    "width": 2000,
+    "height": 2000,
+    "scrollTop": -44,
+    "scrollLeft": 0,
+    "zoomLevel": 1,
+    "show": 511,
+    "database": 4,
+    "databaseName": "",
+    "canvasType": "ERD",
+    "language": 1,
+    "tableNameCase": 4,
+    "columnNameCase": 2,
+    "bracketType": 1,
+    "relationshipDataTypeSync": true,
+    "relationshipOptimization": false,
+    "columnOrder": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32,
+      64
+    ],
+    "maxWidthComment": -1,
+    "ignoreSaveSettings": 0
+  },
+  "doc": {
+    "tableIds": [
+      "DLNWwjkwB8XbcICxzGcsc"
+    ],
+    "relationshipIds": [],
+    "indexIds": [],
+    "memoIds": [
+      "5odtM8nGtjP8IOUxziFz5"
+    ]
+  },
+  "collections": {
+    "tableEntities": {
+      "DLNWwjkwB8XbcICxzGcsc": {
+        "id": "DLNWwjkwB8XbcICxzGcsc",
+        "name": "User",
+        "comment": "학생과 교사 데이터",
+        "columnIds": [
+          "iCeYVjm98e6Eo2s2wFojJ",
+          "xJgQjfD3I-cSxgAT8uUC7",
+          "3cZwYaXonuEGYuvmS6WQu",
+          "KMspC1oJceMXws-XqDumZ",
+          "t6mVB7E7WL3B20lOYTmH5",
+          "0G53cHN1WQB0kSl37lOlu"
+        ],
+        "seqColumnIds": [
+          "iCeYVjm98e6Eo2s2wFojJ",
+          "xJgQjfD3I-cSxgAT8uUC7",
+          "3cZwYaXonuEGYuvmS6WQu",
+          "KMspC1oJceMXws-XqDumZ",
+          "t6mVB7E7WL3B20lOYTmH5",
+          "1gwgRUUSPDzK1AbxlB69Z",
+          "NMcHEKnA57HK8UE_qyaON",
+          "0G53cHN1WQB0kSl37lOlu"
+        ],
+        "ui": {
+          "x": 116,
+          "y": 200,
+          "zIndex": 2,
+          "widthName": 60,
+          "widthComment": 105,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1773237385859,
+          "createAt": 1773236725737
+        }
+      },
+      "R7qDnZKS-hKf434tA0Q1z": {
+        "id": "R7qDnZKS-hKf434tA0Q1z",
+        "name": "point",
+        "comment": "포인트",
+        "columnIds": [
+          "R0nX1O51oVqv3Pur0cNda",
+          "tcQOF9CtWItbYuH0cSyV5"
+        ],
+        "seqColumnIds": [
+          "R0nX1O51oVqv3Pur0cNda",
+          "tcQOF9CtWItbYuH0cSyV5"
+        ],
+        "ui": {
+          "x": 195,
+          "y": 544,
+          "zIndex": 137,
+          "widthName": 60,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1773237374739,
+          "createAt": 1773237127072
+        }
+      }
+    },
+    "tableColumnEntities": {
+      "iCeYVjm98e6Eo2s2wFojJ": {
+        "id": "iCeYVjm98e6Eo2s2wFojJ",
+        "tableId": "DLNWwjkwB8XbcICxzGcsc",
+        "name": "id",
+        "comment": "학생의 경우 학번 사용.",
+        "dataType": "INT",
+        "default": "",
+        "options": 13,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 122,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237316469,
+          "createAt": 1773236747779
+        }
+      },
+      "xJgQjfD3I-cSxgAT8uUC7": {
+        "id": "xJgQjfD3I-cSxgAT8uUC7",
+        "tableId": "DLNWwjkwB8XbcICxzGcsc",
+        "name": "type",
+        "comment": "유저의 종류",
+        "dataType": "ENUM('student', 'teacher', 'service')",
+        "default": "false",
+        "options": 13,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 65,
+          "widthDataType": 187,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237338723,
+          "createAt": 1773236748026
+        }
+      },
+      "3cZwYaXonuEGYuvmS6WQu": {
+        "id": "3cZwYaXonuEGYuvmS6WQu",
+        "tableId": "DLNWwjkwB8XbcICxzGcsc",
+        "name": "name",
+        "comment": "성명",
+        "dataType": "VARCHAR",
+        "default": "",
+        "options": 8,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237073810,
+          "createAt": 1773236872557
+        }
+      },
+      "KMspC1oJceMXws-XqDumZ": {
+        "id": "KMspC1oJceMXws-XqDumZ",
+        "tableId": "DLNWwjkwB8XbcICxzGcsc",
+        "name": "grade",
+        "comment": "학년",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237115011,
+          "createAt": 1773237076326
+        }
+      },
+      "t6mVB7E7WL3B20lOYTmH5": {
+        "id": "t6mVB7E7WL3B20lOYTmH5",
+        "tableId": "DLNWwjkwB8XbcICxzGcsc",
+        "name": "class",
+        "comment": "반",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237118098,
+          "createAt": 1773237087249
+        }
+      },
+      "1gwgRUUSPDzK1AbxlB69Z": {
+        "id": "1gwgRUUSPDzK1AbxlB69Z",
+        "tableId": "DLNWwjkwB8XbcICxzGcsc",
+        "name": "point",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 1,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237198240,
+          "createAt": 1773237153813
+        }
+      },
+      "R0nX1O51oVqv3Pur0cNda": {
+        "id": "R0nX1O51oVqv3Pur0cNda",
+        "tableId": "R7qDnZKS-hKf434tA0Q1z",
+        "name": "user_id",
+        "comment": "연결된 유저의 ID",
+        "dataType": "INT",
+        "default": "",
+        "options": 12,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 92,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237320167,
+          "createAt": 1773237155198
+        }
+      },
+      "NMcHEKnA57HK8UE_qyaON": {
+        "id": "NMcHEKnA57HK8UE_qyaON",
+        "tableId": "DLNWwjkwB8XbcICxzGcsc",
+        "name": "point",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 8,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237299109,
+          "createAt": 1773237299108
+        }
+      },
+      "tcQOF9CtWItbYuH0cSyV5": {
+        "id": "tcQOF9CtWItbYuH0cSyV5",
+        "tableId": "R7qDnZKS-hKf434tA0Q1z",
+        "name": "point",
+        "comment": "",
+        "dataType": "",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237377283,
+          "createAt": 1773237374739
+        }
+      },
+      "0G53cHN1WQB0kSl37lOlu": {
+        "id": "0G53cHN1WQB0kSl37lOlu",
+        "tableId": "DLNWwjkwB8XbcICxzGcsc",
+        "name": "point",
+        "comment": "소유하고 있는 포인트",
+        "dataType": "INT",
+        "default": "0",
+        "options": 8,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 117,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1773237399687,
+          "createAt": 1773237385859
+        }
+      }
+    },
+    "relationshipEntities": {
+      "yAdCu6zt2u5Q1R6ZCc5kA": {
+        "id": "yAdCu6zt2u5Q1R6ZCc5kA",
+        "identification": false,
+        "relationshipType": 8,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "DLNWwjkwB8XbcICxzGcsc",
+          "columnIds": [
+            "1gwgRUUSPDzK1AbxlB69Z"
+          ],
+          "x": 419.5,
+          "y": 400,
+          "direction": 8
+        },
+        "end": {
+          "tableId": "R7qDnZKS-hKf434tA0Q1z",
+          "columnIds": [
+            "R0nX1O51oVqv3Pur0cNda"
+          ],
+          "x": 420,
+          "y": 544,
+          "direction": 4
+        },
+        "meta": {
+          "updateAt": 1773237155198,
+          "createAt": 1773237155198
+        }
+      },
+      "R3Ni8c9nX4_wMvoYJjSOi": {
+        "id": "R3Ni8c9nX4_wMvoYJjSOi",
+        "identification": false,
+        "relationshipType": 2,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "DLNWwjkwB8XbcICxzGcsc",
+          "columnIds": [
+            "1gwgRUUSPDzK1AbxlB69Z"
+          ],
+          "x": 792,
+          "y": 200,
+          "direction": 4
+        },
+        "end": {
+          "tableId": "DLNWwjkwB8XbcICxzGcsc",
+          "columnIds": [
+            "NMcHEKnA57HK8UE_qyaON"
+          ],
+          "x": 812,
+          "y": 220,
+          "direction": 2
+        },
+        "meta": {
+          "updateAt": 1773237299109,
+          "createAt": 1773237299109
+        }
+      }
+    },
+    "indexEntities": {},
+    "indexColumnEntities": {},
+    "memoEntities": {
+      "5odtM8nGtjP8IOUxziFz5": {
+        "id": "5odtM8nGtjP8IOUxziFz5",
+        "value": "유저의 종류의 경우\n- student: 학생 (확인만 가능)\n- teacher: 교사 (지급만 가능)\n- service: 오프라인 사용처 (차감만 가능)",
+        "ui": {
+          "x": 735,
+          "y": 203,
+          "zIndex": 211,
+          "width": 224,
+          "height": 100,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1773237372863,
+          "createAt": 1773237283147
+        }
+      }
+    }
+  }
+}
