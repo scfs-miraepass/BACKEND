@@ -1,12 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, HTTPException, status, Response
 from pydantic import BaseModel, Field
 from sqlmodel import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from math import ceil
 
-
-from app.core.database import get_async_session
-from app.core.dependency import LoginDep
+from app.core import LoginDep, SessionDep
 from app.core.loggers import service_logger
 from app.schemas.response import ResponseModel, ErrorResponse
 from app.schemas import Users, UserType, PointHistory
@@ -96,7 +94,7 @@ async def _process_point_change(
 async def grant_points(
     operation: PointOperation,
     auth_data: LoginDep,
-    session: AsyncSession = Depends(get_async_session),
+    session: SessionDep,
 ):
     user, _ = auth_data
 
@@ -146,7 +144,7 @@ async def grant_points(
 async def deduct_points(
     operation: PointOperation,
     auth_data: LoginDep,
-    session: AsyncSession = Depends(get_async_session),
+    session: SessionDep,
 ):
     user, _ = auth_data
 
@@ -183,7 +181,7 @@ async def deduct_points(
 async def get_point_balance(
     target_user_id: int,
     auth_data: LoginDep,
-    session: AsyncSession = Depends(get_async_session),
+    session: SessionDep,
 ):
     query = select(Users.point).where(Users.id == target_user_id)
     result = await session.execute(query)
@@ -213,7 +211,7 @@ async def get_point_balance(
 async def point_history(
     response: Response,
     auth_data: LoginDep,
-    session: AsyncSession = Depends(get_async_session),
+    session: SessionDep,
     limit: int = 20,
     offset: int = 0,
 ):

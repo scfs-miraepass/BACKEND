@@ -1,12 +1,17 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from sqlalchemy import Column, DateTime, func
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Relationship
+
+if TYPE_CHECKING:
+    from .users import Users
 
 
 class PointHistory(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)  # autoincrement
-    user_id: int = Field(foreign_key="users.id", index=True)
+
+    user: "Users" = Relationship(back_populates="history")
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
 
     changed_amount: int = Field(description="변경된 포인트의 정도")
     reason: str = Field(description="이유")
