@@ -10,6 +10,7 @@ from .schemas.response import ErrorResponse
 from .core import settings
 from .core.loggers import global_logger
 from .core.database import database_init, database_close
+from .core.redis import redis
 
 
 @asynccontextmanager
@@ -24,10 +25,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await database_init()
     global_logger.info("Database Initialized.")
 
+    await redis.init()
+    global_logger.info("Redis Initialized.")
+
     yield
+
+    await redis.close()
+    global_logger.info("Redis Closed.")
 
     await database_close()
     global_logger.info("Database Closed.")
+
 
 
 app = FastAPI(lifespan=lifespan)

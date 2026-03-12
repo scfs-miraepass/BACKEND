@@ -175,6 +175,7 @@ def setup_library_loggers(debug: bool = False):
 
 # 전역 로거 인스턴스
 global_logger = get_logger("global", debug=settings.debug)
+redis_logger = get_logger("redis", debug=settings.debug)
 
 # 라이브러리 로거 설정 적용
 setup_library_loggers(debug=settings.debug)
