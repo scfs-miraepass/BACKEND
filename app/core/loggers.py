@@ -22,9 +22,7 @@ def _initialize_log_file(path: str):
     if not os.path.exists(path):
         try:
             with open(path, "w", encoding="utf-8") as f:
-                f.write(
-                    f"====== Log Initialized at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ======\n"
-                )
+                f.write(f"====== Log Initialized at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ======\n")
         except PermissionError:
             # 다른 프로세스가 이미 파일을 생성/사용 중인 경우 무시
             pass
@@ -91,7 +89,9 @@ class CustomFormatter(logging.Formatter):
         elif record.levelno == logging.CRITICAL:
             level_color = self.bold_red
 
-        log_fmt = f"%(asctime)s | {level_color}%(levelname)-8s{self.reset} | {self.cyan}%(name)-30s{self.reset} | %(message)s"
+        log_fmt = (
+            f"%(asctime)s | {level_color}%(levelname)-8s{self.reset} | {self.cyan}%(name)-30s{self.reset} | %(message)s"
+        )
 
         formatter = logging.Formatter(log_fmt, datefmt=self.date_fmt)
         return formatter.format(record)
@@ -176,6 +176,8 @@ def setup_library_loggers(debug: bool = False):
 # 전역 로거 인스턴스
 global_logger = get_logger("global", debug=settings.debug)
 redis_logger = get_logger("redis", debug=settings.debug)
+service_logger = get_logger("service", debug=settings.debug)
+
 
 # 라이브러리 로거 설정 적용
 setup_library_loggers(debug=settings.debug)
@@ -187,8 +189,6 @@ if not settings.debug:
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
-        global_logger.error(
-            "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
-        )
+        global_logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
     sys.excepthook = handle_exception
