@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlmodel import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from math import ceil
+
 
 from app.core.database import get_async_session
 from app.core.dependency import LoginDep
@@ -192,3 +194,46 @@ async def get_point_balance(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     return ResponseModel[int](success=True, data=point)
+
+
+@router.get(
+    "/history",
+    response_model=ResponseModel[list[PointHistory]],
+    responses={
+        200: {"description": "정상처리"},
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음",
+        },
+    },
+    status_code=status.HTTP_200_OK,
+    summary="포인트 기록",
+    description="현재 로그인한 자기자신의 포인트 기록을 조회합니다.",
+)
+async def point_history(
+    response: Response,
+    auth_data: LoginDep,
+    session: AsyncSession = Depends(get_async_session),
+    limit: int = 20,
+    offset: int = 0,
+):
+    user, _ = auth_data
+
+    query = select(func.count()).select_from(PointHistory).where(PointHistory.user_id == user.id)
+    result = await session.execute(query)
+    count = result.scalar() or 0
+
+    query = (
+        select(PointHistory)
+        .where(PointHistory.user_id == user.id)
+        .order_by(PointHistory.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await session.execute(query)
+    historys = list(result.scalars().all())
+
+    max_page = str(ceil(count / limit))
+    response.headers["X-MAX-PAGE"] = max_page
+
+    return ResponseModel[list[PointHistory]](success=True, data=historys)
