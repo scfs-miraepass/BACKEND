@@ -30,5 +30,5 @@ uv run alembic downgrade -1
 ---
 - Framework: FastAPI + Uvicorn
 - ORM: SQLAlchemy 2.0 (Async)
-- Database: MySQL 8.0
+- Database: MySQL 8.0, Redis
 - Package Management: [UV](https://github.com/astral-sh/uv)
