@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.core import LoginDep, SessionDep, settings
 from app.core.redis import redis
+from app.core.security import get_password_hash, verify_password
 from app.schemas.response import ErrorResponse, ResponseModel
 from app.schemas.users import User, Users
 
@@ -14,6 +15,11 @@ router = APIRouter(prefix="/auth", tags=["users", "auth"])
 class LoginForm(BaseModel):
     id: int
     password: str
+
+
+class ChangePasswordForm(BaseModel):
+    old_password: str
+    new_password: str
 
 
 def _set_session_cookie(response: Response, session_id: str):
@@ -51,7 +57,7 @@ async def login(
     user: Users | None = await session.get(Users, form.id)
 
     # 2. 유저 검증 (비밀번호 비교)
-    if not user or user.password != form.password:
+    if not user or not user.password or not verify_password(form.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -125,3 +131,41 @@ async def get_current_user(
     _set_session_cookie(response, session_id)
 
     return ResponseModel[User](success=True, data=user)
+
+
+@router.put(
+    "/password",
+    responses={
+        204: {"description": "비밀번호 변경 성공"},
+        400: {
+            "model": ErrorResponse,
+            "description": "기존 비밀번호가 일치하지 않음",
+        },
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음.",
+        },
+    },
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="비밀번호 변경",
+    description="로그인된 유저의 비밀번호를 변경합니다.",
+)
+async def change_password(form: ChangePasswordForm, auth_data: LoginDep, session: SessionDep):
+    user, session_id = auth_data
+
+    # 기존 비밀번호 확인. 비밀번호가 없을경우는 PASS
+    if (user.password is not None) and (not verify_password(form.old_password, user.password)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect old password",
+        )
+
+    # 새 비밀번호 해싱 및 저장
+    user.password = get_password_hash(form.new_password)
+    session.add(user)
+    await session.commit()
+
+    # 캐시 및 세션 삭제 (비밀번호 변경 시 모든 기기 로그아웃 유도)
+    # 참고: 모든 세션을 추적하는 별도의 Set이 없다면 현재 세션과 유저 캐시를 우선 삭제합니다.
+    await redis.delete(f"user:{user.id}")
+    await redis.delete(f"session:{session_id}")
