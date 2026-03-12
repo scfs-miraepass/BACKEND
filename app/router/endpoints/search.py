@@ -55,8 +55,6 @@ async def search_users(session: SessionDep, q: str):
         # cached_data는 이미 dict 형태의 리스트
         return ResponseModel(success=True, data=cached_data)
 
-    users = []
-
     # 1. 숫자만 있는 경우: ID(학번) 검색
     if q.isdigit():
         # 학번은 총 4자이므로 4자 미만일 경우 빈 결과 반환
