@@ -1,5 +1,6 @@
-from pydantic import Field, MySQLDsn, BaseModel, RedisDsn
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, MySQLDsn, BaseModel, RedisDsn, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict, NoDecode
+from typing import Annotated
 
 
 class Database(BaseModel):
@@ -19,7 +20,7 @@ class Session(BaseModel):
 
 
 class Service(BaseModel):
-    session: Session = Field(alias="SESSION")
+    session: Session = Field(Session(), alias="SESSION")
 
 
 class Settings(BaseSettings):
@@ -32,9 +33,17 @@ class Settings(BaseSettings):
 
     database: Database = Field(alias="DATABASE")
     redis: Redis = Field(alias="REDIS")
-    service: Service = Field(alias="SERVICE")
+    service: Service = Field(Service(), alias="SERVICE")
     debug: bool = Field(False, alias="DEBUG")
-    allow_origins: list[str] = Field(alias="ALLOWED_ORIGINS")
+    allow_origins: Annotated[list[str], NoDecode] = Field(alias="ALLOWED_ORIGINS")
+
+    @field_validator("allow_origins", mode="before")
+    @classmethod
+    def decode_allow_origins(cls, v):
+        if isinstance(v, str):
+            # 쉼표로 나누고 앞뒤 공백을 제거해요
+            return [item.strip() for item in v.split(",")]
+        return v
 
 
 settings = Settings()
