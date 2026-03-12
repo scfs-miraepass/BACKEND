@@ -17,13 +17,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_nested_delimiter="_",
-        env_file='.env',
-        env_file_encoding='utf-8'
+        env_file=".env",
+        env_file_encoding="utf-8",
     )
 
     database: Database = Field(alias="DATABASE")
     redis: Redis = Field(alias="REDIS")
     debug: bool = Field(False, alias="DEBUG")
+    allow_origins: list[str] = Field(alias="ALLOWED_ORIGINS")
 
 
 settings = Settings()
