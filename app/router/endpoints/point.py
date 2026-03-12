@@ -1,13 +1,15 @@
-from fastapi import APIRouter, HTTPException, status, Response
-from pydantic import BaseModel, Field
-from sqlmodel import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
 from math import ceil
+
+from fastapi import APIRouter, HTTPException, Response, status
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import func, select, col
 
 from app.core import LoginDep, SessionDep
 from app.core.loggers import service_logger
-from app.schemas.response import ResponseModel, ErrorResponse
-from app.schemas import Users, UserType, PointHistory
+from app.core.redis import redis
+from app.schemas import PointHistory, Users, UserType
+from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])
 
@@ -61,6 +63,12 @@ async def _process_point_change(
 
     await session.commit()
     await session.refresh(target_user)
+
+    # 캐시 무효화 (Invalidate Caches)
+    # 1. 유저 정보 캐시 삭제 (포인트 변경 반영을 위해)
+    await redis.delete(f"user:{target_user.id}")
+    # 2. 포인트 히스토리 개수 캐시 삭제 (새로운 기록 추가됨)
+    await redis.delete(f"point_history_count:{target_user.id}")
 
     service_logger.debug(
         f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, Amount: {amount}, New Balance: {target_user.point}"
@@ -180,9 +188,15 @@ async def deduct_points(
 )
 async def get_point_balance(
     target_user_id: int,
-    auth_data: LoginDep,
     session: SessionDep,
 ):
+    # 1. 유저 정보 캐시 확인
+    cached_user = await redis.get(f"user:{target_user_id}")
+    if cached_user:
+        # 캐시가 있다면 그 중 포인트 정보만 반환
+        return ResponseModel[int](success=True, data=cached_user.get("point", 0))
+
+    # 2. 캐시 없으면 DB 조회
     query = select(Users.point).where(Users.id == target_user_id)
     result = await session.execute(query)
     point = result.scalar_one_or_none()
@@ -217,21 +231,32 @@ async def point_history(
 ):
     user, _ = auth_data
 
-    query = select(func.count()).select_from(PointHistory).where(PointHistory.user_id == user.id)
-    result = await session.execute(query)
-    count = result.scalar() or 0
+    # 1. 총 개수 조회 (캐싱 적용)
+    count_cache_key = f"point_history_count:{user.id}"
+    cached_count = await redis.get(count_cache_key)
 
+    if cached_count is not None:
+        count = int(cached_count)
+    else:
+        # Cache Miss: DB 조회
+        query = select(func.count()).select_from(PointHistory).where(PointHistory.user_id == user.id)
+        result = await session.execute(query)
+        count = result.scalar() or 0
+        # 캐시 저장 (TTL: 60초 - 짧게 설정하여 정합성 유지 노력)
+        await redis.set(count_cache_key, count, ttl=60)
+
+    # 2. 히스토리 목록 조회
     query = (
         select(PointHistory)
         .where(PointHistory.user_id == user.id)
-        .order_by(PointHistory.created_at.desc())
+        .order_by(col(PointHistory.created_at).desc())
         .limit(limit)
         .offset(offset)
     )
     result = await session.execute(query)
     historys = list(result.scalars().all())
 
-    max_page = str(ceil(count / limit))
+    max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
 
     return ResponseModel[list[PointHistory]](success=True, data=historys)

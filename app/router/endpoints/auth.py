@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Response, Request, status
-from pydantic import BaseModel
 from uuid import uuid4
+
+from fastapi import APIRouter, HTTPException, Request, Response, status
+from pydantic import BaseModel
+
+from app.core import LoginDep, SessionDep, settings
 from app.core.redis import redis
-from app.schemas.users import Users, User
-from app.schemas.response import ResponseModel, ErrorResponse
-from app.core import settings, LoginDep, SessionDep
+from app.schemas.response import ErrorResponse, ResponseModel
+from app.schemas.users import User, Users
 
 router = APIRouter(prefix="/auth", tags=["users", "auth"])
 
@@ -46,7 +48,7 @@ async def login(
     session: SessionDep,
 ):
     # 1. 유저 조회
-    user = await session.get(Users, form.id)
+    user: Users | None = await session.get(Users, form.id)
 
     # 2. 유저 검증 (비밀번호 비교)
     if not user or user.password != form.password:
@@ -62,7 +64,11 @@ async def login(
     # TTL 설정
     await redis.set(f"session:{session_id}", user.id, ttl=settings.service.session.expire_seconds)
 
-    # 4. 쿠키 설정
+    # 4. 유저 정보 캐싱 (Cache Warming)
+    # 로그인 시점에 미리 캐시에 올려두어 이후 요청 시 DB 접근을 줄임
+    await redis.set(f"user:{user.id}", user.model_dump(), ttl=settings.service.session.expire_seconds)
+
+    # 5. 쿠키 설정
     _set_session_cookie(response, session_id)
 
     return ResponseModel[User](success=True, data=user)
@@ -76,13 +82,17 @@ async def login(
     description="현재 로그인된 세션을 종료합니다.",
 )
 async def logout(response: Response, request: Request):
-    session_id = request.cookies.get(settings.service.session.cookie_nam)
+    session_id = request.cookies.get(settings.service.session.cookie_name)
     if session_id:
+        user_id = await redis.get(f"session:{session_id}")
         # Redis에서 세션 삭제
         await redis.delete(f"session:{session_id}")
+        if user_id:
+            # 유저 정보 캐시도 함께 삭제 (선택 사항이지만 보안상 권장)
+            await redis.delete(f"user:{user_id}")
 
     # 쿠키 삭제
-    response.delete_cookie(settings.service.session.cookie_n)
+    response.delete_cookie(settings.service.session.cookie_name)
 
 
 @router.get(
@@ -108,6 +118,8 @@ async def get_current_user(
     # 4. 세션 연장 (Sliding Session)
     # Redis TTL 갱신
     await redis.expire(f"session:{session_id}", settings.service.session.expire_seconds)
+    # 유저 정보 캐시 TTL도 함께 갱신
+    await redis.expire(f"user:{user.id}", settings.service.session.expire_seconds)
 
     # 쿠키 갱신 (만료 시간 초기화)
     _set_session_cookie(response, session_id)
