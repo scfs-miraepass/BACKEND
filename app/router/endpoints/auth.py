@@ -7,12 +7,9 @@ from app.core.database import get_async_session
 from app.core.redis import redis
 from app.schemas.users import Users, User
 from app.schemas.response import ResponseModel, ErrorResponse
-from app.core import settings
+from app.core import settings, LoginDep
 
-router = APIRouter(prefix="/auth", tags=["auth"])
-
-SESSION_COOKIE_NAME = "session_id"
-SESSION_EXPIRE_SECONDS = 3600 * 24 * 7  # 7 days
+router = APIRouter(prefix="/auth", tags=["users", "auth"])
 
 
 class LoginForm(BaseModel):
@@ -20,47 +17,16 @@ class LoginForm(BaseModel):
     password: str
 
 
-def _get_redis_key(session_id: str) -> str:
-    """Redis에 저장될 세션 키를 생성합니다."""
-    return f"session:{session_id}"
-
-
 def _set_session_cookie(response: Response, session_id: str):
     """응답에 세션 쿠키를 설정합니다."""
     response.set_cookie(
-        key=SESSION_COOKIE_NAME,
+        key=settings.service.session.cookie_name,
         value=session_id,
         httponly=True,  # JavaScript에서 접근 불가 (보안)
         secure=not settings.debug,  # 개발 환경(Debug)에서는 False, 배포 시 True (HTTPS 필요)
         samesite="lax",  # CSRF 보호
-        max_age=SESSION_EXPIRE_SECONDS,
+        max_age=settings.service.session.expire_seconds,
     )
-
-
-async def verify_session(
-    request: Request,
-    session: AsyncSession = Depends(get_async_session),
-) -> tuple[Users, str]:
-    """
-    요청의 쿠키와 Redis를 확인하여 유효한 세션인지 검증합니다.
-    유효하다면 (User 객체, session_id)를 반환합니다.
-    """
-    session_id = request.cookies.get(SESSION_COOKIE_NAME)
-    if not session_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    user_id = await redis.get(_get_redis_key(session_id))
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session expired or invalid",
-        )
-
-    user = await session.get(Users, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
-    return user, session_id
 
 
 @router.post(
@@ -97,7 +63,7 @@ async def login(
 
     # Redis에 세션 저장 (Key: session:{uuid}, Value: user_id)
     # TTL 설정
-    await redis.set(_get_redis_key(session_id), user.id, ttl=SESSION_EXPIRE_SECONDS)
+    await redis.set(f"session:{session_id}", user.id, ttl=settings.service.session.expire_seconds)
 
     # 4. 쿠키 설정
     _set_session_cookie(response, session_id)
@@ -113,13 +79,13 @@ async def login(
     description="현재 로그인된 세션을 종료합니다.",
 )
 async def logout(response: Response, request: Request):
-    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    session_id = request.cookies.get(settings.service.session.cookie_nam)
     if session_id:
         # Redis에서 세션 삭제
-        await redis.delete(_get_redis_key(session_id))
+        await redis.delete(f"session:{session_id}")
 
     # 쿠키 삭제
-    response.delete_cookie(SESSION_COOKIE_NAME)
+    response.delete_cookie(settings.service.session.cookie_n)
 
 
 @router.get(
@@ -138,13 +104,13 @@ async def logout(response: Response, request: Request):
 )
 async def get_current_user(
     response: Response,
-    auth_data: tuple[Users, str] = Depends(verify_session),
+    auth_data: LoginDep,
 ):
     user, session_id = auth_data
 
     # 4. 세션 연장 (Sliding Session)
     # Redis TTL 갱신
-    await redis.expire(_get_redis_key(session_id), SESSION_EXPIRE_SECONDS)
+    await redis.expire(f"session:{session_id}", settings.service.session.expire_seconds)
 
     # 쿠키 갱신 (만료 시간 초기화)
     _set_session_cookie(response, session_id)

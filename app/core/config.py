@@ -13,6 +13,15 @@ class Redis(BaseModel):
     url: RedisDsn = Field(alias="URL")
 
 
+class Session(BaseModel):
+    cookie_name: str = Field("session_id", alias="COOKIE_NAME")
+    expire_seconds: int = Field(3600 * 24 * 7, alias="EXPIRE_SECONDS")  # 기본 7일
+
+
+class Service(BaseModel):
+    session: Session = Field(alias="SESSION")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         case_sensitive=True,
@@ -23,6 +32,7 @@ class Settings(BaseSettings):
 
     database: Database = Field(alias="DATABASE")
     redis: Redis = Field(alias="REDIS")
+    service: Service = Field(alias="SERVICE")
     debug: bool = Field(False, alias="DEBUG")
     allow_origins: list[str] = Field(alias="ALLOWED_ORIGINS")
 

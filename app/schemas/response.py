@@ -10,8 +10,8 @@ class ResponsePayload(BaseModel):
 
 
 class ResponseModel(ResponsePayload, Generic[Data]):
-    data: Data = Field(..., description="응답 데이터")
+    data: Data = Field(description="응답 데이터")
 
 
 class ErrorResponse(ResponsePayload):
-    message: str = Field(..., description="에러 메시지")
+    message: str = Field(description="에러 메시지")
