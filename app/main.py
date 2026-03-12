@@ -45,6 +45,18 @@ app.add_middleware(
     expose_headers=["X-MAX-PAGE"],
 )
 
+# 디버그 모드가 비활성화 되어있으면 모든 에러가 발생하는 내용을 로그에 출력
+if not settings.debug:
+    import sys
+
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        global_logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+    sys.excepthook = handle_exception
+
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):

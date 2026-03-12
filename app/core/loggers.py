@@ -1,6 +1,6 @@
 import logging
 import os
-import sys
+from sys import stdout
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from typing import Optional
@@ -141,7 +141,7 @@ def get_logger(
 
     # 스트림 핸들러 (콘솔용)
     if add_stream:
-        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler = logging.StreamHandler(stdout)
         stream_handler.setFormatter(CustomFormatter())
         stream_handler.setLevel(debug_level if debug else default_level)
         logger.addHandler(stream_handler)
@@ -181,14 +181,3 @@ service_logger = get_logger("service", debug=settings.debug)
 
 # 라이브러리 로거 설정 적용
 setup_library_loggers(debug=settings.debug)
-
-# 디버그 모드가 비활성화 되어있으면 모든 에러가 발생하는 내용을 로그에 출력
-if not settings.debug:
-
-    def handle_exception(exc_type, exc_value, exc_traceback):
-        if issubclass(exc_type, KeyboardInterrupt):
-            sys.__excepthook__(exc_type, exc_value, exc_traceback)
-            return
-        global_logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
-
-    sys.excepthook = handle_exception
