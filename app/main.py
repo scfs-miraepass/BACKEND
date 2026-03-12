@@ -26,13 +26,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global_logger.info("Database Initialized.")
 
     await redis.init()
-    global_logger.info("Redis Initialized.")
 
     yield
 
     await redis.close()
-    global_logger.info("Redis Closed.")
-
     await database_close()
     global_logger.info("Database Closed.")
 
