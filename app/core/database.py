@@ -18,13 +18,13 @@ def _create_engine() -> AsyncEngine:
     """비동기 엔진을 생성합니다."""
     if settings.debug:
         return create_async_engine(
-            settings.database.url,
+            str(settings.database.url),
             echo=settings.debug,
             poolclass=NullPool,
         )
 
     return create_async_engine(
-        settings.database.url,
+        str(settings.database.url),
         echo=settings.debug,
         pool_size=settings.database.pool_size,
         max_overflow=settings.database.max_overflow,

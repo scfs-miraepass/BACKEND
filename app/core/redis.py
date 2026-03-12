@@ -20,7 +20,7 @@ class RedisCore:
 
     async def init(self):
         try:
-            self.redis = Redis.from_url(settings.redis.url, decode_responses=True)
+            self.redis = Redis.from_url(str(settings.redis.url), decode_responses=True)
             await self.redis.ping()
             redis_logger.info("Redis initialized and connected successfully.")
         except Exception as e:
