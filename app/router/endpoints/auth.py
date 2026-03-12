@@ -1,13 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
+from fastapi import APIRouter, HTTPException, Response, Request, status
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
-
-from app.core.database import get_async_session
 from app.core.redis import redis
 from app.schemas.users import Users, User
 from app.schemas.response import ResponseModel, ErrorResponse
-from app.core import settings, LoginDep
+from app.core import settings, LoginDep, SessionDep
 
 router = APIRouter(prefix="/auth", tags=["users", "auth"])
 
@@ -46,7 +43,7 @@ def _set_session_cookie(response: Response, session_id: str):
 async def login(
     response: Response,
     form: LoginForm,
-    session: AsyncSession = Depends(get_async_session),
+    session: SessionDep,
 ):
     # 1. 유저 조회
     user = await session.get(Users, form.id)

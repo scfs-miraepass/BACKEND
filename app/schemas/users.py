@@ -1,6 +1,14 @@
-from sqlmodel import Field, SQLModel
-from typing import Optional
+from sqlmodel import Field, SQLModel, Relationship, delete
+from sqlalchemy import event, Connection, insert
+from typing import Optional, TYPE_CHECKING, List
 from enum import Enum
+from typing import cast, Any
+from hangulpy import split_hangul_string, get_chosung_string
+
+from app.core.loggers import service_logger
+
+if TYPE_CHECKING:
+    from .point import PointHistory
 
 
 class UserType(str, Enum):
@@ -14,6 +22,7 @@ class User(SQLModel):
         primary_key=True,
         default=None,
         description="고유 ID. 교사, 서비스의 경우 자동생성. 학생의 경우 학번 사용",
+        index=True,
     )  # autoincrement
 
     type: UserType = Field(description="유저 종류 (학생, 교사, 서비스)")
@@ -25,3 +34,56 @@ class User(SQLModel):
 
 class Users(User, table=True):
     password: Optional[str] = Field(description="비밀번호")
+
+    search: List["UserSearch"] = Relationship(back_populates="user", cascade_delete=True)
+    history: List["PointHistory"] = Relationship(back_populates="user", cascade_delete=True)
+
+
+class UserSearch(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)  # autoincrement
+
+    user: Users = Relationship(back_populates="search")
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
+    value: str = Field(index=True)
+
+
+def _generate_search_entries(target: Users) -> List[UserSearch]:
+    decomposed = "".join(split_hangul_string(target.name.replace(" ", "")))
+    chosung = get_chosung_string(target.name)
+    return [
+        UserSearch(user_id=target.id, value=decomposed),
+        UserSearch(user_id=target.id, value=chosung),
+    ]
+
+
+@event.listens_for(Users, "after_insert")
+def user_search_insert(mapper, connection: Connection, target: Users):
+    if not target.name or not target.id:
+        return
+
+    service_logger.info(f"Generating search entries for new user: {target.name} (ID: {target.id})")
+    search_entries = _generate_search_entries(target)
+    # 성능을 위해 대량 삽입을 사용하거나 세션에 추가
+    connection.execute(
+        insert(UserSearch),
+        [entry.model_dump() for entry in search_entries],
+    )
+
+
+@event.listens_for(Users, "after_update")
+def user_search_update(mapper, connection: Connection, target: Users):
+    # 이름이 변경된 경우에만 실행하도록 검사
+    state = getattr(target, "_sa_instance_state", None)
+    if state:
+        history = state.get_history("name", True)
+        if not history.has_changes():
+            return
+
+    service_logger.info(f"Updating search entries for user ID: {target.id} due to name change")
+    connection.execute(delete(UserSearch).where(cast(Any, UserSearch.user_id == target.id)))
+    if target.name:
+        search_entries = _generate_search_entries(target)
+        connection.execute(
+            insert(UserSearch),
+            [entry.model_dump() for entry in search_entries],
+        )

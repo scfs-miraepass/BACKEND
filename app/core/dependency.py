@@ -4,14 +4,14 @@ from typing import Annotated
 
 from app.core.database import get_async_session
 from app.core.redis import redis
-from app.schemas.users import Users
+from app.schemas import Users
 from app.core import settings
 
 
 async def verify_session(
     request: Request,
-    session: AsyncSession = Depends(get_async_session),
-) -> tuple[Users, str]:
+    session: SessionDep,
+) -> tuple[type[Users], str]:
     """
     요청의 쿠키와 Redis를 확인하여 유효한 세션인지 검증합니다.
     유효하다면 (User 객체, session_id)를 반환합니다.
@@ -35,3 +35,4 @@ async def verify_session(
 
 
 LoginDep = Annotated[tuple[Users, str], Depends(verify_session)]
+SessionDep = Annotated[AsyncSession, Depends(get_async_session)]
