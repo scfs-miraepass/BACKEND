@@ -42,8 +42,6 @@ uv run alembic downgrade -1
 
 ## 📦 프로젝트 구조
 ---
-
-### 폴더 구조
 ```
 alembic                 # alembic 시스템
 app
