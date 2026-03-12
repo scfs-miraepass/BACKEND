@@ -45,7 +45,7 @@ uv run alembic downgrade -1
 
 ### 폴더 구조
 ```
-alembic                 # alembic 시스템 폴더
+alembic                 # alembic 시스템
 app
 ├── core                # 핵심 로직
 │   ├── __init__.py
@@ -68,6 +68,8 @@ app
 │   ├── point.py        # 포인트 관련
 │   ├── response.py     # 응답 스키마
 │   └── users.py        # 유저 관련
+│
+├── logs                # 시스템 로그 (자동 생성)
 │
 ├── __init__.py
 └── main.py             # FastAPI APP
