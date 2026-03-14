@@ -23,7 +23,7 @@ def normalize_and_decompose(query: str) -> str:
 
 
 @router.get(
-    "/student",
+    "",
     response_model=ResponseModel[List[User]],
     responses={
         200: {"description": "정상 처리"},
@@ -37,10 +37,10 @@ def normalize_and_decompose(query: str) -> str:
         },
     },
     status_code=status.HTTP_200_OK,
-    summary="학생 검색",
-    description="학생 유저를 이름 또는 ID(학번)으로 검색합니다.",
+    summary="유저 검색",
+    description="유저를 이름 또는 ID(학번)으로 검색합니다.",
 )
-async def search_student(session: SessionDep, auth_data: LoginDep, q: str):
+async def search_student(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserType] = None):
     """
     사용자 검색 API
 
@@ -57,6 +57,9 @@ async def search_student(session: SessionDep, auth_data: LoginDep, q: str):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
         )
+
+    if t is None:
+        t = []
 
     # 입력값 양끝 공백 제거
     q = q.strip()
@@ -97,9 +100,10 @@ async def search_student(session: SessionDep, auth_data: LoginDep, q: str):
         stmt = (
             select(Users)
             .join(UserSearch, cast(Any, Users.id == UserSearch.user_id))
-            .where(Users.type == UserType.student)
             .where(col(UserSearch.value).like(f"%{decomposed_query}%"))
         )
+        if t:
+            stmt = stmt.where(col(Users.type).in_(t))
 
         result = await session.execute(stmt)
         # 중복 제거 (Users 객체 기준)
