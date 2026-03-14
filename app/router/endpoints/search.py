@@ -1,14 +1,14 @@
 from functools import lru_cache
 from typing import List, cast, Any
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, HTTPException
 from hangulpy import split_hangul_string
 from sqlmodel import select, col
 
-from app.core.dependency import SessionDep
+from app.core import SessionDep, LoginDep
 from app.core.redis import redis
-from app.schemas.response import ResponseModel
-from app.schemas.users import User, Users, UserSearch, UserType
+from app.schemas import User, Users, UserSearch, UserType
+from app.schemas.response import ResponseModel, ErrorResponse
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -23,13 +23,24 @@ def normalize_and_decompose(query: str) -> str:
 
 
 @router.get(
-    "",
+    "/student",
     response_model=ResponseModel[List[User]],
+    responses={
+        200: {"description": "정상 처리"},
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음",
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
+    },
     status_code=status.HTTP_200_OK,
     summary="학생 검색",
     description="학생 유저를 이름 또는 ID(학번)으로 검색합니다.",
 )
-async def search_users(session: SessionDep, q: str):
+async def search_student(session: SessionDep, auth_data: LoginDep, q: str):
     """
     사용자 검색 API
 
@@ -38,6 +49,15 @@ async def search_users(session: SessionDep, q: str):
 
     Redis 캐싱을 적용하여 동일한 검색어에 대한 DB 부하를 줄입니다.
     """
+    user, _ = auth_data
+
+    # 권한 확인: Teacher, Service only
+    if user.type != UserType.teacher and user.type != UserType.service:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
     # 입력값 양끝 공백 제거
     q = q.strip()
 
