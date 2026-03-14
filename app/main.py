@@ -71,4 +71,15 @@ async def read_root():
     return {"message": "Hello, World!"}
 
 
+# from .core import SessionDep
+# from .schemas import Users, UserType
+# @app.get("/test")
+# async def test(session: SessionDep):
+#     session.add(Users(id=3406, type=UserType.student, name="임영재", grade=3, number=4))
+#     session.add(Users(id=3405, type=UserType.student, name="이동현", grade=3, number=4))
+#     session.add(Users(id=3101, type=UserType.student, name="김채원", grade=3, number=1))
+#     session.add(Users(type=UserType.teacher, name="최주영"))
+#     await session.commit()
+
+
 app.include_router(router)
