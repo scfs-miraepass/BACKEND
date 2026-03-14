@@ -170,6 +170,7 @@ async def change_password_new(form: ChangePasswordNewForm, session: SessionDep):
             detail="Password already set",
         )
 
+    print(form)
     # 새 비밀번호 해싱 및 저장
     user.password = get_password_hash(form.password)
     session.add(user)
