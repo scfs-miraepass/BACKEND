@@ -22,6 +22,11 @@ class ChangePasswordForm(BaseModel):
     new_password: str
 
 
+class ChangePasswordNewForm(BaseModel):
+    user: int
+    password: str
+
+
 def _set_session_cookie(response: Response, session_id: str):
     """응답에 세션 쿠키를 설정합니다."""
     response.set_cookie(
@@ -133,6 +138,47 @@ async def get_current_user(
     return ResponseModel[User](success=True, data=user)
 
 
+@router.post(
+    "/password",
+    responses={
+        204: {"description": "비밀번호 변경 성공"},
+        404: {
+            "model": ErrorResponse,
+            "description": "유저을 찾을 수 없음",
+        },
+        400: {
+            "model": ErrorResponse,
+            "description": "이미 비밀번호가 설정되어있음.",
+        },
+    },
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="비밀번호 초기 변경",
+    description="첫 로그인시 비밀번호 변경을 합니다.",
+)
+async def change_password_new(form: ChangePasswordNewForm, session: SessionDep):
+    user: Users | None = await session.get(Users, form.user)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user.password is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password already set",
+        )
+
+    # 새 비밀번호 해싱 및 저장
+    user.password = get_password_hash(form.password)
+    session.add(user)
+    await session.commit()
+
+    # 혹시 모르니 캐시 삭제
+    await redis.delete(f"user:{user.id}")
+
+
 @router.put(
     "/password",
     responses={
@@ -145,6 +191,10 @@ async def get_current_user(
             "model": ErrorResponse,
             "description": "세션이 만료되었거나 유효하지 않음.",
         },
+        404: {
+            "model": ErrorResponse,
+            "description": "초기회 되지 않은 유저.",
+        },
     },
     status_code=status.HTTP_204_NO_CONTENT,
     summary="비밀번호 변경",
@@ -152,9 +202,14 @@ async def get_current_user(
 )
 async def change_password(form: ChangePasswordForm, auth_data: LoginDep, session: SessionDep):
     user, session_id = auth_data
+    if user.password is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User does not have a password",
+        )
 
     # 기존 비밀번호 확인. 비밀번호가 없을경우는 PASS
-    if (user.password is not None) and (not verify_password(form.old_password, user.password)):
+    if not verify_password(form.old_password, user.password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect old password",
