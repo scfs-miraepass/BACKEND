@@ -78,7 +78,7 @@ async def search_users(session: SessionDep, q: str):
             select(Users)
             .join(UserSearch, cast(Any, Users.id == UserSearch.user_id))
             .where(Users.type == UserType.student)
-            .where(col(UserSearch.value).like(f"{decomposed_query}%"))
+            .where(col(UserSearch.value).like(f"%{decomposed_query}%"))
         )
 
         result = await session.execute(stmt)
