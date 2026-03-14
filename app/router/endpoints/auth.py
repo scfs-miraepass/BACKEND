@@ -176,7 +176,7 @@ async def change_password_new(form: ChangePasswordNewForm, session: SessionDep):
     session.add(user)
     await session.commit()
 
-    # 혹시 모르니 캐시 삭제
+    # 캐시 삭제
     await redis.delete(f"user:{user.id}")
 
 
@@ -249,4 +249,6 @@ async def check_password_exists(user_id: int, session: SessionDep):
             detail="User not found",
         )
 
+    # 유저 캐시
+    await redis.set(f"user:{user.id}", user.model_dump(), ttl=settings.service.session.expire_seconds)
     return ResponseModel[bool](success=True, data=user.password is not None)
