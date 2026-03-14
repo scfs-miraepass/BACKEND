@@ -75,10 +75,21 @@ async def read_root():
 # from .schemas import Users, UserType
 # @app.get("/test")
 # async def test(session: SessionDep):
+#
+#     # 1101~3699 : 학생
+#     # 4000~4999 : 교사
+#     # 5000~ : 서비스
+#
+#     # 테스트 학생
 #     session.add(Users(id=3406, type=UserType.student, name="임영재", grade=3, number=4))
 #     session.add(Users(id=3405, type=UserType.student, name="이동현", grade=3, number=4))
 #     session.add(Users(id=3101, type=UserType.student, name="김채원", grade=3, number=1))
-#     session.add(Users(type=UserType.teacher, name="최주영"))
+#
+#     # 테스트 교사
+#     session.add(Users(type=UserType.teacher, name="최주영", id=4000))
+#
+#     # 테스트 서비스
+#     session.add(Users(type=UserType.service, name="카페테리아", id=5000))
 #     await session.commit()
 
 
