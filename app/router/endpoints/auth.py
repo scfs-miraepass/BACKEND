@@ -36,6 +36,7 @@ def _set_session_cookie(response: Response, session_id: str):
         secure=not settings.debug,  # 개발 환경(Debug)에서는 False, 배포 시 True (HTTPS 필요)
         samesite="lax",  # CSRF 보호
         max_age=settings.service.session.expire_seconds,
+        path="/",
     )
 
 
@@ -170,7 +171,6 @@ async def change_password_new(form: ChangePasswordNewForm, session: SessionDep):
             detail="Password already set",
         )
 
-    print(form)
     # 새 비밀번호 해싱 및 저장
     user.password = get_password_hash(form.password)
     session.add(user)

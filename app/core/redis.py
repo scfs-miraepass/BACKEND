@@ -78,5 +78,16 @@ class RedisCore:
         except Exception as e:
             redis_logger.error(f"Error deleting pattern '{pattern}': {e}", exc_info=True)
 
+    async def expire(self, key: str, time: int, **kwargs) -> bool:
+        if not self.redis:
+            return False
+        try:
+            result = await self.redis.expire(key, time, **kwargs)
+            redis_logger.debug(f"EXPIRE: {key} set to {time}s")
+            return result
+        except Exception as e:
+            redis_logger.error(f"Error setting expire for key '{key}': {e}", exc_info=True)
+            return False
+
 
 redis = RedisCore()
