@@ -40,7 +40,7 @@ def normalize_and_decompose(query: str) -> str:
     summary="유저 검색",
     description="유저를 이름 또는 ID(학번)으로 검색합니다.",
 )
-async def search_student(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserType] = None):
+async def search(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserType] = None):
     """
     사용자 검색 API
 
@@ -115,3 +115,31 @@ async def search_student(session: SessionDep, auth_data: LoginDep, q: str, t: li
     await redis.set(cache_key, users_data, ttl=300)
 
     return ResponseModel(success=True, data=users)
+
+
+@router.get(
+    "/teacher/{user_name}",
+    response_model=ResponseModel[User],
+    responses={
+        200: {"description": "정상 처리"},
+        404: {
+            "model": ErrorResponse,
+            "description": "유저를 찾을 수 없음",
+        },
+    },
+    status_code=status.HTTP_200_OK,
+    summary="교사 데이터",
+    description="교사의 정확한 이름을 가지고 교사의 데이터를 가져옵니다.",
+)
+async def teacher_get_by_name(session: SessionDep, user_name: str):
+    stmt = select(Users).where(Users.name == user_name, Users.type == UserType.teacher)
+    result = await session.execute(stmt)
+    teacher = result.scalar_one_or_none()
+
+    if not teacher:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Teacher not found.",
+        )
+
+    return ResponseModel(success=True, data=teacher)
