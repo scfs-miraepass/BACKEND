@@ -169,3 +169,28 @@ async def change_password(form: ChangePasswordForm, auth_data: LoginDep, session
     # 참고: 모든 세션을 추적하는 별도의 Set이 없다면 현재 세션과 유저 캐시를 우선 삭제합니다.
     await redis.delete(f"user:{user.id}")
     await redis.delete(f"session:{session_id}")
+
+
+@router.get(
+    "/password/exists/{user_id}",
+    response_model=ResponseModel[bool],
+    responses={
+        404: {
+            "model": ErrorResponse,
+            "description": "유저를 찾을 수 없음",
+        },
+    },
+    summary="비밀번호 존재 여부 확인",
+    description="특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다.",
+)
+async def check_password_exists(user_id: int, session: SessionDep):
+    """특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다."""
+    user: Users | None = await session.get(Users, user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    return ResponseModel[bool](success=True, data=user.password is not None)
