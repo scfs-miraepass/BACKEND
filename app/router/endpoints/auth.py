@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.core import LoginDep, SessionDep, settings
 from app.core.redis import redis
 from app.core.security import get_password_hash, verify_password
+from app.schemas import UserType
 from app.schemas.response import ErrorResponse, ResponseModel
 from app.schemas.users import User, Users
 
@@ -235,12 +236,16 @@ async def change_password(form: ChangePasswordForm, auth_data: LoginDep, session
             "model": ErrorResponse,
             "description": "유저를 찾을 수 없음",
         },
+        400: {
+            "model": ErrorResponse,
+            "description": "해당 유저의 타입이 지정된 타입과 일치하지 않음",
+        },
     },
     summary="비밀번호 존재 여부 확인",
     description="특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다.",
 )
-async def check_password_exists(user_id: int, session: SessionDep):
-    """특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다."""
+async def check_password_exists(user_id: int, session: SessionDep, t: UserType | None = None):
+    """특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다. 로그인시 유저가 있는지 확인할때 사용합니다."""
     user: Users | None = await session.get(Users, user_id)
 
     if not user:
@@ -251,4 +256,9 @@ async def check_password_exists(user_id: int, session: SessionDep):
 
     # 유저 캐시
     await redis.set(f"user:{user.id}", user.model_dump(), ttl=settings.service.session.expire_seconds)
+    if t is not None and user.type != t:
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User type does not match",
+        )
     return ResponseModel[bool](success=True, data=user.password is not None)
