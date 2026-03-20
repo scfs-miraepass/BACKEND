@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import List, cast, Any
 
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status, HTTPException, Query
 from hangulpy import split_hangul_string
 from sqlmodel import select, col
 
@@ -40,7 +40,7 @@ def normalize_and_decompose(query: str) -> str:
     summary="유저 검색",
     description="유저를 이름 또는 ID(학번)으로 검색합니다.",
 )
-async def search(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserType] = None):
+async def search(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
     """
     사용자 검색 API
 
