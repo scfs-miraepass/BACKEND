@@ -128,14 +128,20 @@ async def get_current_user(
 ):
     user, session_id = auth_data
 
-    # 4. 세션 연장 (Sliding Session)
-    # Redis TTL 갱신
-    await redis.expire(f"session:{session_id}", settings.service.session.expire_seconds)
-    # 유저 정보 캐시 TTL도 함께 갱신
-    await redis.expire(f"user:{user.id}", settings.service.session.expire_seconds)
+    # 1. 현재 세션의 남은 TTL(수명) 확인
+    current_ttl = await redis.ttl(f"session:{session_id}")
 
-    # 쿠키 갱신 (만료 시간 초기화)
-    _set_session_cookie(response, session_id)
+    # 2. 남은 시간이 설정된 만료 시간의 50% 미만일 때만 연장 (조건부 갱신)
+    # (current_ttl이 정상적인 양수일 때만 동작하도록 예외 처리 포함)
+    if 0 <= current_ttl < (settings.service.session.expire_seconds * 0.5):
+        # 3. Redis 파이프라인을 사용하여 네트워크 왕복(RTT) 최소화
+        async with redis.pipeline() as pipe:
+            pipe.expire(f"session:{session_id}", settings.service.session.expire_seconds)
+            pipe.expire(f"user:{user.id}", settings.service.session.expire_seconds)
+            await pipe.execute()
+
+        # 쿠키 갱신 (만료 시간 초기화)
+        _set_session_cookie(response, session_id)
 
     return ResponseModel[User](success=True, data=user)
 
