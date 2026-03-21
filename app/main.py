@@ -1,3 +1,5 @@
+from tomllib import load
+from pathlib import Path
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -11,6 +13,14 @@ from .core import settings
 from .core.loggers import global_logger
 from .core.database import database_init, database_close
 from .core.redis import redis
+
+# pyproject.toml에서 버전을 동적으로 불러오기
+pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+with open(pyproject_path, "rb") as f:
+    pyproject_data = load(f)
+    app_version = pyproject_data.get("project", {}).get("version")
+    if not app_version:
+        raise KeyError("Failed to find 'version' in [project] section of pyproject.toml")
 
 
 @asynccontextmanager
@@ -34,7 +44,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global_logger.info("Database Closed.")
 
 
-app = FastAPI(lifespan=lifespan)
+# FastAPI 인스턴스에 version 정보를 명시합니다.
+app = FastAPI(lifespan=lifespan, title="MIRAE PASS BACKEND", version=app_version)
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,8 +53,17 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-MAX-PAGE"],
+    expose_headers=["X-MAX-PAGE", "X-Server-Version"],  # 클라이언트가 읽을 수 있도록 허용
 )
+
+
+# 모든 응답에 서버 버전을 알려주는 미들웨어 추가
+@app.middleware("http")
+async def add_server_version_header(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Server-Version"] = app.version
+    return response
+
 
 # 디버그 모드가 비활성화 되어있으면 모든 에러가 발생하는 내용을 로그에 출력
 if not settings.debug:
