@@ -18,6 +18,11 @@ class RedisCore:
     def __init__(self):
         self.redis: Optional[Redis] = None
 
+    def __getattr__(self, name):
+        if self.redis:
+            return getattr(self.redis, name)
+        raise AttributeError(f"Redis is not initialized. Cannot access '{name}'")
+
     async def init(self):
         try:
             self.redis = Redis.from_url(str(settings.redis.url), decode_responses=True)
@@ -88,6 +93,17 @@ class RedisCore:
         except Exception as e:
             redis_logger.error(f"Error setting expire for key '{key}': {e}", exc_info=True)
             return False
+
+    async def ttl(self, key: str) -> int:
+        if not self.redis:
+            return -2
+        try:
+            ttl = await self.redis.ttl(key)
+            redis_logger.debug(f"TTL: {key} is {ttl}s")
+            return ttl
+        except Exception as e:
+            redis_logger.error(f"Error getting TTL for key '{key}': {e}", exc_info=True)
+            return -2
 
 
 redis = RedisCore()
