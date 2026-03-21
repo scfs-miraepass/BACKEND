@@ -69,6 +69,8 @@ async def _process_point_change(
     await redis.delete(f"user:{target_user.id}")
     # 2. 포인트 히스토리 개수 캐시 삭제 (새로운 기록 추가됨)
     await redis.delete(f"point_history_count:{target_user.id}")
+    # 3. 포인트 히스토리 목록 캐시 삭제 (패턴 매칭 삭제)
+    await redis.delete_pattern(f"point_history:{target_user.id}:*")
 
     service_logger.debug(
         f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, Amount: {amount}, New Balance: {target_user.point}"
@@ -176,39 +178,6 @@ async def deduct_points(
 
 
 @router.get(
-    "/{target_user_id}",
-    response_model=ResponseModel[int],
-    responses={
-        200: {"description": "정상 처리"},
-        404: {"model": ErrorResponse, "description": "유저를 찾을 수 없음"},
-    },
-    status_code=status.HTTP_200_OK,
-    summary="포인트 조회",
-    description="특정 유저의 현재 포인트를 조회합니다.",
-)
-async def get_point_balance(
-    target_user_id: int,
-    session: SessionDep,
-):
-    # 1. 유저 정보 캐시 확인
-    cached_user = await redis.get(f"user:{target_user_id}")
-    if cached_user:
-        # 캐시가 있다면 그 중 포인트 정보만 반환
-        return ResponseModel[int](success=True, data=cached_user.get("point", 0))
-
-    # 2. 캐시 없으면 DB 조회
-    query = select(Users.point).where(Users.id == target_user_id)
-    result = await session.execute(query)
-    point = result.scalar_one_or_none()
-
-    if point is None:
-        service_logger.debug(f"UserNotFound: User ID {target_user_id} does not exist.")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    return ResponseModel[int](success=True, data=point)
-
-
-@router.get(
     "/history",
     response_model=ResponseModel[list[PointHistory]],
     responses={
@@ -246,17 +215,59 @@ async def point_history(
         await redis.set(count_cache_key, count, ttl=60)
 
     # 2. 히스토리 목록 조회
-    query = (
-        select(PointHistory)
-        .where(PointHistory.user_id == user.id)
-        .order_by(col(PointHistory.created_at).desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    result = await session.execute(query)
-    historys = list(result.scalars().all())
+    history_cache_key = f"point_history:{user.id}:{limit}:{offset}"
+    cached_history = await redis.get(history_cache_key)
+
+    if cached_history is not None:
+        historys = [PointHistory(**item) for item in cached_history]
+    else:
+        query = (
+            select(PointHistory)
+            .where(PointHistory.user_id == user.id)
+            .order_by(col(PointHistory.created_at).desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await session.execute(query)
+        historys = list(result.scalars().all())
+        # 캐시 저장 (TTL: 60초)
+        history_data = [item.model_dump() for item in historys]
+        await redis.set(history_cache_key, history_data, ttl=60)
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
 
     return ResponseModel[list[PointHistory]](success=True, data=historys)
+
+
+@router.get(
+    "/{target_user_id}",
+    response_model=ResponseModel[int],
+    responses={
+        200: {"description": "정상 처리"},
+        404: {"model": ErrorResponse, "description": "유저를 찾을 수 없음"},
+    },
+    status_code=status.HTTP_200_OK,
+    summary="포인트 조회",
+    description="특정 유저의 현재 포인트를 조회합니다.",
+)
+async def get_point_balance(
+    target_user_id: int,
+    session: SessionDep,
+):
+    # 1. 유저 정보 캐시 확인
+    cached_user = await redis.get(f"user:{target_user_id}")
+    if cached_user:
+        # 캐시가 있다면 그 중 포인트 정보만 반환
+        return ResponseModel[int](success=True, data=cached_user.get("point", 0))
+
+    # 2. 캐시 없으면 DB 조회
+    query = select(Users.point).where(Users.id == target_user_id)
+    result = await session.execute(query)
+    point = result.scalar_one_or_none()
+
+    if point is None:
+        service_logger.debug(f"UserNotFound: User ID {target_user_id} does not exist.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return ResponseModel[int](success=True, data=point)
