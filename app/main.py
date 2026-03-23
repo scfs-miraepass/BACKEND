@@ -104,9 +104,15 @@ async def read_root():
 #     session.add(Users(id=3406, type=UserType.student, name="임영재", grade=3, number=4))
 #     session.add(Users(id=3405, type=UserType.student, name="이동현", grade=3, number=4))
 #     session.add(Users(id=3101, type=UserType.student, name="김채원", grade=3, number=1))
+#     session.add(Users(id=3505, type=UserType.student, name="서은성", grade=3, number=5))
+#     session.add(Users(id=3401, type=UserType.student, name="김민주", grade=3, number=4))
+#     session.add(Users(id=3407, type=UserType.student, name="허겸", grade=3, number=4))
 #
 #     # 테스트 교사
 #     session.add(Users(type=UserType.teacher, name="최주영", id=4000))
+#     session.add(Users(type=UserType.teacher, name="이종현", id=4001))
+#     session.add(Users(type=UserType.teacher, name="조연주", id=4002))
+#     session.add(Users(type=UserType.teacher, name="이용욱", id=4003))
 #
 #     # 테스트 서비스
 #     session.add(Users(type=UserType.service, name="카페테리아", id=5000))
