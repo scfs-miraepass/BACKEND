@@ -57,7 +57,7 @@ async def _process_point_change(
     history = PointHistory(
         user_id=target_user.id,
         changed_amount=change_amount,
-        reason=operator.name,
+        reason=operator.name + " 선생님" if operator.type == UserType.teacher else "",
     )
     session.add(history)
 
