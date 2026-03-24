@@ -33,7 +33,7 @@ class User(SQLModel):
     point: int = Field(0, description="보유 포인트")
 
     history_type: Optional[PointHistoryType] = Field(
-        None, description="(서비스 전용) 해당 서비스에서 차감시 포인트 기록에 들어갈 타입"
+        None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입"
     )
 
 
