@@ -6,6 +6,7 @@ from typing import cast, Any
 from hangulpy import split_hangul_string, get_chosung_string
 
 from app.core.loggers import service_logger
+from .point import PointHistoryType
 
 if TYPE_CHECKING:
     from .point import PointHistory
@@ -30,6 +31,10 @@ class User(SQLModel):
     grade: Optional[int] = Field(description="학년")
     number: Optional[int] = Field(description="반")
     point: int = Field(0, description="보유 포인트")
+
+    history_type: Optional[PointHistoryType] = Field(
+        None, description="(서비스 전용) 해당 서비스에서 차감시 포인트 기록에 들어갈 타입"
+    )
 
 
 class Users(User, table=True):
