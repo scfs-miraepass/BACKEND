@@ -71,6 +71,8 @@ async def _process_point_change(
     await redis.delete(f"point_history_count:{target_user.id}")
     # 3. 포인트 히스토리 목록 캐시 삭제 (패턴 매칭 삭제)
     await redis.delete_pattern(f"point_history:{target_user.id}:*")
+    # 4. 검색 캐시 삭제(패턴 매칭 삭제)
+    await redis.delete_pattern("search_users:*")
 
     service_logger.debug(
         f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, Amount: {amount}, New Balance: {target_user.point}"
