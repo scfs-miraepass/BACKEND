@@ -8,7 +8,7 @@ from sqlmodel import func, select, col
 from app.core import LoginDep, SessionDep
 from app.core.loggers import service_logger
 from app.core.redis import redis
-from app.schemas import PointHistory, Users, UserType
+from app.schemas import PointHistory, Users, UserType, PointHistoryType
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])
@@ -16,7 +16,8 @@ router = APIRouter(prefix="/point", tags=["users", "point"])
 
 class PointOperation(BaseModel):
     target_user_id: int
-    amount: int = Field(..., gt=0, description="Amount of points")
+    amount: int = Field(..., gt=0, description="처리할 포인트")
+    change_type: PointHistoryType | None = Field(None, description="포인트를 처리하는 이유의 종류")
 
 
 async def _process_point_change(
@@ -25,6 +26,7 @@ async def _process_point_change(
     target_user_id: int,
     amount: int,
     is_deduction: bool = False,
+    change_type: PointHistoryType | None = None,
 ) -> int:
     """포인트 변경 로직을 처리하는 내부 함수 (Locking 및 History 생성 포함)"""
     # 동시성 문제 해결을 위해 Row-level Lock 적용 (SELECT ... FOR UPDATE)
@@ -58,6 +60,7 @@ async def _process_point_change(
         user_id=target_user.id,
         changed_amount=change_amount,
         reason=operator.name + (" 선생님" if operator.type == UserType.teacher else ""),
+        type=change_type,
     )
     session.add(history)
 
@@ -123,6 +126,7 @@ async def grant_points(
         operator=user,
         target_user_id=operation.target_user_id,
         amount=operation.amount,
+        change_type=operation.change_type,
         is_deduction=False,
     )
 
@@ -173,6 +177,7 @@ async def deduct_points(
         operator=user,
         target_user_id=operation.target_user_id,
         amount=operation.amount,
+        change_type=operation.change_type,
         is_deduction=True,
     )
 
