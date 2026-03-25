@@ -8,7 +8,7 @@ from sqlmodel import func, select, col
 from app.core import LoginDep, SessionDep
 from app.core.loggers import service_logger
 from app.core.redis import redis
-from app.schemas import PointHistory, Users, UserType
+from app.schemas import PointHistory, Users, UserType, PointHistoryType
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])
@@ -16,7 +16,8 @@ router = APIRouter(prefix="/point", tags=["users", "point"])
 
 class PointOperation(BaseModel):
     target_user_id: int
-    amount: int = Field(..., gt=0, description="Amount of points")
+    amount: int = Field(..., gt=0, description="처리할 포인트")
+    change_type: PointHistoryType | None = Field(None, description="포인트를 처리하는 이유의 종류")
 
 
 async def _process_point_change(
@@ -25,6 +26,7 @@ async def _process_point_change(
     target_user_id: int,
     amount: int,
     is_deduction: bool = False,
+    change_type: PointHistoryType | None = None,
 ) -> int:
     """포인트 변경 로직을 처리하는 내부 함수 (Locking 및 History 생성 포함)"""
     # 동시성 문제 해결을 위해 Row-level Lock 적용 (SELECT ... FOR UPDATE)
@@ -57,7 +59,8 @@ async def _process_point_change(
     history = PointHistory(
         user_id=target_user.id,
         changed_amount=change_amount,
-        reason=operator.name,
+        reason=operator.name + (" 선생님" if operator.type == UserType.teacher else ""),
+        type=change_type,
     )
     session.add(history)
 
@@ -69,6 +72,10 @@ async def _process_point_change(
     await redis.delete(f"user:{target_user.id}")
     # 2. 포인트 히스토리 개수 캐시 삭제 (새로운 기록 추가됨)
     await redis.delete(f"point_history_count:{target_user.id}")
+    # 3. 포인트 히스토리 목록 캐시 삭제 (패턴 매칭 삭제)
+    await redis.delete_pattern(f"point_history:{target_user.id}:*")
+    # 4. 검색 캐시 삭제(패턴 매칭 삭제)
+    await redis.delete_pattern("search_users:*")
 
     service_logger.debug(
         f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, Amount: {amount}, New Balance: {target_user.point}"
@@ -119,6 +126,7 @@ async def grant_points(
         operator=user,
         target_user_id=operation.target_user_id,
         amount=operation.amount,
+        change_type=operation.change_type,
         is_deduction=False,
     )
 
@@ -169,43 +177,11 @@ async def deduct_points(
         operator=user,
         target_user_id=operation.target_user_id,
         amount=operation.amount,
+        change_type=operation.change_type,
         is_deduction=True,
     )
 
     return ResponseModel[int](success=True, data=new_balance)
-
-
-@router.get(
-    "/{target_user_id}",
-    response_model=ResponseModel[int],
-    responses={
-        200: {"description": "정상 처리"},
-        404: {"model": ErrorResponse, "description": "유저를 찾을 수 없음"},
-    },
-    status_code=status.HTTP_200_OK,
-    summary="포인트 조회",
-    description="특정 유저의 현재 포인트를 조회합니다.",
-)
-async def get_point_balance(
-    target_user_id: int,
-    session: SessionDep,
-):
-    # 1. 유저 정보 캐시 확인
-    cached_user = await redis.get(f"user:{target_user_id}")
-    if cached_user:
-        # 캐시가 있다면 그 중 포인트 정보만 반환
-        return ResponseModel[int](success=True, data=cached_user.get("point", 0))
-
-    # 2. 캐시 없으면 DB 조회
-    query = select(Users.point).where(Users.id == target_user_id)
-    result = await session.execute(query)
-    point = result.scalar_one_or_none()
-
-    if point is None:
-        service_logger.debug(f"UserNotFound: User ID {target_user_id} does not exist.")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    return ResponseModel[int](success=True, data=point)
 
 
 @router.get(
@@ -246,17 +222,59 @@ async def point_history(
         await redis.set(count_cache_key, count, ttl=60)
 
     # 2. 히스토리 목록 조회
-    query = (
-        select(PointHistory)
-        .where(PointHistory.user_id == user.id)
-        .order_by(col(PointHistory.created_at).desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    result = await session.execute(query)
-    historys = list(result.scalars().all())
+    history_cache_key = f"point_history:{user.id}:{limit}:{offset}"
+    cached_history = await redis.get(history_cache_key)
+
+    if cached_history is not None:
+        historys = [PointHistory(**item) for item in cached_history]
+    else:
+        query = (
+            select(PointHistory)
+            .where(PointHistory.user_id == user.id)
+            .order_by(col(PointHistory.created_at).desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await session.execute(query)
+        historys = list(result.scalars().all())
+        # 캐시 저장 (TTL: 60초)
+        history_data = [item.model_dump() for item in historys]
+        await redis.set(history_cache_key, history_data, ttl=60)
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
 
     return ResponseModel[list[PointHistory]](success=True, data=historys)
+
+
+@router.get(
+    "/{target_user_id}",
+    response_model=ResponseModel[int],
+    responses={
+        200: {"description": "정상 처리"},
+        404: {"model": ErrorResponse, "description": "유저를 찾을 수 없음"},
+    },
+    status_code=status.HTTP_200_OK,
+    summary="포인트 조회",
+    description="특정 유저의 현재 포인트를 조회합니다.",
+)
+async def get_point_balance(
+    target_user_id: int,
+    session: SessionDep,
+):
+    # 1. 유저 정보 캐시 확인
+    cached_user = await redis.get(f"user:{target_user_id}")
+    if cached_user:
+        # 캐시가 있다면 그 중 포인트 정보만 반환
+        return ResponseModel[int](success=True, data=cached_user.get("point", 0))
+
+    # 2. 캐시 없으면 DB 조회
+    query = select(Users.point).where(Users.id == target_user_id)
+    result = await session.execute(query)
+    point = result.scalar_one_or_none()
+
+    if point is None:
+        service_logger.debug(f"UserNotFound: User ID {target_user_id} does not exist.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return ResponseModel[int](success=True, data=point)

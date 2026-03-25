@@ -25,7 +25,7 @@ uv run alembic upgrade head
 uv run fastapi dev
 ```
 
-## ✨ 명령어
+## ✨ 명령어 및 개발 가이드
 ---
 ### 데이터베이스 관리
 데이터베이스 관리에는 Alembic를 사용합니다.
@@ -38,6 +38,14 @@ uv run alembic upgrade head
 
 # 롤백
 uv run alembic downgrade -1
+```
+### 버전 지정
+버전의 경우 [pyproject.toml]()에 작성하며. 유의적 버전 규칙을 따릅니다.
+```
+Major.Minor.Patch
+- Major (1.x.x): 기존 기능과 호환되지 않는 큰 변화가 있을 때
+- Minor (x.1.x): 새로운 기능이 추가되었지만, 기존 기능은 그대로 잘 작동할 때
+- Patch (x.x.1): 단순한 버그 수정이나 성능 개선이 있었을 때
 ```
 
 ## 📦 프로젝트 구조
