@@ -12,14 +12,9 @@ docker-build:
   script:
     - APP_VERSION=$(grep -m 1 '^version' pyproject.toml | cut -d '"' -f 2)
     - echo "APP VERSION '$APP_VERSION'"
-    - docker build --pull --provenance=false -t "$DOCKER_IMAGE_NAME" -t "$CI_REGISTRY_IMAGE:$APP_VERSION" .
-    - docker push "$DOCKER_IMAGE_NAME"
+    - docker build --pull --provenance=false -t "$DOCKER_IMAGE_NAME:latest" -t "$CI_REGISTRY_IMAGE:$APP_VERSION" .
+    - docker push "$DOCKER_IMAGE_NAME:latest"
     - docker push "$CI_REGISTRY_IMAGE:$APP_VERSION"
-    - |
-      if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
-        docker tag "$DOCKER_IMAGE_NAME" "$CI_REGISTRY_IMAGE:latest"
-        docker push "$CI_REGISTRY_IMAGE:latest"
-      fi
   after_script:
     - docker logout
 
