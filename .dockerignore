@@ -1,0 +1,11 @@
+.venv
+logs
+tools
+.pre-commit-config.yaml
+.python-version
+.gitignore
+
+database.erd
+*.env
+LICENSE
+README.md
