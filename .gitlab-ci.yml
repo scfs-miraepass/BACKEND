@@ -11,7 +11,8 @@ docker-build:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
     - APP_VERSION=$(grep -m 1 '^version' pyproject.toml | cut -d '"' -f 2)
-    - docker build --pull -t "$DOCKER_IMAGE_NAME" -t "$CI_REGISTRY_IMAGE:$APP_VERSION" .
+    - echo "APP VERSION '$APP_VERSION'"
+    - docker build --pull --provenance=false -t "$DOCKER_IMAGE_NAME" -t "$CI_REGISTRY_IMAGE:$APP_VERSION" .
     - docker push "$DOCKER_IMAGE_NAME"
     - docker push "$CI_REGISTRY_IMAGE:$APP_VERSION"
     - |
@@ -23,6 +24,6 @@ docker-build:
     - docker logout
 
   rules:
-    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       exists:
         - Dockerfile
