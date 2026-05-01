@@ -29,6 +29,7 @@ def _create_engine() -> AsyncEngine:
         pool_size=settings.database.pool_size,
         max_overflow=settings.database.max_overflow,
         pool_timeout=settings.database.pool_timeout,
+        pool_recycle=3600,
         pool_pre_ping=True,  # 연결 유효성 검사
     )
 

@@ -1,7 +1,9 @@
 import json
 from datetime import datetime
 from typing import Any, Optional
-from redis.asyncio import Redis
+from redis.asyncio import Redis, ConnectionPool
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
 
 from .config import settings
 from .loggers import redis_logger
@@ -21,11 +23,20 @@ class RedisCore:
     def __getattr__(self, name):
         if self.redis:
             return getattr(self.redis, name)
+        redis_logger.warning(f"Redis is not available. Accessing '{name}' failed.")
         raise AttributeError(f"Redis is not initialized. Cannot access '{name}'")
 
     async def init(self):
         try:
-            self.redis = Redis.from_url(str(settings.redis.url), decode_responses=True)
+            retry = Retry(ExponentialBackoff(), 3)
+            pool = ConnectionPool.from_url(
+                str(settings.redis.url),
+                retry=retry,
+                retry_on_timeout=True,
+                health_check_interval=30,
+            )
+
+            self.redis = Redis.from_url(connection_pool=pool, decode_responses=True)
             await self.redis.ping()
             redis_logger.info("Redis initialized and connected successfully.")
         except Exception as e:
