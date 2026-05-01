@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import Any, Optional
-from redis.asyncio import Redis, ConnectionPool
+from redis.asyncio import Redis
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
@@ -29,14 +29,13 @@ class RedisCore:
     async def init(self):
         try:
             retry = Retry(ExponentialBackoff(), 3)
-            pool = ConnectionPool.from_url(
+            self.redis = Redis.from_url(
                 str(settings.redis.url),
                 retry=retry,
                 retry_on_timeout=True,
                 health_check_interval=30,
+                decode_responses=True,
             )
-
-            self.redis = Redis.from_url(connection_pool=pool, decode_responses=True)
             await self.redis.ping()
             redis_logger.info("Redis initialized and connected successfully.")
         except Exception as e:
