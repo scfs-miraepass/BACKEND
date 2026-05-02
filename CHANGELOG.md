@@ -1,3 +1,10 @@
+## [1.0.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.0.0...v1.0.1) (2026-05-02)
+
+
+### Bug Fixes
+
+* **deploy:** uv.lock 가 아티펙트로 안넘어가서 uv lock를 따로 해야하는 현상 해결 ([b334d47](https://git.rldn.xyz/scfs.miraepass/backend/commit/b334d4778f0e10ea3140ec211df4d653c0647cd0))
+
 # 1.0.0 (2026-05-02)
 
 
