@@ -1,3 +1,10 @@
+# [1.1.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.0.2...v1.1.0-dev.1) (2026-05-02)
+
+
+### Features
+
+* GET /admin/student 학생 목록 Endpoint 추가 ([369e0cf](https://git.rldn.xyz/scfs.miraepass/backend/commit/369e0cfed2e95aedbd078f5b31d7637b26b469a4))
+
 ## [1.0.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.0.1...v1.0.2) (2026-05-02)
 
 
