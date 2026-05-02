@@ -21,6 +21,7 @@ semantic-release:
       dotenv: build.env
     paths:
       - pyproject.toml
+      - uv.lock
 
 docker-build:
   image: docker:cli
