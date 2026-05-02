@@ -1,3 +1,26 @@
+stages:
+  - release
+  - build
+
+semantic-release:
+  stage: release
+  image: node:24-slim
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+    - if: $CI_COMMIT_BRANCH == "dev"
+  before_script:
+    - apt-get update && apt-get install -y git
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - export PATH="$HOME/.local/bin:$PATH"
+    - npm install @semantic-release/changelog @semantic-release/git @semantic-release/gitlab @semantic-release/exec @semantic-release/npm @semantic-release/commit-analyzer @semantic-release/release-notes-generator -D
+  script:
+    - npx semantic-release
+  artifacts:
+    reports:
+      dotenv: build.env
+    paths:
+      - pyproject.toml
+
 docker-build:
   image: docker:cli
   stage: build
@@ -7,18 +30,22 @@ docker-build:
     DOCKER_IMAGE_NAME: $CI_REGISTRY_IMAGE
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
+  needs:
+    - job: semantic-release
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+    - if: $CI_COMMIT_BRANCH == "dev"
   before_script:
+    - echo "Version $NEW_VERSION"
+    - if [ -z "$NEW_VERSION" ]; then echo "No new version to build."; exit 0; fi
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - APP_VERSION=$(grep -m 1 '^version' pyproject.toml | cut -d '"' -f 2)
-    - echo "APP VERSION '$APP_VERSION'"
-    - docker build --pull --provenance=false -t "$DOCKER_IMAGE_NAME:latest" -t "$CI_REGISTRY_IMAGE:$APP_VERSION" .
-    - docker push "$DOCKER_IMAGE_NAME:latest"
-    - docker push "$CI_REGISTRY_IMAGE:$APP_VERSION"
+    - docker build --pull --provenance=false -t "$CI_REGISTRY_IMAGE:$NEW_VERSION" .
+    - docker push "$CI_REGISTRY_IMAGE:$NEW_VERSION"
+    - if [[ "$NEW_VERSION" != *"-dev"* ]]; then
+        docker tag $CI_REGISTRY_IMAGE:$NEW_VERSION $CI_REGISTRY_IMAGE:latest
+        docker push $CI_REGISTRY_IMAGE:latest
+      fi
   after_script:
     - docker logout
-
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      exists:
-        - Dockerfile
