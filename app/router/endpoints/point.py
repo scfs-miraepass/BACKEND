@@ -56,10 +56,14 @@ async def _process_point_change(
     target_user.point += change_amount
 
     # 포인트 이력 생성
+    reason = operator.name
+    if operator.type == UserType.teacher:
+        reason += " 선생님"
+
     history = PointHistory(
         user_id=target_user.id,
         changed_amount=change_amount,
-        reason=operator.name + (" 선생님" if operator.type == UserType.teacher else ""),
+        reason=reason,
         type=change_type,
     )
     session.add(history)
@@ -104,7 +108,7 @@ async def _process_point_change(
     },
     status_code=status.HTTP_204_NO_CONTENT,
     summary="포인트 지급",
-    description="특정 유저에게 포인트를 지급합니다. (교사 전용)",
+    description="특정 유저에게 포인트를 지급합니다. (교사 또는 관리자 전용)",
 )
 async def grant_points(
     operation: PointOperation,
@@ -113,12 +117,14 @@ async def grant_points(
 ):
     user, _ = auth_data
 
-    # 권한 확인: Teacher only
-    if user.type != UserType.teacher:
-        service_logger.warning(f"Unauthorized grant attempt. UserID: {user.id}, Role: {user.type}")
+    # 권한 확인: Teacher or Admin only
+    if user.type != UserType.teacher and not user.is_admin:
+        service_logger.warning(
+            f"Unauthorized grant attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied. Only teachers can grant points.",
+            detail="Permission denied. Only teachers or admins can grant points.",
         )
 
     await _process_point_change(
@@ -155,7 +161,7 @@ async def grant_points(
     },
     status_code=status.HTTP_200_OK,
     summary="포인트 차감",
-    description="특정 유저의 포인트를 차감합니다. (서비스 유저 전용)",
+    description="특정 유저의 포인트를 차감합니다. (서비스 유저 또는 관리자 전용)",
 )
 async def deduct_points(
     operation: PointOperation,
@@ -164,12 +170,14 @@ async def deduct_points(
 ):
     user, _ = auth_data
 
-    # 권한 확인: Service only
-    if user.type != UserType.service:
-        service_logger.warning(f"Unauthorized deduct attempt. UserID: {user.id}, Role: {user.type}")
+    # 권한 확인: Service or Admin only
+    if user.type != UserType.service and not user.is_admin:
+        service_logger.warning(
+            f"Unauthorized deduct attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied. Only service users can deduct points.",
+            detail="Permission denied. Only service users or admins can deduct points.",
         )
 
     new_balance = await _process_point_change(
