@@ -9,7 +9,7 @@ semantic-release:
     - if: $CI_COMMIT_BRANCH == "master"
     - if: $CI_COMMIT_BRANCH == "dev"
   before_script:
-    - apt-get update && apt-get install -y git
+    - apt-get update && apt-get install -y git curl
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - export PATH="$HOME/.local/bin:$PATH"
     - npm install @semantic-release/changelog @semantic-release/git @semantic-release/gitlab @semantic-release/exec @semantic-release/npm @semantic-release/commit-analyzer @semantic-release/release-notes-generator -D
