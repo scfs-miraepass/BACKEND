@@ -45,7 +45,8 @@ docker-build:
   script:
     - docker build --pull --provenance=false -t "$CI_REGISTRY_IMAGE:$NEW_VERSION" .
     - docker push "$CI_REGISTRY_IMAGE:$NEW_VERSION"
-    - if [[ "$NEW_VERSION" != *"-dev"* ]]; then
+    - |
+      if [[ "$NEW_VERSION" != *"-dev"* ]]; then
         docker tag $CI_REGISTRY_IMAGE:$NEW_VERSION $CI_REGISTRY_IMAGE:latest
         docker push $CI_REGISTRY_IMAGE:latest
       fi
