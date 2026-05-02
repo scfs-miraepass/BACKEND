@@ -1,3 +1,10 @@
+# [1.1.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0-dev.1...v1.1.0-dev.2) (2026-05-02)
+
+
+### Features
+
+* **POST /admin/point:** 완성 (closes [#9](https://git.rldn.xyz/scfs.miraepass/backend/issues/9), [#10](https://git.rldn.xyz/scfs.miraepass/backend/issues/10)) ([baa67ba](https://git.rldn.xyz/scfs.miraepass/backend/commit/baa67bafb149cbd751744bc9cd265e749ebe414c))
+
 # [1.1.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.0.2...v1.1.0-dev.1) (2026-05-02)
 
 
