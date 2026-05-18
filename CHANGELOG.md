@@ -1,3 +1,10 @@
+# [1.1.0-dev.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0-dev.2...v1.1.0-dev.3) (2026-05-18)
+
+
+### Features
+
+* **point:** 포인트 지급시 교사에게 10% 포인트 지급 ([e17e0f9](https://git.rldn.xyz/scfs.miraepass/backend/commit/e17e0f9e1158f0ac3c16653eccba5b3b5eda8bab)), closes [#12](https://git.rldn.xyz/scfs.miraepass/backend/issues/12)
+
 # [1.1.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0-dev.1...v1.1.0-dev.2) (2026-05-02)
 
 
