@@ -74,7 +74,10 @@ async def _process_point_change(
         op_user.point += bonus_amount
         session.add(
             PointHistory(
-                user_id=op_user.id, changed_amount=bonus_amount, reason="포인트 지급 보상", type=PointHistoryType.grant
+                user_id=op_user.id,
+                changed_amount=bonus_amount,
+                reason=f"{target_user.name} 포인트 지급",
+                type=PointHistoryType.grant,
             )
         )
 
