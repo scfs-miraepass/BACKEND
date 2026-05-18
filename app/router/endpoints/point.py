@@ -78,14 +78,16 @@ async def _process_point_change(
             )
         )
 
-        await redis.delete(f"user:{op_user.id}", f"point_history_count:{op_user.id}")
+        await redis.delete(f"user:{op_user.id}")
+        await redis.delete(f"point_history_count:{op_user.id}")
         await redis.delete_pattern(f"point_history:{op_user.id}:*")
 
     await session.commit()
     await session.refresh(target_user)
 
     # 캐시 무효화
-    await redis.delete(f"user:{target_user.id}", f"point_history_count:{target_user.id}")
+    await redis.delete(f"user:{target_user.id}")
+    await redis.delete(f"point_history_count:{target_user.id}")
     await redis.delete_pattern(f"point_history:{target_user.id}:*")
     await redis.delete_pattern("search_users:*")
 
