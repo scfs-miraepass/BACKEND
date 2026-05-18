@@ -32,7 +32,7 @@ async def _process_point_change(
     # 동시성 문제 해결을 위해 Row-level Lock 적용 (SELECT ... FOR UPDATE)
     query = select(Users).where(Users.id == target_user_id).with_for_update()
     result = await session.execute(query)
-    target_user = result.scalar_one_or_none()
+    target_user: Users | None = result.scalar_one_or_none()
 
     action_name = "Deduct" if is_deduction else "Grant"
 
@@ -67,6 +67,28 @@ async def _process_point_change(
         type=change_type,
     )
     session.add(history)
+
+    # 교사가 포인트를 지급하는 경우, 교사에게도 10% 지급 (소수점 버림)
+    if not is_deduction and operator.type == UserType.teacher:
+        bonus_amount = amount // 10
+        if bonus_amount > 0:
+            # 교사 본인 정보 락 및 업데이트
+            op_query = select(Users).where(Users.id == operator.id).with_for_update()
+            op_result = await session.execute(op_query)
+            op_user = op_result.scalar_one()
+            op_user.point += bonus_amount
+
+            # 교사 포인트 이력 생성
+            op_history = PointHistory(
+                user_id=op_user.id,
+                changed_amount=bonus_amount,
+                reason="포인트 지급 보상",
+                type=PointHistoryType.grant,
+            )
+            session.add(op_history)
+            await redis.delete(f"user:{op_user.id}")
+            await redis.delete(f"point_history_count:{op_user.id}")
+            await redis.delete_pattern(f"point_history:{op_user.id}:*")
 
     await session.commit()
     await session.refresh(target_user)

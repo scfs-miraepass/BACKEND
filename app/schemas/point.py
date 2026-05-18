@@ -12,6 +12,8 @@ class PointHistoryType(str, Enum):
     teacher = "teacher"  # 교사 지급
     cafe = "cafe"  # 음료 구매
     food = "food"  # 음식 구매
+    etc = "etc"  # 기타
+    grant = "grant"  # 학생 포인트 지급에 대한 교사 포인트 지급
 
 
 class PointHistory(SQLModel, table=True):
