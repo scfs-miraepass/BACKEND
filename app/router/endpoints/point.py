@@ -37,7 +37,7 @@ async def _process_point_change(
     action_name = "Deduct" if is_deduction else "Grant"
 
     if not target_user:
-        service_logger.debug(f"{action_name} points failed. Target User ID {target_user_id} not found.")
+        service_logger.warning(f"{action_name} points failed. Target User ID {target_user_id} not found.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found.")
 
     if is_deduction:
@@ -56,58 +56,42 @@ async def _process_point_change(
     target_user.point += change_amount
 
     # 포인트 이력 생성
-    reason = operator.name
-    if operator.type == UserType.teacher:
-        reason += " 선생님"
-
-    history = PointHistory(
-        user_id=target_user.id,
-        changed_amount=change_amount,
-        reason=reason,
-        type=change_type,
+    reason = f"{operator.name} 선생님" if operator.type == UserType.teacher else operator.name
+    session.add(
+        PointHistory(
+            user_id=target_user.id,
+            changed_amount=change_amount,
+            reason=reason,
+            type=change_type,
+        )
     )
-    session.add(history)
 
     # 교사가 포인트를 지급하는 경우, 교사에게도 10% 지급 (소수점 버림)
-    if not is_deduction and operator.type == UserType.teacher:
-        bonus_amount = amount // 10
-        if bonus_amount > 0:
-            # 교사 본인 정보 락 및 업데이트
-            op_query = select(Users).where(Users.id == operator.id).with_for_update()
-            op_result = await session.execute(op_query)
-            op_user = op_result.scalar_one()
-            op_user.point += bonus_amount
-
-            # 교사 포인트 이력 생성
-            op_history = PointHistory(
-                user_id=op_user.id,
-                changed_amount=bonus_amount,
-                reason="포인트 지급 보상",
-                type=PointHistoryType.grant,
+    bonus_amount = amount // 10
+    if not is_deduction and operator.type == UserType.teacher and bonus_amount > 0:
+        op_result = await session.execute(select(Users).where(Users.id == operator.id).with_for_update())
+        op_user = op_result.scalar_one()
+        op_user.point += bonus_amount
+        session.add(
+            PointHistory(
+                user_id=op_user.id, changed_amount=bonus_amount, reason="포인트 지급 보상", type=PointHistoryType.grant
             )
-            session.add(op_history)
-            await redis.delete(f"user:{op_user.id}")
-            await redis.delete(f"point_history_count:{op_user.id}")
-            await redis.delete_pattern(f"point_history:{op_user.id}:*")
+        )
+
+        await redis.delete(f"user:{op_user.id}", f"point_history_count:{op_user.id}")
+        await redis.delete_pattern(f"point_history:{op_user.id}:*")
 
     await session.commit()
     await session.refresh(target_user)
 
-    # 캐시 무효화 (Invalidate Caches)
-    # 1. 유저 정보 캐시 삭제 (포인트 변경 반영을 위해)
-    await redis.delete(f"user:{target_user.id}")
-    # 2. 포인트 히스토리 개수 캐시 삭제 (새로운 기록 추가됨)
-    await redis.delete(f"point_history_count:{target_user.id}")
-    # 3. 포인트 히스토리 목록 캐시 삭제 (패턴 매칭 삭제)
+    # 캐시 무효화
+    await redis.delete(f"user:{target_user.id}", f"point_history_count:{target_user.id}")
     await redis.delete_pattern(f"point_history:{target_user.id}:*")
-    # 4. 검색 캐시 삭제(패턴 매칭 삭제)
     await redis.delete_pattern("search_users:*")
 
     service_logger.debug(
-        f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, Amount: {amount}, New Balance: {target_user.point}"
+        f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, New Balance: {target_user.point}"
     )
-    service_logger.debug(f"Point history recorded for user {target_user.id}")
-
     return target_user.point
 
 
