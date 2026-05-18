@@ -1,3 +1,16 @@
+# [1.1.0-dev.4](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0-dev.3...v1.1.0-dev.4) (2026-05-18)
+
+
+### Bug Fixes
+
+* Redis 캐시 초기화 하는 과정에서 delete에 인수가 잘 못 들어가 있는거 수정 ([83cd756](https://git.rldn.xyz/scfs.miraepass/backend/commit/83cd756cdb6b86c9591eb8194205e3a20c2c1efc))
+
+
+### Features
+
+* DATABASE 마이그레이셩 재구성 ([3b294d2](https://git.rldn.xyz/scfs.miraepass/backend/commit/3b294d238e5dcaf6a4b405e752c5ce9bb66901e1))
+* 교사 포인트 지급 보상? 포인트에 어떤 학생에게 주었는지 까지 표기 ([32c75bb](https://git.rldn.xyz/scfs.miraepass/backend/commit/32c75bb8773b2e18f005129d8486d2d81b334a91))
+
 # [1.1.0-dev.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0-dev.2...v1.1.0-dev.3) (2026-05-18)
 
 
