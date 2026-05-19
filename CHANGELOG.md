@@ -1,3 +1,15 @@
+# [1.2.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0...v1.2.0) (2026-05-19)
+
+
+### Features
+
+* 학생 지급시 교사 10% 지급에서 교사 동일 지급 ([7911209](https://git.rldn.xyz/scfs.miraepass/backend/commit/791120987ec62f1dab1de3bfa1d19df3c0510fd3))
+
+
+### Reverts
+
+* Revert "chore(release): 1.1.0 [skip ci]" ([5e05c49](https://git.rldn.xyz/scfs.miraepass/backend/commit/5e05c498e21ba1da56026880f23aa594bcd03163))
+
 # [1.1.0-dev.4](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0-dev.3...v1.1.0-dev.4) (2026-05-18)
 
 
