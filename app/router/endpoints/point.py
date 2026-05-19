@@ -66,16 +66,15 @@ async def _process_point_change(
         )
     )
 
-    # 교사가 포인트를 지급하는 경우, 교사에게도 10% 지급 (소수점 버림)
-    bonus_amount = amount // 10
-    if not is_deduction and operator.type == UserType.teacher and bonus_amount > 0:
+    # 교사가 포인트를 지급하는 경우, 교사에게도 지급
+    if not is_deduction and operator.type == UserType.teacher and amount > 0:
         op_result = await session.execute(select(Users).where(Users.id == operator.id).with_for_update())
         op_user = op_result.scalar_one()
-        op_user.point += bonus_amount
+        op_user.point += amount
         session.add(
             PointHistory(
                 user_id=op_user.id,
-                changed_amount=bonus_amount,
+                changed_amount=amount,
                 reason=f"{target_user.name} 포인트 지급",
                 type=PointHistoryType.grant,
             )
