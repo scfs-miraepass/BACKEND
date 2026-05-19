@@ -1,4 +1,5 @@
 from uuid import uuid4
+from typing import cast
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel
@@ -61,7 +62,7 @@ async def login(
     session: SessionDep,
 ):
     # 1. 유저 조회
-    user: Users | None = await session.get(Users, form.id)
+    user = cast(Users | None, await session.get(Users, form.id))
 
     # 2. 유저 검증 (비밀번호 비교)
     if not user or not user.password or not verify_password(form.password, user.password):
@@ -164,7 +165,7 @@ async def get_current_user(
     description="첫 로그인시 비밀번호 변경을 합니다.",
 )
 async def change_password_new(form: ChangePasswordNewForm, session: SessionDep):
-    user: Users | None = await session.get(Users, form.user)
+    user = cast(Users | None, await session.get(Users, form.user))
 
     if not user:
         raise HTTPException(
@@ -252,7 +253,7 @@ async def change_password(form: ChangePasswordForm, auth_data: LoginDep, session
 )
 async def check_password_exists(user_id: int, session: SessionDep, t: UserType | None = None):
     """특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다. 로그인시 유저가 있는지 확인할때 사용합니다."""
-    user: Users | None = await session.get(Users, user_id)
+    user = cast(Users | None, await session.get(Users, user_id))
 
     if not user:
         raise HTTPException(

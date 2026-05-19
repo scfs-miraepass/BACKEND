@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +38,7 @@ async def verify_session(
         return user, session_id
 
     # 2. Cache Miss: DB에서 유저 정보 조회
-    user: Users | None = await session.get(Users, user_id)
+    user = cast(Users | None, await session.get(Users, user_id))
     if not user:
         # DB에도 유저가 없는 경우, 비정상적인 상태이므로 세션 삭제
         await redis.delete(f"session:{session_id}")

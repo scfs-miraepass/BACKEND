@@ -51,8 +51,8 @@ async def search(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserT
     """
     user, _ = auth_data
 
-    # 권한 확인: Teacher, Service only
-    if user.type != UserType.teacher and user.type != UserType.service:
+    # 권한 확인: Teacher, Service or Admin only
+    if user.type != UserType.teacher and user.type != UserType.service and not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",

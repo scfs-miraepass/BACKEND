@@ -1,3 +1,37 @@
+# [1.1.0-dev.4](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0-dev.3...v1.1.0-dev.4) (2026-05-18)
+
+
+### Bug Fixes
+
+* Redis 캐시 초기화 하는 과정에서 delete에 인수가 잘 못 들어가 있는거 수정 ([83cd756](https://git.rldn.xyz/scfs.miraepass/backend/commit/83cd756cdb6b86c9591eb8194205e3a20c2c1efc))
+
+
+### Features
+
+* DATABASE 마이그레이셩 재구성 ([3b294d2](https://git.rldn.xyz/scfs.miraepass/backend/commit/3b294d238e5dcaf6a4b405e752c5ce9bb66901e1))
+* 교사 포인트 지급 보상? 포인트에 어떤 학생에게 주었는지 까지 표기 ([32c75bb](https://git.rldn.xyz/scfs.miraepass/backend/commit/32c75bb8773b2e18f005129d8486d2d81b334a91))
+
+# [1.1.0-dev.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0-dev.2...v1.1.0-dev.3) (2026-05-18)
+
+
+### Features
+
+* **point:** 포인트 지급시 교사에게 10% 포인트 지급 ([e17e0f9](https://git.rldn.xyz/scfs.miraepass/backend/commit/e17e0f9e1158f0ac3c16653eccba5b3b5eda8bab)), closes [#12](https://git.rldn.xyz/scfs.miraepass/backend/issues/12)
+
+# [1.1.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0-dev.1...v1.1.0-dev.2) (2026-05-02)
+
+
+### Features
+
+* **POST /admin/point:** 완성 (closes [#9](https://git.rldn.xyz/scfs.miraepass/backend/issues/9), [#10](https://git.rldn.xyz/scfs.miraepass/backend/issues/10)) ([baa67ba](https://git.rldn.xyz/scfs.miraepass/backend/commit/baa67bafb149cbd751744bc9cd265e749ebe414c))
+
+# [1.1.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.0.2...v1.1.0-dev.1) (2026-05-02)
+
+
+### Features
+
+* GET /admin/student 학생 목록 Endpoint 추가 ([369e0cf](https://git.rldn.xyz/scfs.miraepass/backend/commit/369e0cfed2e95aedbd078f5b31d7637b26b469a4))
+
 ## [1.0.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.0.1...v1.0.2) (2026-05-02)
 
 

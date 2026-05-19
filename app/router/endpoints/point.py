@@ -32,12 +32,12 @@ async def _process_point_change(
     # 동시성 문제 해결을 위해 Row-level Lock 적용 (SELECT ... FOR UPDATE)
     query = select(Users).where(Users.id == target_user_id).with_for_update()
     result = await session.execute(query)
-    target_user = result.scalar_one_or_none()
+    target_user: Users | None = result.scalar_one_or_none()
 
     action_name = "Deduct" if is_deduction else "Grant"
 
     if not target_user:
-        service_logger.debug(f"{action_name} points failed. Target User ID {target_user_id} not found.")
+        service_logger.warning(f"{action_name} points failed. Target User ID {target_user_id} not found.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found.")
 
     if is_deduction:
@@ -56,32 +56,47 @@ async def _process_point_change(
     target_user.point += change_amount
 
     # 포인트 이력 생성
-    history = PointHistory(
-        user_id=target_user.id,
-        changed_amount=change_amount,
-        reason=operator.name + (" 선생님" if operator.type == UserType.teacher else ""),
-        type=change_type,
+    reason = f"{operator.name} 선생님" if operator.type == UserType.teacher else operator.name
+    session.add(
+        PointHistory(
+            user_id=target_user.id,
+            changed_amount=change_amount,
+            reason=reason,
+            type=change_type,
+        )
     )
-    session.add(history)
+
+    # 교사가 포인트를 지급하는 경우, 교사에게도 10% 지급 (소수점 버림)
+    bonus_amount = amount // 10
+    if not is_deduction and operator.type == UserType.teacher and bonus_amount > 0:
+        op_result = await session.execute(select(Users).where(Users.id == operator.id).with_for_update())
+        op_user = op_result.scalar_one()
+        op_user.point += bonus_amount
+        session.add(
+            PointHistory(
+                user_id=op_user.id,
+                changed_amount=bonus_amount,
+                reason=f"{target_user.name} 포인트 지급",
+                type=PointHistoryType.grant,
+            )
+        )
+
+        await redis.delete(f"user:{op_user.id}")
+        await redis.delete(f"point_history_count:{op_user.id}")
+        await redis.delete_pattern(f"point_history:{op_user.id}:*")
 
     await session.commit()
     await session.refresh(target_user)
 
-    # 캐시 무효화 (Invalidate Caches)
-    # 1. 유저 정보 캐시 삭제 (포인트 변경 반영을 위해)
+    # 캐시 무효화
     await redis.delete(f"user:{target_user.id}")
-    # 2. 포인트 히스토리 개수 캐시 삭제 (새로운 기록 추가됨)
     await redis.delete(f"point_history_count:{target_user.id}")
-    # 3. 포인트 히스토리 목록 캐시 삭제 (패턴 매칭 삭제)
     await redis.delete_pattern(f"point_history:{target_user.id}:*")
-    # 4. 검색 캐시 삭제(패턴 매칭 삭제)
     await redis.delete_pattern("search_users:*")
 
     service_logger.debug(
-        f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, Amount: {amount}, New Balance: {target_user.point}"
+        f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, New Balance: {target_user.point}"
     )
-    service_logger.debug(f"Point history recorded for user {target_user.id}")
-
     return target_user.point
 
 
@@ -104,7 +119,7 @@ async def _process_point_change(
     },
     status_code=status.HTTP_204_NO_CONTENT,
     summary="포인트 지급",
-    description="특정 유저에게 포인트를 지급합니다. (교사 전용)",
+    description="특정 유저에게 포인트를 지급합니다. (교사 또는 관리자 전용)",
 )
 async def grant_points(
     operation: PointOperation,
@@ -113,12 +128,14 @@ async def grant_points(
 ):
     user, _ = auth_data
 
-    # 권한 확인: Teacher only
-    if user.type != UserType.teacher:
-        service_logger.warning(f"Unauthorized grant attempt. UserID: {user.id}, Role: {user.type}")
+    # 권한 확인: Teacher or Admin only
+    if user.type != UserType.teacher and not user.is_admin:
+        service_logger.warning(
+            f"Unauthorized grant attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied. Only teachers can grant points.",
+            detail="Permission denied. Only teachers or admins can grant points.",
         )
 
     await _process_point_change(
@@ -155,7 +172,7 @@ async def grant_points(
     },
     status_code=status.HTTP_200_OK,
     summary="포인트 차감",
-    description="특정 유저의 포인트를 차감합니다. (서비스 유저 전용)",
+    description="특정 유저의 포인트를 차감합니다. (서비스 유저 또는 관리자 전용)",
 )
 async def deduct_points(
     operation: PointOperation,
@@ -164,12 +181,14 @@ async def deduct_points(
 ):
     user, _ = auth_data
 
-    # 권한 확인: Service only
-    if user.type != UserType.service:
-        service_logger.warning(f"Unauthorized deduct attempt. UserID: {user.id}, Role: {user.type}")
+    # 권한 확인: Service or Admin only
+    if user.type != UserType.service and not user.is_admin:
+        service_logger.warning(
+            f"Unauthorized deduct attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied. Only service users can deduct points.",
+            detail="Permission denied. Only service users or admins can deduct points.",
         )
 
     new_balance = await _process_point_change(
