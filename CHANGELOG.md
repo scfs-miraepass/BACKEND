@@ -1,3 +1,11 @@
+# [1.3.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.3.0-dev.1...v1.3.0-dev.2) (2026-05-20)
+
+
+### Features
+
+* **point:** 포인트 지급 한도를 조회하는 Endpoint 추가 ([52c2b0b](https://git.rldn.xyz/scfs.miraepass/backend/commit/52c2b0b7e9ff9e3fa0231c455794339eb9e25138))
+* **point:** 포인트 지급한도 초기화를 위한 스케줄러 추가 ([39e6c24](https://git.rldn.xyz/scfs.miraepass/backend/commit/39e6c24acd21e00d1a109bd43868f607bb7a2185))
+
 # [1.3.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.2.0...v1.3.0-dev.1) (2026-05-20)
 
 
