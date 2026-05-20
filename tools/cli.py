@@ -7,7 +7,6 @@ import logging
 
 import typer
 from sqlalchemy import select, desc
-from sqlalchemy.exc import NoResultFound
 
 # 프로젝트 루트 디렉토리를 sys.path에 추가하여 app 모듈을 임포트할 수 있도록 합니다.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -62,6 +61,15 @@ async def run_with_redis(coroutine):
         await coroutine
     finally:
         await redis.close()
+
+
+async def clear_user_cache(user_id: int):
+    """Clears the cache for a specific user."""
+    await redis.delete(f"user:{user_id}")
+    await redis.delete(f"point_history_count:{user_id}")
+    await redis.delete_pattern(f"point_history:{user_id}:*")
+    await redis.delete_pattern("search_users:*")
+    print(f"Cache cleared for user ID: {user_id}")
 
 
 @app.command()
@@ -141,28 +149,26 @@ def manage_point(
 
     async def _manage_point():
         async for session in get_session_context():
-            try:
-                user = await session.get(Users, user_id)
-                if not user:
-                    print(f"Error: User with ID {user_id} not found.")
-                    return
-
-                user.point += amount
-
-                history_entry = PointHistory(
-                    user_id=user_id,
-                    changed_amount=amount,
-                    reason=reason,
-                    type=history_type,
-                )
-                session.add(history_entry)
-
-                print(f"Successfully changed points for user {user_id}. New balance: {user.point}")
-
-            except NoResultFound:
+            user = await session.get(Users, user_id)
+            if not user:
                 print(f"Error: User with ID {user_id} not found.")
+                return
 
-    asyncio.run(_manage_point())
+            user.point += amount
+
+            history_entry = PointHistory(
+                user_id=user_id,
+                changed_amount=amount,
+                reason=reason,
+                type=history_type,
+            )
+            session.add(history_entry)
+            await session.commit()  # Commit before clearing cache
+
+            await clear_user_cache(user_id)
+            print(f"Successfully changed points for user {user_id}. New balance: {user.point}")
+
+    asyncio.run(run_with_redis(_manage_point()))
 
 
 @app.command()
@@ -252,9 +258,45 @@ def delete_user(
                     return
 
             await session.delete(user)
+            await session.commit()  # Commit before clearing cache
+
+            await clear_user_cache(user_id)
             print(f"User '{user.name}' (ID: {user.id}) has been successfully deleted.")
 
-    asyncio.run(_delete_user())
+    asyncio.run(run_with_redis(_delete_user()))
+
+
+@app.command()
+def reset_password(
+    user_id: int = typer.Option(..., help="User ID to reset password for"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force reset without prompt"),
+):
+    """
+    Reset a user's password to None.
+    """
+
+    async def _reset_password():
+        async for session in get_session_context():
+            user = await session.get(Users, user_id)
+            if not user:
+                print(f"User with ID {user_id} not found.")
+                return
+
+            if not force:
+                confirm = input(
+                    f"Are you sure you want to reset the password for user '{user.name}' (ID: {user.id})? [y/N]: "
+                )
+                if confirm.lower() != "y":
+                    print("Password reset cancelled.")
+                    return
+
+            user.password = None
+            await session.commit()  # Commit before clearing cache
+
+            await clear_user_cache(user_id)
+            print(f"Password for user '{user.name}' (ID: {user.id}) has been reset to None.")
+
+    asyncio.run(run_with_redis(_reset_password()))
 
 
 @app.command()
