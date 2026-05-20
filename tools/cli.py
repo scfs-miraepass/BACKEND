@@ -322,14 +322,65 @@ def point_history(
                 print("No point history found.")
                 return
 
-            print(f"{'User ID':<10} | {'Amount':<10} | {'Type':<10} | {'Reason':<20} | {'Date'}")
-            print("-" * 80)
+            print(f"{'ID':<8} | {'User ID':<10} | {'Amount':<10} | {'Type':<10} | {'Reason':<20} | {'Date'}")
+            print("-" * 90)
             for h in histories:
                 h_type = h.type.value if h.type else "N/A"
                 date_str = h.created_at.strftime("%Y-%m-%d %H:%M:%S") if h.created_at else "N/A"
-                print(f"{h.user_id:<10} | {h.changed_amount:<10} | {h_type:<10} | {h.reason:<20} | {date_str}")
+                print(
+                    f"{h.id:<8} | {h.user_id:<10} | {h.changed_amount:<10} | {h_type:<10} | {h.reason:<20} | {date_str}"
+                )
 
     asyncio.run(_point_history())
+
+
+@app.command()
+def delete_point_history(
+    history_id: int = typer.Option(..., help="Point history ID to delete"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force deletion without prompt"),
+):
+    """
+    Delete a point history record and recalculate user points.
+    """
+
+    async def _delete_point_history():
+        async for session in get_session_context():
+            history_to_delete = await session.get(PointHistory, history_id)
+
+            if not history_to_delete:
+                print(f"Point history with ID {history_id} not found.")
+                return
+
+            user_id = history_to_delete.user_id
+            changed_amount = history_to_delete.changed_amount
+
+            if not force:
+                confirm = input(
+                    f"Are you sure you want to delete history ID {history_id} (User: {user_id}, Amount: {changed_amount})? This will affect user's points. [y/N]: "
+                )
+                if confirm.lower() != "y":
+                    print("Deletion cancelled.")
+                    return
+
+            # Get the associated user
+            user = await session.get(Users, user_id)
+            if not user:
+                print(f"Error: User with ID {user_id} not found, cannot recalculate points. Deletion aborted.")
+                return
+
+            # Revert the point change
+            user.point -= changed_amount
+            if changed_amount > 0:  # If it was a point gain, revert total_point as well
+                user.total_point -= changed_amount
+
+            await session.delete(history_to_delete)
+            await session.commit()
+
+            await clear_user_cache(user_id)
+            print(f"Point history ID {history_id} deleted. User {user_id}'s points have been recalculated.")
+            print(f"New point balance for user {user_id}: {user.point}")
+
+    asyncio.run(run_with_redis(_delete_point_history()))
 
 
 # --- Redis Commands ---
