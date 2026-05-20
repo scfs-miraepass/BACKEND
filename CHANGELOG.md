@@ -1,3 +1,10 @@
+# [1.3.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.2.0...v1.3.0-dev.1) (2026-05-20)
+
+
+### Features
+
+* **point:** 누적 포인트 추가 ([3221ce7](https://git.rldn.xyz/scfs.miraepass/backend/commit/3221ce71c5804c56b8f5015f0ea54200df327307)), closes [#16](https://git.rldn.xyz/scfs.miraepass/backend/issues/16)
+
 # [1.2.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.1.0...v1.2.0) (2026-05-19)
 
 
