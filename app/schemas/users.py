@@ -1,9 +1,10 @@
 from sqlmodel import Field, SQLModel, Relationship, delete
 from sqlalchemy import event, Connection, insert
-from typing import Optional, TYPE_CHECKING, List
+from typing import Optional, TYPE_CHECKING, List, Any
 from enum import Enum
-from typing import cast, Any
+from typing import cast
 from hangulpy import split_hangul_string, get_chosung_string
+from pydantic import field_serializer
 
 from app.core.loggers import service_logger
 from .point import PointHistoryType
@@ -31,11 +32,33 @@ class User(SQLModel):
     grade: Optional[int] = Field(description="학년")
     number: Optional[int] = Field(description="반")
     point: int = Field(0, description="보유 포인트")
+    total_point: int = Field(0, description="누적 포인트")
     is_admin: bool = Field(False, description="관리자 여부")
 
     history_type: Optional[PointHistoryType] = Field(
         None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입"
     )
+
+    @field_serializer("type")
+    def serialize_type(self, type_value: Any, _info):
+        if isinstance(type_value, UserType):
+            return type_value.value
+        return type_value
+
+    @field_serializer("history_type")
+    def serialize_history_type(self, type_value: Any, _info):
+        if isinstance(type_value, PointHistoryType):
+            return type_value.value
+        return type_value
+
+    def __setattr__(self, name, value):
+        if name == "point":
+            current_point = getattr(self, "point", 0)
+            if value is not None and current_point is not None:
+                if value > current_point:
+                    diff = value - current_point
+                    self.total_point = getattr(self, "total_point", 0) + diff
+        super().__setattr__(name, value)
 
 
 class Users(User, table=True):

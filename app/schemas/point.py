@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Any
 from sqlalchemy import Column, DateTime, func
 from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum
+from pydantic import field_serializer
 
 if TYPE_CHECKING:
     from .users import Users
@@ -35,3 +36,15 @@ class PointHistory(SQLModel, table=True):
             onupdate=func.now(),
         ),
     )
+
+    @field_serializer("type")
+    def serialize_type(self, type_value: Any, _info):
+        if isinstance(type_value, PointHistoryType):
+            return type_value.value
+        return type_value
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, dt: Any, _info):
+        if isinstance(dt, datetime):
+            return dt.isoformat()
+        return dt

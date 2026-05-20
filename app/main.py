@@ -7,10 +7,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+
 from .router import router
 from .schemas.response import ErrorResponse
 from .core import settings
-from .core.loggers import global_logger
+from .core.loggers import global_logger, service_logger
 from .core.database import database_init, database_close
 from .core.redis import redis
 
@@ -21,6 +24,12 @@ with open(pyproject_path, "rb") as f:
     app_version = pyproject_data.get("project", {}).get("version")
     if not app_version:
         raise KeyError("Failed to find 'version' in [project] section of pyproject.toml")
+
+
+async def reset_limit():
+    service_logger.debug("Resetting point distribution limits.")
+    await redis.delete_pattern("point_limit:*")
+    service_logger.info("Point distribution limit reset complete.")
 
 
 @asynccontextmanager
@@ -36,10 +45,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global_logger.info("Database Initialized.")
 
     await redis.init()
+    global_logger.info("Redis Initialized.")
+
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(reset_limit, CronTrigger(day_of_week="mon", hour=0, minute=0))
+
+    scheduler.start()
+    global_logger.info("Scheduler Start")
 
     yield
 
+    scheduler.shutdown()
+    global_logger.info("Scheduler Stop")
+
     await redis.close()
+    global_logger.info("Redis Closed.")
+
     await database_close()
     global_logger.info("Database Closed.")
 
@@ -101,7 +122,7 @@ async def read_root():
 #     # 5000~ : 서비스
 #
 #     # 테스트 학생
-#     session.add(Users(id=3601, type=UserType.student, name="홍길동", grade=3, number=6))
+#     # session.add(Users(id=3601, type=UserType.student, name="홍길동", grade=3, number=6))
 #
 #     # 테스트 서비스
 #     session.add(Users(type=UserType.service, name="카페테리아", id=5000))

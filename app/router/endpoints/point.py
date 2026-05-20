@@ -12,6 +12,7 @@ from app.schemas import PointHistory, Users, UserType, PointHistoryType
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])
+DEFAULT_POINT_LIMIT = 500
 
 
 class PointOperation(BaseModel):
@@ -99,6 +100,36 @@ async def _process_point_change(
     return target_user.point
 
 
+@router.get(
+    "/limit",
+    responses={
+        200: {"description": "정상적으로 처리됨"},
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음",
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
+    },
+    response_model=ResponseModel[int],
+    status_code=status.HTTP_200_OK,
+    summary="포인트 지급 한도 조회",
+    description="현재 로그인한 자기자신의 포인트 지급 한도를 조회합니다.",
+)
+async def get_limit(
+    auth_data: LoginDep,
+):
+    user, _ = auth_data
+    limit_key = f"point_limit:{user.id}"
+    limit: int = await redis.get(limit_key)
+    if limit is None:
+        limit = DEFAULT_POINT_LIMIT
+
+    return ResponseModel[int](success=True, data=limit)
+
+
 @router.post(
     "/grant",
     responses={
@@ -114,6 +145,10 @@ async def _process_point_change(
         404: {
             "model": ErrorResponse,
             "description": "지급할 학생을 찾을 수 없음",
+        },
+        429: {
+            "model": ErrorResponse,
+            "description": "주간 포인트 지급 한도를 초과할 경우 발생합니다. 관리자 계정의 경우 한도가 적용되지 않습니다.",
         },
     },
     status_code=status.HTTP_204_NO_CONTENT,
@@ -136,6 +171,20 @@ async def grant_points(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied. Only teachers or admins can grant points.",
         )
+
+    if not user.is_admin:
+        limit_key = f"point_limit:{user.id}"
+        limit: int = await redis.get(limit_key)
+        if limit is None:
+            limit = DEFAULT_POINT_LIMIT
+        use_limit = limit - operation.amount
+        if use_limit < 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="The weekly limit has been reached.",
+            )
+
+        await redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 7)
 
     await _process_point_change(
         session=session,
@@ -190,7 +239,7 @@ async def deduct_points(
             detail="Permission denied. Only service users or admins can deduct points.",
         )
 
-    new_balance = await _process_point_change(
+    new_point = await _process_point_change(
         session=session,
         operator=user,
         target_user_id=operation.target_user_id,
@@ -199,7 +248,7 @@ async def deduct_points(
         is_deduction=True,
     )
 
-    return ResponseModel[int](success=True, data=new_balance)
+    return ResponseModel[int](success=True, data=new_point)
 
 
 @router.get(
