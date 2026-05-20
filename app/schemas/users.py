@@ -4,7 +4,7 @@ from typing import Optional, TYPE_CHECKING, List, Any
 from enum import Enum
 from typing import cast
 from hangulpy import split_hangul_string, get_chosung_string
-from pydantic import field_validator
+from pydantic import field_serializer
 
 from app.core.loggers import service_logger
 from .point import PointHistoryType
@@ -35,24 +35,30 @@ class User(SQLModel):
     total_point: int = Field(0, description="누적 포인트")
     is_admin: bool = Field(False, description="관리자 여부")
 
-    @field_validator("type", mode="before")
-    @classmethod
-    def type_to_enum(cls, v: Any) -> "UserType":
-        if isinstance(v, str):
-            return UserType(v)
-        return v
+    history_type: Optional[PointHistoryType] = Field(
+        None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입"
+    )
+
+    @field_serializer("type")
+    def serialize_type(self, type_value: Any, _info):
+        if isinstance(type_value, UserType):
+            return type_value.value
+        return type_value
+
+    @field_serializer("history_type")
+    def serialize_history_type(self, type_value: Any, _info):
+        if isinstance(type_value, PointHistoryType):
+            return type_value.value
+        return type_value
 
     def __setattr__(self, name, value):
         if name == "point":
             current_point = getattr(self, "point", 0)
-            if value > current_point:
-                diff = value - current_point
-                self.total_point = getattr(self, "total_point", 0) + diff
+            if value is not None and current_point is not None:
+                if value > current_point:
+                    diff = value - current_point
+                    self.total_point = getattr(self, "total_point", 0) + diff
         super().__setattr__(name, value)
-
-    history_type: Optional[PointHistoryType] = Field(
-        None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입"
-    )
 
 
 class Users(User, table=True):

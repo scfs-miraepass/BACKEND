@@ -122,7 +122,7 @@ async def read_root():
 #     # 5000~ : 서비스
 #
 #     # 테스트 학생
-#     session.add(Users(id=3601, type=UserType.student, name="홍길동", grade=3, number=6))
+#     # session.add(Users(id=3601, type=UserType.student, name="홍길동", grade=3, number=6))
 #
 #     # 테스트 서비스
 #     session.add(Users(type=UserType.service, name="카페테리아", id=5000))
