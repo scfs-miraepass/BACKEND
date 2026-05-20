@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Any
 from sqlalchemy import Column, DateTime, func
 from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum
+from pydantic import field_validator
 
 if TYPE_CHECKING:
     from .users import Users
@@ -35,3 +36,28 @@ class PointHistory(SQLModel, table=True):
             onupdate=func.now(),
         ),
     )
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def type_to_enum(cls, v: Any) -> Optional["PointHistoryType"]:
+        if v is None:
+            return v
+        if isinstance(v, str):
+            return PointHistoryType(v)
+        return v
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def created_at_validate(cls, v: Any) -> datetime:
+        if isinstance(v, str):
+            # The format from the log is like '2026-05-18T15:11:29'
+            # which from iso format can handle.
+            # If there's a 'Z' or timezone info, it's also handled.
+            if v.endswith("Z"):
+                v = v[:-1] + "+00:00"
+            try:
+                return datetime.fromisoformat(v)
+            except ValueError:
+                # Handle cases without seconds or other formats if necessary
+                return datetime.strptime(v, "%Y-%m-%d %H:%M:%S")
+        return v

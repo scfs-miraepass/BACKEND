@@ -1,9 +1,10 @@
 from sqlmodel import Field, SQLModel, Relationship, delete
 from sqlalchemy import event, Connection, insert
-from typing import Optional, TYPE_CHECKING, List
+from typing import Optional, TYPE_CHECKING, List, Any
 from enum import Enum
-from typing import cast, Any
+from typing import cast
 from hangulpy import split_hangul_string, get_chosung_string
+from pydantic import field_validator
 
 from app.core.loggers import service_logger
 from .point import PointHistoryType
@@ -33,6 +34,13 @@ class User(SQLModel):
     point: int = Field(0, description="보유 포인트")
     total_point: int = Field(0, description="누적 포인트")
     is_admin: bool = Field(False, description="관리자 여부")
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def type_to_enum(cls, v: Any) -> "UserType":
+        if isinstance(v, str):
+            return UserType(v)
+        return v
 
     def __setattr__(self, name, value):
         if name == "point":
