@@ -67,7 +67,7 @@ async def _process_point_change(
         )
     )
 
-    # 교사가 포인트를 지급하는 경우, 교사에게도 지급 (소수점 버림)
+    # 교사가 포인트를 지급하는 경우, 교사에게도 지급
     if not is_deduction and operator.type == UserType.teacher and amount > 0:
         op_result = await session.execute(select(Users).where(Users.id == operator.id).with_for_update())
         op_user = op_result.scalar_one()
