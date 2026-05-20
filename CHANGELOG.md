@@ -1,3 +1,11 @@
+# [1.3.0-dev.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.3.0-dev.2...v1.3.0-dev.3) (2026-05-20)
+
+
+### Bug Fixes
+
+* pydantic 경고 재수정 ([5037dd0](https://git.rldn.xyz/scfs.miraepass/backend/commit/5037dd0713d6204e38bbfa8177484c251e08a833)), closes [#13](https://git.rldn.xyz/scfs.miraepass/backend/issues/13)
+* 지급 가능 포인트 소진시 500으로 다시 초기화 되는 형상 해결 ([1037550](https://git.rldn.xyz/scfs.miraepass/backend/commit/10375509eb62fbf5d28bbf8379b1c43b469aa1eb))
+
 # [1.3.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.3.0-dev.1...v1.3.0-dev.2) (2026-05-20)
 
 
