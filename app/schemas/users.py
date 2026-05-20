@@ -31,7 +31,16 @@ class User(SQLModel):
     grade: Optional[int] = Field(description="학년")
     number: Optional[int] = Field(description="반")
     point: int = Field(0, description="보유 포인트")
+    total_point: int = Field(0, description="누적 포인트")
     is_admin: bool = Field(False, description="관리자 여부")
+
+    def __setattr__(self, name, value):
+        if name == "point":
+            current_point = getattr(self, "point", 0)
+            if value > current_point:
+                diff = value - current_point
+                self.total_point = getattr(self, "total_point", 0) + diff
+        super().__setattr__(name, value)
 
     history_type: Optional[PointHistoryType] = Field(
         None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입"
