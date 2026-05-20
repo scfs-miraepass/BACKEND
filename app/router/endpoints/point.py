@@ -123,7 +123,9 @@ async def get_limit(
 ):
     user, _ = auth_data
     limit_key = f"point_limit:{user.id}"
-    limit: int = await redis.get(limit_key) or DEFAULT_POINT_LIMIT
+    limit: int = await redis.get(limit_key)
+    if limit is None:
+        limit = DEFAULT_POINT_LIMIT
 
     return ResponseModel[int](success=True, data=limit)
 
@@ -172,7 +174,9 @@ async def grant_points(
 
     if not user.is_admin:
         limit_key = f"point_limit:{user.id}"
-        limit: int = await redis.get(limit_key) or DEFAULT_POINT_LIMIT
+        limit: int = await redis.get(limit_key)
+        if limit is None:
+            limit = DEFAULT_POINT_LIMIT
         use_limit = limit - operation.amount
         if use_limit < 0:
             raise HTTPException(
