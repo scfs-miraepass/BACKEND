@@ -369,6 +369,10 @@ async def point_history(
     responses={
         200: {"description": "정상 처리"},
         404: {"model": ErrorResponse, "description": "유저를 찾을 수 없음"},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
     },
     status_code=status.HTTP_200_OK,
     summary="포인트 조회",
@@ -376,8 +380,17 @@ async def point_history(
 )
 async def get_point_balance(
     target_user_id: int,
+    auth_data: LoginDep,
     session: SessionDep,
 ):
+    user, _ = auth_data
+    # 권한 확인: Teacher, Service or Admin only
+    if user.type != UserType.teacher and user.type != UserType.service and not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
     # 1. 유저 정보 캐시 확인
     cached_user = await redis.get(f"user:{target_user_id}")
     if cached_user:
