@@ -27,6 +27,12 @@ class GetLimitResponse(BaseModel):
     target_limit: int
 
 
+class RankingResponse(BaseModel):
+    id: int
+    name: str
+    total_point: int
+
+
 async def _process_point_change(
     session: AsyncSession,
     operator: Users,
@@ -102,6 +108,7 @@ async def _process_point_change(
         await redis.delete(f"user:{op_user.id}")
         await redis.delete(f"point_history_count:{op_user.id}")
         await redis.delete_pattern(f"point_history:{op_user.id}:*")
+        await redis.delete_pattern("ranking:teacher:*")
 
     await session.commit()
     await session.refresh(target_user)
@@ -111,6 +118,10 @@ async def _process_point_change(
     await redis.delete(f"point_history_count:{target_user.id}")
     await redis.delete_pattern(f"point_history:{target_user.id}:*")
     await redis.delete_pattern("search_users:*")
+    if target_user.type == UserType.student:
+        await redis.delete_pattern("ranking:student:*")
+    elif target_user.type == UserType.teacher:
+        await redis.delete_pattern("ranking:teacher:*")
 
     service_logger.debug(
         f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, New Balance: {target_user.point}"
@@ -361,6 +372,73 @@ async def point_history(
     response.headers["X-MAX-PAGE"] = max_page
 
     return ResponseModel[list[PointHistory]](success=True, data=historys)
+
+
+async def _get_ranking(
+    user_type: UserType,
+    response: Response,
+    session: SessionDep,
+    limit: int = 20,
+    offset: int = 0,
+):
+    type_str = "student" if user_type == UserType.student else "teacher"
+    count_cache_key = f"ranking_count:{type_str}"
+    cached_count = await redis.get(count_cache_key)
+
+    if cached_count is not None:
+        count = int(cached_count)
+    else:
+        # Cache Miss: DB 조회
+        query = select(func.count()).select_from(Users).where(Users.type == user_type)
+        result = await session.execute(query)
+        count = result.scalar() or 0
+        await redis.set(count_cache_key, count, ttl=60 * 5)  # 5분 캐시
+
+    ranking_cache_key = f"ranking:{type_str}:{limit}:{offset}"
+    cached_ranking = await redis.get(ranking_cache_key)
+
+    if cached_ranking is not None:
+        rankings = [RankingResponse(**item) for item in cached_ranking]
+    else:
+        query = (
+            select(Users.id, Users.name, Users.total_point)
+            .where(Users.type == user_type)
+            .order_by(col(Users.total_point).desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await session.execute(query)
+        rankings = [RankingResponse(id=row.id, name=row.name, total_point=row.total_point) for row in result.all()]
+
+        ranking_data = [item.model_dump() for item in rankings]
+        await redis.set(ranking_cache_key, ranking_data, ttl=60 * 5)  # 5분 캐시
+
+    max_page = str(ceil(count / limit)) if limit > 0 else "1"
+    response.headers["X-MAX-PAGE"] = max_page
+
+    return ResponseModel[list[RankingResponse]](success=True, data=rankings)
+
+
+@router.get(
+    "/ranking/student",
+    response_model=ResponseModel[list[RankingResponse]],
+    status_code=status.HTTP_200_OK,
+    summary="학생 포인트 랭킹 조회",
+    description="학생들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
+)
+async def get_student_ranking(response: Response, session: SessionDep, limit: int = 20, offset: int = 0):
+    return await _get_ranking(UserType.student, response, session, limit, offset)
+
+
+@router.get(
+    "/ranking/teacher",
+    response_model=ResponseModel[list[RankingResponse]],
+    status_code=status.HTTP_200_OK,
+    summary="교사 포인트 랭킹 조회",
+    description="교사들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
+)
+async def get_teacher_ranking(response: Response, session: SessionDep, limit: int = 20, offset: int = 0):
+    return await _get_ranking(UserType.teacher, response, session, limit, offset)
 
 
 @router.get(
