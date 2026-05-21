@@ -12,13 +12,19 @@ from app.schemas import PointHistory, Users, UserType, PointHistoryType
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])
-DEFAULT_POINT_LIMIT = 500
+TEACHER_POINT_LIMIT = 500
+STUDENT_POINT_LIMIT = 200
 
 
 class PointOperation(BaseModel):
     target_user_id: int
     amount: int = Field(..., gt=0, description="처리할 포인트")
     change_type: PointHistoryType | None = Field(None, description="포인트를 처리하는 이유의 종류")
+
+
+class GetLimitResponse(BaseModel):
+    limit: int
+    target_limit: int
 
 
 async def _process_point_change(
@@ -52,6 +58,18 @@ async def _process_point_change(
             )
         change_amount = -amount
     else:
+        limit_key = f"point_limit:student:{target_user.id}"
+        limit: int = await redis.get(limit_key)
+        if limit is None:
+            limit = STUDENT_POINT_LIMIT
+        use_limit = limit - amount
+        if use_limit < 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="The target user's daily point limit has been exceeded.",
+            )
+        await redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 1)
+
         change_amount = amount
 
     target_user.point += change_amount
@@ -101,6 +119,37 @@ async def _process_point_change(
 
 
 @router.get(
+    "/limit/{target_user_id}",
+    responses={
+        200: {"description": "정상적으로 처리됨"},
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음",
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
+    },
+    response_model=ResponseModel[GetLimitResponse],
+    status_code=status.HTTP_200_OK,
+    summary="포인트 지급 한도 조회",
+    description="현재 로그인한 자기자신의과 지급하려는 대상의 포인트 지급 한도를 조회합니다.",
+)
+async def get_limit(auth_data: LoginDep, target_user_id: int):
+    user, _ = auth_data
+    limit_key = f"point_limit:teacher:{user.id}"
+    limit: int = await redis.get(limit_key)
+    if limit is None:
+        limit = TEACHER_POINT_LIMIT
+    student_limit: int = await redis.get(f"point_limit:student:{target_user_id}")
+    if student_limit is None:
+        student_limit = STUDENT_POINT_LIMIT
+
+    return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=limit, target_limit=student_limit))
+
+
+@router.get(
     "/limit",
     responses={
         200: {"description": "정상적으로 처리됨"},
@@ -115,17 +164,17 @@ async def _process_point_change(
     },
     response_model=ResponseModel[int],
     status_code=status.HTTP_200_OK,
-    summary="포인트 지급 한도 조회",
+    summary="포인트 지급 본인 한도 조회",
     description="현재 로그인한 자기자신의 포인트 지급 한도를 조회합니다.",
 )
-async def get_limit(
+async def get_limit_session(
     auth_data: LoginDep,
 ):
     user, _ = auth_data
-    limit_key = f"point_limit:{user.id}"
+    limit_key = f"point_limit:teacher:{user.id}"
     limit: int = await redis.get(limit_key)
     if limit is None:
-        limit = DEFAULT_POINT_LIMIT
+        limit = TEACHER_POINT_LIMIT
 
     return ResponseModel[int](success=True, data=limit)
 
@@ -173,15 +222,15 @@ async def grant_points(
         )
 
     if not user.is_admin:
-        limit_key = f"point_limit:{user.id}"
+        limit_key = f"point_limit:teacher:{user.id}"
         limit: int = await redis.get(limit_key)
         if limit is None:
-            limit = DEFAULT_POINT_LIMIT
+            limit = TEACHER_POINT_LIMIT
         use_limit = limit - operation.amount
         if use_limit < 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="The weekly limit has been reached.",
+                detail="The teacher's weekly point limit has been exceeded.",
             )
 
         await redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 7)
