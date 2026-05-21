@@ -12,13 +12,25 @@ from app.schemas import PointHistory, Users, UserType, PointHistoryType
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])
-DEFAULT_POINT_LIMIT = 500
+TEACHER_POINT_LIMIT = 500
+STUDENT_POINT_LIMIT = 200
 
 
 class PointOperation(BaseModel):
     target_user_id: int
     amount: int = Field(..., gt=0, description="처리할 포인트")
     change_type: PointHistoryType | None = Field(None, description="포인트를 처리하는 이유의 종류")
+
+
+class GetLimitResponse(BaseModel):
+    limit: int
+    target_limit: int
+
+
+class RankingResponse(BaseModel):
+    id: int
+    name: str
+    total_point: int
 
 
 async def _process_point_change(
@@ -52,6 +64,18 @@ async def _process_point_change(
             )
         change_amount = -amount
     else:
+        limit_key = f"point_limit:student:{target_user.id}"
+        limit: int = await redis.get(limit_key)
+        if limit is None:
+            limit = STUDENT_POINT_LIMIT
+        use_limit = limit - amount
+        if use_limit < 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="The target user's daily point limit has been exceeded.",
+            )
+        await redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 1)
+
         change_amount = amount
 
     target_user.point += change_amount
@@ -84,6 +108,7 @@ async def _process_point_change(
         await redis.delete(f"user:{op_user.id}")
         await redis.delete(f"point_history_count:{op_user.id}")
         await redis.delete_pattern(f"point_history:{op_user.id}:*")
+        await redis.delete_pattern("ranking:teacher:*")
 
     await session.commit()
     await session.refresh(target_user)
@@ -93,11 +118,46 @@ async def _process_point_change(
     await redis.delete(f"point_history_count:{target_user.id}")
     await redis.delete_pattern(f"point_history:{target_user.id}:*")
     await redis.delete_pattern("search_users:*")
+    if target_user.type == UserType.student:
+        await redis.delete_pattern("ranking:student:*")
+    elif target_user.type == UserType.teacher:
+        await redis.delete_pattern("ranking:teacher:*")
 
     service_logger.debug(
         f"Points {action_name}ed. Executor: {operator.id}, Target: {target_user.id}, New Balance: {target_user.point}"
     )
     return target_user.point
+
+
+@router.get(
+    "/limit/{target_user_id}",
+    responses={
+        200: {"description": "정상적으로 처리됨"},
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음",
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
+    },
+    response_model=ResponseModel[GetLimitResponse],
+    status_code=status.HTTP_200_OK,
+    summary="포인트 지급 한도 조회",
+    description="현재 로그인한 자기자신의과 지급하려는 대상의 포인트 지급 한도를 조회합니다.",
+)
+async def get_limit(auth_data: LoginDep, target_user_id: int):
+    user, _ = auth_data
+    limit_key = f"point_limit:teacher:{user.id}"
+    limit: int = await redis.get(limit_key)
+    if limit is None:
+        limit = TEACHER_POINT_LIMIT
+    student_limit: int = await redis.get(f"point_limit:student:{target_user_id}")
+    if student_limit is None:
+        student_limit = STUDENT_POINT_LIMIT
+
+    return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=limit, target_limit=student_limit))
 
 
 @router.get(
@@ -115,17 +175,17 @@ async def _process_point_change(
     },
     response_model=ResponseModel[int],
     status_code=status.HTTP_200_OK,
-    summary="포인트 지급 한도 조회",
+    summary="포인트 지급 본인 한도 조회",
     description="현재 로그인한 자기자신의 포인트 지급 한도를 조회합니다.",
 )
-async def get_limit(
+async def get_limit_session(
     auth_data: LoginDep,
 ):
     user, _ = auth_data
-    limit_key = f"point_limit:{user.id}"
+    limit_key = f"point_limit:teacher:{user.id}"
     limit: int = await redis.get(limit_key)
     if limit is None:
-        limit = DEFAULT_POINT_LIMIT
+        limit = TEACHER_POINT_LIMIT
 
     return ResponseModel[int](success=True, data=limit)
 
@@ -173,15 +233,15 @@ async def grant_points(
         )
 
     if not user.is_admin:
-        limit_key = f"point_limit:{user.id}"
+        limit_key = f"point_limit:teacher:{user.id}"
         limit: int = await redis.get(limit_key)
         if limit is None:
-            limit = DEFAULT_POINT_LIMIT
+            limit = TEACHER_POINT_LIMIT
         use_limit = limit - operation.amount
         if use_limit < 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="The weekly limit has been reached.",
+                detail="The teacher's weekly point limit has been exceeded.",
             )
 
         await redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 7)
@@ -314,12 +374,83 @@ async def point_history(
     return ResponseModel[list[PointHistory]](success=True, data=historys)
 
 
+async def _get_ranking(
+    user_type: UserType,
+    response: Response,
+    session: SessionDep,
+    limit: int = 20,
+    offset: int = 0,
+):
+    type_str = "student" if user_type == UserType.student else "teacher"
+    count_cache_key = f"ranking_count:{type_str}"
+    cached_count = await redis.get(count_cache_key)
+
+    if cached_count is not None:
+        count = int(cached_count)
+    else:
+        # Cache Miss: DB 조회
+        query = select(func.count()).select_from(Users).where(Users.type == user_type)
+        result = await session.execute(query)
+        count = result.scalar() or 0
+        await redis.set(count_cache_key, count, ttl=60 * 5)  # 5분 캐시
+
+    ranking_cache_key = f"ranking:{type_str}:{limit}:{offset}"
+    cached_ranking = await redis.get(ranking_cache_key)
+
+    if cached_ranking is not None:
+        rankings = [RankingResponse(**item) for item in cached_ranking]
+    else:
+        query = (
+            select(Users.id, Users.name, Users.total_point)
+            .where(Users.type == user_type)
+            .order_by(col(Users.total_point).desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await session.execute(query)
+        rankings = [RankingResponse(id=row.id, name=row.name, total_point=row.total_point) for row in result.all()]
+
+        ranking_data = [item.model_dump() for item in rankings]
+        await redis.set(ranking_cache_key, ranking_data, ttl=60 * 5)  # 5분 캐시
+
+    max_page = str(ceil(count / limit)) if limit > 0 else "1"
+    response.headers["X-MAX-PAGE"] = max_page
+
+    return ResponseModel[list[RankingResponse]](success=True, data=rankings)
+
+
+@router.get(
+    "/ranking/student",
+    response_model=ResponseModel[list[RankingResponse]],
+    status_code=status.HTTP_200_OK,
+    summary="학생 포인트 랭킹 조회",
+    description="학생들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
+)
+async def get_student_ranking(response: Response, session: SessionDep, limit: int = 20, offset: int = 0):
+    return await _get_ranking(UserType.student, response, session, limit, offset)
+
+
+@router.get(
+    "/ranking/teacher",
+    response_model=ResponseModel[list[RankingResponse]],
+    status_code=status.HTTP_200_OK,
+    summary="교사 포인트 랭킹 조회",
+    description="교사들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
+)
+async def get_teacher_ranking(response: Response, session: SessionDep, limit: int = 20, offset: int = 0):
+    return await _get_ranking(UserType.teacher, response, session, limit, offset)
+
+
 @router.get(
     "/{target_user_id}",
     response_model=ResponseModel[int],
     responses={
         200: {"description": "정상 처리"},
         404: {"model": ErrorResponse, "description": "유저를 찾을 수 없음"},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
     },
     status_code=status.HTTP_200_OK,
     summary="포인트 조회",
@@ -327,8 +458,17 @@ async def point_history(
 )
 async def get_point_balance(
     target_user_id: int,
+    auth_data: LoginDep,
     session: SessionDep,
 ):
+    user, _ = auth_data
+    # 권한 확인: Teacher, Service or Admin only
+    if user.type != UserType.teacher and user.type != UserType.service and not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
     # 1. 유저 정보 캐시 확인
     cached_user = await redis.get(f"user:{target_user_id}")
     if cached_user:

@@ -9,9 +9,14 @@
 
 ### Features
 
+* **point:** 교사, 학생 누적 포인트 순위 추가 ([8fc0a21](https://git.rldn.xyz/scfs.miraepass/backend/commit/8fc0a2196ca8799d397c3714e6b037cfc8eed123)), closes [#18](https://git.rldn.xyz/scfs.miraepass/backend/issues/18)
+* **point:** 포인트 조회 Endpoint 권한 검사 추가 ([2dca93c](https://git.rldn.xyz/scfs.miraepass/backend/commit/2dca93c84ee96997e2b2db0dd11ecaeb9598d686)), closes [#17](https://git.rldn.xyz/scfs.miraepass/backend/issues/17)
+* **point:** 학생 하루 포인트 지급 한도 추가 ([65c8b0f](https://git.rldn.xyz/scfs.miraepass/backend/commit/65c8b0fd4742c96bbaa5b49f597651448b0a7517)), closes [#19](https://git.rldn.xyz/scfs.miraepass/backend/issues/19)
+
 * **point:** 누적 포인트 추가 ([3221ce7](https://git.rldn.xyz/scfs.miraepass/backend/commit/3221ce71c5804c56b8f5015f0ea54200df327307)), closes [#16](https://git.rldn.xyz/scfs.miraepass/backend/issues/16)
 * **point:** 포인트 지급 한도를 조회하는 Endpoint 추가 ([52c2b0b](https://git.rldn.xyz/scfs.miraepass/backend/commit/52c2b0b7e9ff9e3fa0231c455794339eb9e25138))
 * **point:** 포인트 지급한도 초기화를 위한 스케줄러 추가 ([39e6c24](https://git.rldn.xyz/scfs.miraepass/backend/commit/39e6c24acd21e00d1a109bd43868f607bb7a2185))
+
 
 # [1.3.0-dev.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.3.0-dev.2...v1.3.0-dev.3) (2026-05-20)
 

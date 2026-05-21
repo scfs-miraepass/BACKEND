@@ -17,6 +17,8 @@ from .core.loggers import global_logger, service_logger
 from .core.database import database_init, database_close
 from .core.redis import redis
 
+scheduler = AsyncIOScheduler()
+
 # pyproject.toml에서 버전을 동적으로 불러오기
 pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
 with open(pyproject_path, "rb") as f:
@@ -26,10 +28,16 @@ with open(pyproject_path, "rb") as f:
         raise KeyError("Failed to find 'version' in [project] section of pyproject.toml")
 
 
-async def reset_limit():
-    service_logger.debug("Resetting point distribution limits.")
-    await redis.delete_pattern("point_limit:*")
-    service_logger.info("Point distribution limit reset complete.")
+@scheduler.scheduled_job(CronTrigger(day_of_week="mon", hour=0, minute=0))
+async def reset_teacher_limit():
+    await redis.delete_pattern("point_limit:teacher:*")
+    service_logger.info("Teacher point distribution limits have been reset.")
+
+
+@scheduler.scheduled_job(CronTrigger(hour=0, minute=0))
+async def reset_student_limit():
+    await redis.delete_pattern("point_limit:student:*")
+    service_logger.info("Student point distribution limits have been reset.")
 
 
 @asynccontextmanager
@@ -45,10 +53,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global_logger.info("Database Initialized.")
 
     await redis.init()
-    global_logger.info("Redis Initialized.")
-
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(reset_limit, CronTrigger(day_of_week="mon", hour=0, minute=0))
 
     scheduler.start()
     global_logger.info("Scheduler Start")
@@ -59,7 +63,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global_logger.info("Scheduler Stop")
 
     await redis.close()
-    global_logger.info("Redis Closed.")
 
     await database_close()
     global_logger.info("Database Closed.")
