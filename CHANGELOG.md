@@ -1,3 +1,12 @@
+# [1.4.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.3.0...v1.4.0) (2026-05-21)
+
+
+### Features
+
+* **point:** 교사, 학생 누적 포인트 순위 추가 ([8fc0a21](https://git.rldn.xyz/scfs.miraepass/backend/commit/8fc0a2196ca8799d397c3714e6b037cfc8eed123)), closes [#18](https://git.rldn.xyz/scfs.miraepass/backend/issues/18)
+* **point:** 포인트 조회 Endpoint 권한 검사 추가 ([2dca93c](https://git.rldn.xyz/scfs.miraepass/backend/commit/2dca93c84ee96997e2b2db0dd11ecaeb9598d686)), closes [#17](https://git.rldn.xyz/scfs.miraepass/backend/issues/17)
+* **point:** 학생 하루 포인트 지급 한도 추가 ([65c8b0f](https://git.rldn.xyz/scfs.miraepass/backend/commit/65c8b0fd4742c96bbaa5b49f597651448b0a7517)), closes [#19](https://git.rldn.xyz/scfs.miraepass/backend/issues/19)
+
 # [1.3.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.2.0...v1.3.0) (2026-05-20)
 
 
