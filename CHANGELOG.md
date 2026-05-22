@@ -1,3 +1,10 @@
+## [1.4.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.0...v1.4.1) (2026-05-22)
+
+
+### Bug Fixes
+
+* 도커 이미지에 tools포함 하도록 수정 ([8acb4c9](https://git.rldn.xyz/scfs.miraepass/backend/commit/8acb4c9bc0c26d9e73da4d627598cda439b16a3c))
+
 # [1.4.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.3.0...v1.4.0) (2026-05-21)
 
 
