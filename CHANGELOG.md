@@ -1,3 +1,10 @@
+## [1.4.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.2...v1.4.3) (2026-05-26)
+
+
+### Bug Fixes
+
+* **ci:** backend 실행 명령어 수정 ([e00da0f](https://git.rldn.xyz/scfs.miraepass/backend/commit/e00da0f89905b8c256aaa3d8070d2d1a2bf8834d))
+
 ## [1.4.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.1...v1.4.2) (2026-05-26)
 
 
