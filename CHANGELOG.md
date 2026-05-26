@@ -1,3 +1,10 @@
+## [1.4.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.1...v1.4.2) (2026-05-26)
+
+
+### Bug Fixes
+
+* 검색에서 필터가 다름에도 캐시는 동일하게 적용되는 현상 수정 ([fd7b110](https://git.rldn.xyz/scfs.miraepass/backend/commit/fd7b11003b516c0df17f4e65d38522eedf772772))
+
 ## [1.4.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.0...v1.4.1) (2026-05-22)
 
 
