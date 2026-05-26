@@ -1,7 +1,7 @@
-FROM python:3.14-slim@sha256:557811b1000883f3c2bed1ad0e7b6c7a2fe8b4c4966c6ad26107e0ea4e62070f
+FROM python:3.14-slim
 
 # UV Install
-COPY --from=ghcr.io/astral-sh/uv@sha256:733b4042187702f832f7fdecb3aff14a61b288c4ca37af188bb5715c1caebaf8 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -17,5 +17,5 @@ RUN apt-get update \
 
 EXPOSE 8000
 
-# DB 생성 및 실행
-CMD ["sh", "-c", "uv run alembic upgrade head && uv run fastapi run"]
+# DB 마이그레이션 및 실행
+CMD ['sh', '-c', 'uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips="*"']

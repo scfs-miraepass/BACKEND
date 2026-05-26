@@ -69,7 +69,7 @@ async def search(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserT
         return ResponseModel(success=True, data=[])
 
     # 캐시 키 생성
-    cache_key = f"search_users:{q}"
+    cache_key = f"search_users:{q},{','.join(t)}"
 
     # Redis 캐시 조회
     cached_data = await redis.get(cache_key)

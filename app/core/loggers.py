@@ -22,7 +22,9 @@ def _initialize_log_file(path: str):
     if not os.path.exists(path):
         try:
             with open(path, "w", encoding="utf-8") as f:
-                f.write(f"====== Log Initialized at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ======\n")
+                f.write(
+                    f"====== Log Initialized at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ======\n"
+                )
         except PermissionError:
             # 다른 프로세스가 이미 파일을 생성/사용 중인 경우 무시
             pass
@@ -38,7 +40,7 @@ def _get_file_handler(filename: str) -> logging.Handler:
     _initialize_log_file(log_path)
 
     file_formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)-8s | %(name)-30s | %(message)s",
+        "%(asctime)s | %(levelname)-8s | %(name)-40s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
@@ -89,9 +91,7 @@ class CustomFormatter(logging.Formatter):
         elif record.levelno == logging.CRITICAL:
             level_color = self.bold_red
 
-        log_fmt = (
-            f"%(asctime)s | {level_color}%(levelname)-8s{self.reset} | {self.cyan}%(name)-30s{self.reset} | %(message)s"
-        )
+        log_fmt = f"%(asctime)s | {level_color}%(levelname)-8s{self.reset} | {self.cyan}%(name)-30s{self.reset} | %(message)s"
 
         formatter = logging.Formatter(log_fmt, datefmt=self.date_fmt)
         return formatter.format(record)
