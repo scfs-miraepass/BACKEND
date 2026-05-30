@@ -77,7 +77,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-MAX-PAGE", "X-Server-Version"],  # 클라이언트가 읽을 수 있도록 허용
+    expose_headers=["X-MAX-PAGE", "X-Server-Version", "X-CACHED"],  # 클라이언트가 읽을 수 있도록 허용
 )
 
 
