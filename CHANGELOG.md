@@ -1,3 +1,10 @@
+# [1.5.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.3...v1.5.0-dev.1) (2026-05-30)
+
+
+### Features
+
+* **point:** 포인트 변화 처리를 위한 x-cached 헤더 추가 ([69b58cd](https://git.rldn.xyz/scfs.miraepass/backend/commit/69b58cdb71f31c1f6cdbd289df76d23c9dc0c733))
+
 ## [1.4.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.2...v1.4.3) (2026-05-26)
 
 
