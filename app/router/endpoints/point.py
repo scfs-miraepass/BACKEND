@@ -12,8 +12,8 @@ from app.schemas import PointHistory, Users, UserType, PointHistoryType
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])
-TEACHER_POINT_LIMIT = 500
-STUDENT_POINT_LIMIT = 200
+TEACHER_POINT_LIMIT = 1000
+STUDENT_POINT_LIMIT = 1000
 
 
 class PointOperation(BaseModel):
@@ -345,8 +345,8 @@ async def point_history(
         query = select(func.count()).select_from(PointHistory).where(PointHistory.user_id == user.id)
         result = await session.execute(query)
         count = result.scalar() or 0
-        # 캐시 저장 (TTL: 60초 - 짧게 설정하여 정합성 유지 노력)
-        await redis.set(count_cache_key, count, ttl=60)
+        # 캐시 저장 (TTL: 1일)
+        await redis.set(count_cache_key, count, ttl=60 * 60 * 24)
 
     # 2. 히스토리 목록 조회
     history_cache_key = f"point_history:{user.id}:{limit}:{offset}"
@@ -354,7 +354,9 @@ async def point_history(
 
     if cached_history is not None:
         historys = [PointHistory(**item) for item in cached_history]
+        response.headers["X-CACHED"] = "true"
     else:
+        response.headers["X-CACHED"] = "false"
         query = (
             select(PointHistory)
             .where(PointHistory.user_id == user.id)
@@ -364,9 +366,9 @@ async def point_history(
         )
         result = await session.execute(query)
         historys = list(result.scalars().all())
-        # 캐시 저장 (TTL: 60초)
+        # 캐시 저장 (TTL: 1일)
         history_data = [item.model_dump() for item in historys]
-        await redis.set(history_cache_key, history_data, ttl=60)
+        await redis.set(history_cache_key, history_data, ttl=60 * 60 * 24)
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
