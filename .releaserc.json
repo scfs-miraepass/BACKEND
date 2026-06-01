@@ -22,7 +22,7 @@
     ],
     "@semantic-release/gitlab",
     "@saithodev/semantic-release-backmerge", {
-      "branches": [{"from": "master", "to": "dev"}]
+      "backmergeBranches": [{"from": "master", "to": "dev"}]
     }
   ]
 }
