@@ -1,3 +1,10 @@
+# [1.5.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.5.0-dev.1...v1.5.0-dev.2) (2026-06-01)
+
+
+### Features
+
+* 학생, 교사 포인트 제한 1000으로 변경 ([be8e3d7](https://git.rldn.xyz/scfs.miraepass/backend/commit/be8e3d7431fc5d7e1c4ea353a57c5fcb8bf4c9ac)), closes [#20](https://git.rldn.xyz/scfs.miraepass/backend/issues/20)
+
 # [1.5.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.3...v1.5.0-dev.1) (2026-05-30)
 
 
