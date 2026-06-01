@@ -12,8 +12,8 @@ from app.schemas import PointHistory, Users, UserType, PointHistoryType
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])
-TEACHER_POINT_LIMIT = 500
-STUDENT_POINT_LIMIT = 200
+TEACHER_POINT_LIMIT = 1000
+STUDENT_POINT_LIMIT = 1000
 
 
 class PointOperation(BaseModel):
