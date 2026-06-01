@@ -20,9 +20,6 @@
         "message": "chore(release): ${nextRelease.version} [skip ci]"
       }
     ],
-    "@semantic-release/gitlab",
-    "@saithodev/semantic-release-backmerge", {
-      "backmergeBranches": [{"from": "master", "to": "dev"}]
-    }
+    "@semantic-release/gitlab"
   ]
 }
