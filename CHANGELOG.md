@@ -1,3 +1,10 @@
+# [1.6.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.5.0...v1.6.0-dev.1) (2026-06-07)
+
+
+### Features
+
+* **point:** 포인트 차감및 지급 Endpoint Body에 기록 메모(지급/차감시 사유) 추가 ([ae2e524](https://git.rldn.xyz/scfs.miraepass/backend/commit/ae2e5247046a1ad2b377ddba04cfdbf221b37892))
+
 # [1.5.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.3...v1.5.0) (2026-06-01)
 
 
