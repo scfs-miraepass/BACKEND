@@ -20,6 +20,7 @@ class PointOperation(BaseModel):
     target_user_id: int
     amount: int = Field(..., gt=0, description="처리할 포인트")
     change_type: PointHistoryType | None = Field(None, description="포인트를 처리하는 이유의 종류")
+    memo: str | None = Field(None, description="포인트를 처리하는 이유")
 
 
 class GetLimitResponse(BaseModel):
@@ -40,6 +41,7 @@ async def _process_point_change(
     amount: int,
     is_deduction: bool = False,
     change_type: PointHistoryType | None = None,
+    memo: str | None = None,
 ) -> int:
     """포인트 변경 로직을 처리하는 내부 함수 (Locking 및 History 생성 포함)"""
     # 동시성 문제 해결을 위해 Row-level Lock 적용 (SELECT ... FOR UPDATE)
@@ -252,6 +254,7 @@ async def grant_points(
         target_user_id=operation.target_user_id,
         amount=operation.amount,
         change_type=operation.change_type,
+        memo=operation.memo,
         is_deduction=False,
     )
 
@@ -305,6 +308,7 @@ async def deduct_points(
         target_user_id=operation.target_user_id,
         amount=operation.amount,
         change_type=operation.change_type,
+        memo=operation.memo,
         is_deduction=True,
     )
 
