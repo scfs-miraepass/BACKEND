@@ -24,7 +24,12 @@ class PointHistory(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
 
     changed_amount: int = Field(description="변경된 포인트의 정도")
-    reason: str = Field(description="이유")
+
+    # 기록 이유 (프론트에는 memo가 없는 경우 reason이 표기)
+    # 기존 reason만 있다가 처리 이유를 따로 담을 필요성이 있어서 memo를 추가했지만
+    # 기존에 있는 데이터 마이그레이션을 고려해 아래와 같이 분리함
+    reason: str = Field(description="누구의 무엇의 의해서 포인트가 변경되었는지 이유")
+    memo: Optional[str] = Field(None, description="포인트가 어떠한 사유로 변경되었는지 이유")
 
     type: Optional[PointHistoryType] = Field(None, description="기록 종류")
 
