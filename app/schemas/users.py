@@ -11,6 +11,7 @@ from .point import PointHistoryType
 
 if TYPE_CHECKING:
     from .point import PointHistory
+    from .post import Posts
 
 
 class UserType(str, Enum):
@@ -64,8 +65,9 @@ class User(SQLModel):
 class Users(User, table=True):
     password: Optional[str] = Field(description="비밀번호")
 
-    search: List["UserSearch"] = Relationship(back_populates="user", cascade_delete=True)
-    history: List["PointHistory"] = Relationship(back_populates="user", cascade_delete=True)
+    search: List["UserSearch"] = Relationship(back_populates="user", passive_deletes=True)
+    history: List["PointHistory"] = Relationship(back_populates="user", passive_deletes=True)
+    posts: List["Posts"] = Relationship(back_populates="author")
 
 
 class UserSearch(SQLModel, table=True):
