@@ -109,3 +109,44 @@ async def update_post(
     await session.refresh(post)
 
     return ResponseModel[Posts](success=True, data=post)
+
+
+@router.delete(
+    "/{post_id}",
+    responses={
+        204: {"description": "게시글 삭제 완료"},
+        401: {"model": ErrorResponse, "description": "인증되지 않은 사용자"},
+        403: {"model": ErrorResponse, "description": "권한이 없음"},
+        404: {"model": ErrorResponse, "description": "게시글을 찾을 수 없음"},
+    },
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="게시글 삭제",
+    description="기존 게시글을 삭제합니다.",
+)
+async def delete_post(
+    post_id: int,
+    auth_data: LoginDep,
+    session: SessionDep,
+):
+    user, _ = auth_data
+
+    # 관리자 권한 확인
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    # 게시글 조회
+    result = await session.execute(select(Posts).where(Posts.id == post_id))
+    post = result.scalar_one_or_none()
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found.",
+        )
+
+    # 데이터 삭제
+    await session.delete(post)
+    await session.commit()
