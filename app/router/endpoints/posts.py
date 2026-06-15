@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import select, func
 
 from app.core import SessionDep, LoginDep
+from app.core.redis import redis
 from app.schemas.post import Posts, PostContent
 from app.schemas.response import ResponseModel, ErrorResponse
 
@@ -42,22 +43,39 @@ async def get_posts(
         20, ge=1, le=100, description="페이지 당 게시글 데이터 갯수 (최대 100)"
     ),
 ):
-    # 총 게시글 수 조회
-    count_query = select(func.count()).select_from(Posts)
-    total_count = (await session.execute(count_query)).scalar_one()
+    # 1. 총 게시글 수 조회 (캐싱 적용)
+    count_cache_key = "posts_count"
+    cached_count = await redis.get(count_cache_key)
+
+    if cached_count is not None:
+        total_count = int(cached_count)
+    else:
+        count_query = select(func.count()).select_from(Posts)
+        total_count = (await session.execute(count_query)).scalar_one()
+        # 캐시 저장 (TTL: 1일)
+        await redis.set(count_cache_key, total_count, ttl=60 * 60 * 24)
 
     # 최대 페이지 계산 (데이터가 없으면 1페이지)
     max_page = ceil(total_count / size) if total_count > 0 else 1
 
-    # 클라이언트가 읽을 수 있도록 헤더에 최대 페이지 전달
     response.headers["X-MAX-PAGE"] = str(max_page)
 
-    # offset 계산 및 데이터 조회 (최신순 정렬)
-    offset = (page - 1) * size
-    query = select(Posts).order_by(Posts.id.desc()).offset(offset).limit(size)
+    # 2. 목록 데이터 조회 (캐싱 적용)
+    list_cache_key = f"posts:list:{page}:{size}"
+    cached_list = await redis.get(list_cache_key)
 
-    result = await session.execute(query)
-    posts = list(result.scalars().all())
+    if cached_list is not None:
+        posts = [Posts(**item) for item in cached_list]
+        response.headers["X-CACHED"] = "true"
+    else:
+        response.headers["X-CACHED"] = "false"
+        offset = (page - 1) * size
+        query = select(Posts).order_by(Posts.id.desc()).offset(offset).limit(size)
+
+        result = await session.execute(query)
+        posts = list(result.scalars().all())
+        posts_data = [item.model_dump() for item in posts]
+        await redis.set(list_cache_key, posts_data, ttl=60 * 60 * 24)
 
     return ResponseModel[List[Posts]](success=True, data=posts)
 
@@ -79,7 +97,13 @@ async def get_post(
     auth_data: LoginDep,
     session: SessionDep,
 ):
-    # 게시글 단일 조회
+    # 게시글 단일 조회 (캐싱 적용)
+    cache_key = f"post:{post_id}"
+    cached_post = await redis.get(cache_key)
+
+    if cached_post is not None:
+        return ResponseModel[Posts](success=True, data=Posts(**cached_post))
+
     result = await session.execute(select(Posts).where(Posts.id == post_id))
     post = result.scalar_one_or_none()
 
@@ -88,6 +112,9 @@ async def get_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found.",
         )
+
+    # 캐시 저장 (TTL: 1일)
+    await redis.set(cache_key, post.model_dump(), ttl=60 * 60 * 24)
 
     return ResponseModel[Posts](success=True, data=post)
 
@@ -125,6 +152,10 @@ async def create_post(
     session.add(new_post)
     await session.commit()
     await session.refresh(new_post)
+
+    # 데이터 변경 시 목록 관련 캐시 무효화
+    await redis.delete("posts_count")
+    await redis.delete_pattern("posts:list:*")
 
     return ResponseModel[Posts](success=True, data=new_post)
 
@@ -181,6 +212,10 @@ async def update_post(
     await session.commit()
     await session.refresh(post)
 
+    # 데이터 변경 시 관련된 캐시 무효화
+    await redis.delete(f"post:{post_id}")
+    await redis.delete_pattern("posts:list:*")
+
     return ResponseModel[Posts](success=True, data=post)
 
 
@@ -223,3 +258,8 @@ async def delete_post(
     # 데이터 삭제
     await session.delete(post)
     await session.commit()
+
+    # 데이터 변경 시 관련된 캐시 무효화
+    await redis.delete(f"post:{post_id}")
+    await redis.delete("posts_count")
+    await redis.delete_pattern("posts:list:*")
