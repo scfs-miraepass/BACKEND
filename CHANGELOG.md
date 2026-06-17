@@ -1,3 +1,10 @@
+# [1.6.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.1...v1.6.0-dev.2) (2026-06-17)
+
+
+### Bug Fixes
+
+* 랭크 Endpoint들의 rank 순위가 포함되지 않던 문제 해결 ([9f8d76a](https://git.rldn.xyz/scfs.miraepass/backend/commit/9f8d76a9c55f74c05f4b1b0b4775a3ffd1cdbb3e))
+
 # [1.6.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.5.0...v1.6.0-dev.1) (2026-06-07)
 
 
