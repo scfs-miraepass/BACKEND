@@ -1,3 +1,10 @@
+# [1.6.0-dev.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.2...v1.6.0-dev.3) (2026-06-18)
+
+
+### Features
+
+* 게시글 시스템 ([4fc9a43](https://git.rldn.xyz/scfs.miraepass/backend/commit/4fc9a4303497b954f063a143c5da6cf5536ecfad))
+
 # [1.6.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.1...v1.6.0-dev.2) (2026-06-17)
 
 
