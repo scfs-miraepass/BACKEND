@@ -160,7 +160,7 @@ async def create_post(
     return ResponseModel[Posts](success=True, data=new_post)
 
 
-@router.put(
+@router.patch(
     "/{post_id}",
     response_model=ResponseModel[Posts],
     responses={
