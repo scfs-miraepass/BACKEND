@@ -1,3 +1,10 @@
+# [1.6.0-dev.5](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.4...v1.6.0-dev.5) (2026-06-22)
+
+
+### Features
+
+* 퀘스트 시스템 ([84aeb25](https://git.rldn.xyz/scfs.miraepass/backend/commit/84aeb256942b3cab339937f13fa0c2a5f75b74f1))
+
 # [1.6.0-dev.4](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.3...v1.6.0-dev.4) (2026-06-22)
 
 
