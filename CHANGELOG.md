@@ -1,3 +1,15 @@
+# [1.6.0-dev.4](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.3...v1.6.0-dev.4) (2026-06-22)
+
+
+### Bug Fixes
+
+* **database:** 게시글 관련 스키마 메타데이터에 등록되지 않는 현상 해결 ([ec30bfa](https://git.rldn.xyz/scfs.miraepass/backend/commit/ec30bfa057d3f1d3051fd45430ddb836bc128603))
+
+
+### Performance Improvements
+
+* DB 마이그레이션을 고려해 PointHistoryType 검증 자체는 Python 단에서 DB는 String으로 처리 [skip ci] ([dec38fb](https://git.rldn.xyz/scfs.miraepass/backend/commit/dec38fb7a97315c50ec0b4b8fcee660948eb19df))
+
 # [1.6.0-dev.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.2...v1.6.0-dev.3) (2026-06-18)
 
 
