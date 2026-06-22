@@ -15,13 +15,14 @@ class PointHistoryType(str, Enum):
     food = "food"  # 음식 구매
     etc = "etc"  # 기타
     grant = "grant"  # 학생 포인트 지급에 대한 교사 포인트 지급
+    quest = "quest"  # 퀘스트 보상
 
 
 class PointHistory(SQLModel, table=True):
-    id: Optional[int] = Field(None, primary_key=True)  # autoincrement
+    id: Optional[int] = Field(None, primary_key=True, index=True)  # autoincrement
 
     user: "Users" = Relationship(back_populates="history")
-    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
 
     changed_amount: int = Field(description="변경된 포인트의 정도")
 
