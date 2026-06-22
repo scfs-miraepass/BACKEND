@@ -49,6 +49,9 @@ docker-build:
       if [[ "$NEW_VERSION" != *"-dev"* ]]; then
         docker tag $CI_REGISTRY_IMAGE:$NEW_VERSION $CI_REGISTRY_IMAGE:latest
         docker push $CI_REGISTRY_IMAGE:latest
+      else
+        docker tag $CI_REGISTRY_IMAGE:$NEW_VERSION $CI_REGISTRY_IMAGE:dev
+        docker push $CI_REGISTRY_IMAGE:dev
       fi
   after_script:
     - docker logout
