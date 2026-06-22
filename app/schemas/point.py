@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING, Any
-from sqlalchemy import Column, DateTime, func
+from sqlalchemy import Column, DateTime, String, func
 from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum
 from pydantic import field_serializer
@@ -31,7 +31,7 @@ class PointHistory(SQLModel, table=True):
     reason: str = Field(description="누구의 무엇의 의해서 포인트가 변경되었는지 이유")
     memo: Optional[str] = Field(None, description="포인트가 어떠한 사유로 변경되었는지 이유")
 
-    type: Optional[PointHistoryType] = Field(None, description="기록 종류")
+    type: Optional[PointHistoryType] = Field(None, description="기록 종류", sa_column=Column(String(20)))
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
