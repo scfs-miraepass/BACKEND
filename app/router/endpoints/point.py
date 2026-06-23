@@ -19,7 +19,9 @@ STUDENT_POINT_LIMIT = 1000
 class PointOperation(BaseModel):
     target_user_id: int
     amount: int = Field(..., gt=0, description="처리할 포인트")
-    change_type: PointHistoryType | None = Field(None, description="포인트를 처리하는 이유의 종류")
+    change_type: PointHistoryType | None = Field(
+        None, description="포인트를 처리하는 이유의 종류"
+    )
     memo: str | None = Field(None, description="포인트를 처리하는 이유")
 
 
@@ -29,7 +31,9 @@ class GetLimitResponse(BaseModel):
 
 
 class RankingResponse(BaseModel):
-    id: int = Field(description="고유 ID. 교사, 서비스의 경우 자동생성. 학생의 경우 학번 사용")
+    id: int = Field(
+        description="고유 ID. 교사, 서비스의 경우 자동생성. 학생의 경우 학번 사용"
+    )
     name: str = Field(description="이름")
     grade: int | None = Field(description="학년")
     number: int | None = Field(description="반")
@@ -55,8 +59,12 @@ async def _process_point_change(
     action_name = "Deduct" if is_deduction else "Grant"
 
     if not target_user:
-        service_logger.warning(f"{action_name} points failed. Target User ID {target_user_id} not found.")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found.")
+        service_logger.warning(
+            f"{action_name} points failed. Target User ID {target_user_id} not found."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found."
+        )
 
     if is_deduction:
         if target_user.point < amount:
@@ -86,14 +94,26 @@ async def _process_point_change(
     target_user.point += change_amount
 
     # 포인트 이력 생성
-    reason = f"{operator.name} 선생님" if operator.type == UserType.teacher else operator.name
+    reason = (
+        f"{operator.name} 선생님"
+        if operator.type == UserType.teacher
+        else operator.name
+    )
     session.add(
-        PointHistory(user_id=target_user.id, changed_amount=change_amount, reason=reason, type=change_type, memo=memo)
+        PointHistory(
+            user_id=target_user.id,
+            changed_amount=change_amount,
+            reason=reason,
+            type=change_type,
+            memo=memo,
+        )
     )
 
     # 교사가 포인트를 지급하는 경우, 교사에게도 지급
     if not is_deduction and operator.type == UserType.teacher and amount > 0:
-        op_result = await session.execute(select(Users).where(Users.id == operator.id).with_for_update())
+        op_result = await session.execute(
+            select(Users).where(Users.id == operator.id).with_for_update()
+        )
         op_user = op_result.scalar_one()
         op_user.point += amount
         session.add(
@@ -153,14 +173,21 @@ async def get_limit(auth_data: LoginDep, target_user_id: int):
     if student_limit is None:
         student_limit = STUDENT_POINT_LIMIT
     if user.is_admin:
-        return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=0, target_limit=student_limit))
+        return ResponseModel[GetLimitResponse](
+            success=True,
+            data=GetLimitResponse(
+                limit=TEACHER_POINT_LIMIT, target_limit=student_limit
+            ),
+        )
 
     limit_key = f"point_limit:teacher:{user.id}"
     limit: int = await redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
 
-    return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=limit, target_limit=student_limit))
+    return ResponseModel[GetLimitResponse](
+        success=True, data=GetLimitResponse(limit=limit, target_limit=student_limit)
+    )
 
 
 @router.get(
@@ -186,7 +213,7 @@ async def get_limit_session(
 ):
     user, _ = auth_data
     if user.is_admin:
-        return ResponseModel[int](success=True, data=0)
+        return ResponseModel[int](success=True, data=TEACHER_POINT_LIMIT)
     limit_key = f"point_limit:teacher:{user.id}"
     limit: int = await redis.get(limit_key)
     if limit is None:
@@ -349,7 +376,11 @@ async def point_history(
         count = int(cached_count)
     else:
         # Cache Miss: DB 조회
-        query = select(func.count()).select_from(PointHistory).where(PointHistory.user_id == user.id)
+        query = (
+            select(func.count())
+            .select_from(PointHistory)
+            .where(PointHistory.user_id == user.id)
+        )
         result = await session.execute(query)
         count = result.scalar() or 0
         # 캐시 저장 (TTL: 1일)
@@ -411,7 +442,12 @@ async def _get_ranking(
     else:
         # 서브쿼리 없이 Users 모델 전체와 rank를 바로 선택 (SQLModel / Pydantic 경고 방지 및 성능 개선)
         query = (
-            select(Users, func.dense_rank().over(order_by=col(Users.total_point).desc()).label("rank"))
+            select(
+                Users,
+                func.dense_rank()
+                .over(order_by=col(Users.total_point).desc())
+                .label("rank"),
+            )
             .where(Users.type == user_type)
             # 페이지네이션 시 동일 포인트의 정렬이 변경되지 않도록 tie-breaker (id) 추가
             .order_by(col(Users.total_point).desc(), col(Users.id).asc())
@@ -448,7 +484,9 @@ async def _get_ranking(
     summary="학생 포인트 랭킹 조회",
     description="학생들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
 )
-async def get_student_ranking(response: Response, session: SessionDep, limit: int = 20, offset: int = 0):
+async def get_student_ranking(
+    response: Response, session: SessionDep, limit: int = 20, offset: int = 0
+):
     return await _get_ranking(UserType.student, response, session, limit, offset)
 
 
@@ -459,7 +497,9 @@ async def get_student_ranking(response: Response, session: SessionDep, limit: in
     summary="교사 포인트 랭킹 조회",
     description="교사들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
 )
-async def get_teacher_ranking(response: Response, session: SessionDep, limit: int = 20, offset: int = 0):
+async def get_teacher_ranking(
+    response: Response, session: SessionDep, limit: int = 20, offset: int = 0
+):
     return await _get_ranking(UserType.teacher, response, session, limit, offset)
 
 
@@ -485,7 +525,11 @@ async def get_point_balance(
 ):
     user, _ = auth_data
     # 권한 확인: Teacher, Service or Admin only
-    if user.type != UserType.teacher and user.type != UserType.service and not user.is_admin:
+    if (
+        user.type != UserType.teacher
+        and user.type != UserType.service
+        and not user.is_admin
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -504,6 +548,8 @@ async def get_point_balance(
 
     if point is None:
         service_logger.debug(f"UserNotFound: User ID {target_user_id} does not exist.")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     return ResponseModel[int](success=True, data=point)
