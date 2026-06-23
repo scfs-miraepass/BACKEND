@@ -6,6 +6,8 @@ semantic-release:
   stage: release
   image: node:24-slim
   rules:
+    - if: '$MANUAL_VERSION'
+      when: never
     - if: $CI_COMMIT_BRANCH == "master"
     - if: $CI_COMMIT_BRANCH == "dev"
   before_script:
@@ -35,22 +37,25 @@ docker-build:
   needs:
     - job: semantic-release
       artifacts: true
+      optional: true
   rules:
     - if: $CI_COMMIT_BRANCH == "master"
     - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_PIPELINE_SOURCE == "web"
   before_script:
-    - echo "Version $NEW_VERSION"
-    - if [ -z "$NEW_VERSION" ]; then echo "No new version to build."; exit 0; fi
+    - export FINAL_VERSION="${MANUAL_VERSION:-$NEW_VERSION}"
+    - echo "Build Version is $FINAL_VERSION"
+    - if [ -z "$FINAL_VERSION" ]; then echo "No version to build."; exit 0; fi
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - docker build --pull --provenance=false -t "$CI_REGISTRY_IMAGE:$NEW_VERSION" .
-    - docker push "$CI_REGISTRY_IMAGE:$NEW_VERSION"
+    - docker build --pull --provenance=false -t "$CI_REGISTRY_IMAGE:$FINAL_VERSION" .
+    - docker push "$CI_REGISTRY_IMAGE:$FINAL_VERSION"
     - |
-      if [[ "$NEW_VERSION" != *"-dev"* ]]; then
-        docker tag $CI_REGISTRY_IMAGE:$NEW_VERSION $CI_REGISTRY_IMAGE:latest
+      if [[ "$CI_COMMIT_BRANCH" == "master" ]]; then
+        docker tag $CI_REGISTRY_IMAGE:$FINAL_VERSION $CI_REGISTRY_IMAGE:latest
         docker push $CI_REGISTRY_IMAGE:latest
-      else
-        docker tag $CI_REGISTRY_IMAGE:$NEW_VERSION $CI_REGISTRY_IMAGE:dev
+      elif [[ "$CI_COMMIT_BRANCH" == "dev" ]]; then
+        docker tag $CI_REGISTRY_IMAGE:$FINAL_VERSION $CI_REGISTRY_IMAGE:dev
         docker push $CI_REGISTRY_IMAGE:dev
       fi
   after_script:
