@@ -88,12 +88,7 @@ async def _process_point_change(
     # 포인트 이력 생성
     reason = f"{operator.name} 선생님" if operator.type == UserType.teacher else operator.name
     session.add(
-        PointHistory(
-            user_id=target_user.id,
-            changed_amount=change_amount,
-            reason=reason,
-            type=change_type,
-        )
+        PointHistory(user_id=target_user.id, changed_amount=change_amount, reason=reason, type=change_type, memo=memo)
     )
 
     # 교사가 포인트를 지급하는 경우, 교사에게도 지급
@@ -154,13 +149,16 @@ async def _process_point_change(
 )
 async def get_limit(auth_data: LoginDep, target_user_id: int):
     user, _ = auth_data
+    student_limit: int = await redis.get(f"point_limit:student:{target_user_id}")
+    if student_limit is None:
+        student_limit = STUDENT_POINT_LIMIT
+    if user.is_admin:
+        return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=0, target_limit=student_limit))
+
     limit_key = f"point_limit:teacher:{user.id}"
     limit: int = await redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
-    student_limit: int = await redis.get(f"point_limit:student:{target_user_id}")
-    if student_limit is None:
-        student_limit = STUDENT_POINT_LIMIT
 
     return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=limit, target_limit=student_limit))
 
@@ -187,6 +185,8 @@ async def get_limit_session(
     auth_data: LoginDep,
 ):
     user, _ = auth_data
+    if user.is_admin:
+        return ResponseModel[int](success=True, data=0)
     limit_key = f"point_limit:teacher:{user.id}"
     limit: int = await redis.get(limit_key)
     if limit is None:
