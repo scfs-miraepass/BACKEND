@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from math import ceil
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
@@ -24,6 +24,44 @@ from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/quest", tags=["quest"])
 QUEST_MAX_POINT_LIMIT = 300
+QUEST_ID_BACKFILLED = False
+
+
+def serialize_quest(quest: Quest) -> dict[str, Any]:
+    return {
+        "id": quest.id,
+        "title": quest.title,
+        "description": quest.description,
+        "reward": quest.reward,
+        "end_date": quest.end_date,
+        "max_repeat": 1,
+        "created_at": quest.created_at,
+        "author_id": quest.author_id,
+    }
+
+
+async def backfill_missing_quest_ids(session: SessionDep) -> None:
+    global QUEST_ID_BACKFILLED
+
+    if QUEST_ID_BACKFILLED:
+        return
+
+    missing_result = await session.execute(select(Quest).where(Quest.id.is_(None)).order_by(Quest.created_at))
+    missing_quests = [item for item in missing_result.scalars().all() if item is not None]
+
+    if not missing_quests:
+        QUEST_ID_BACKFILLED = True
+        return
+
+    max_id_result = await session.execute(select(func.max(Quest.id)))
+    next_id = (max_id_result.scalar() or 0) + 1
+
+    for quest in missing_quests:
+        quest.id = next_id
+        next_id += 1
+
+    await session.commit()
+    QUEST_ID_BACKFILLED = True
 
 
 class QuestOperation(BaseModel):
@@ -31,7 +69,7 @@ class QuestOperation(BaseModel):
     description: str = Field(..., description="퀘스트 내용")
     reward: int = Field(..., gt=0, description="퀘스트 보상(포인트)")
     end_date: datetime = Field(..., description="퀘스트 종료 날짜")
-    max_repeat: int = Field(..., ge=1, description="퀘스트 반복 가능 횟수")
+    max_repeat: int = Field(1, ge=1, description="퀘스트 반복 가능 횟수")
 
 
 class QuestUpdate(BaseModel):
@@ -77,23 +115,25 @@ async def create_quest(
             detail=f"The maximum point reward for a quest is {QUEST_MAX_POINT_LIMIT}.",
         )
 
+    next_quest_id = await session.scalar(select(func.coalesce(func.max(Quest.id), 0))) or 0
     quest = Quest(
+        id=next_quest_id + 1,
         title=operation.title,
         description=operation.description,
         reward=operation.reward,
         end_date=operation.end_date,
-        max_repeat=operation.max_repeat,
-        created_by_teacher_id=user.id,
+        max_repeat=1,
+        author_id=user.id,
     )
 
     session.add(quest)
+    await session.flush()
     await session.commit()
-    await session.refresh(quest)
 
     await redis.delete("quests_count")
     await redis.delete_pattern("quests:*")
 
-    return ResponseModel(success=True, data=quest)
+    return ResponseModel(success=True, data=serialize_quest(quest))
 
 
 @router.get(
@@ -115,36 +155,22 @@ async def list_quests(
     offset: int = 0,
 ):
     _user, _ = auth_data
+    await backfill_missing_quest_ids(session)
 
-    count_cache_key = "quests_count"
-    cached_count = await redis.get(count_cache_key)
+    count_query = select(func.count()).select_from(Quest)
+    count_result = await session.execute(count_query)
+    count = count_result.scalar() or 0
 
-    if cached_count is not None:
-        count = int(cached_count)
-    else:
-        count_query = select(func.count()).select_from(Quest)
-        count_result = await session.execute(count_query)
-        count = count_result.scalar() or 0
-        await redis.set(count_cache_key, count, ttl=60 * 5)
-
-    quests_cache_key = f"quests:{limit}:{offset}"
-    cached_quests = await redis.get(quests_cache_key)
-
-    if cached_quests is not None:
-        quests = [Quest(**item) for item in cached_quests]
-        response.headers["X-CACHED"] = "true"
-    else:
-        response.headers["X-CACHED"] = "false"
-        query = select(Quest).order_by(Quest.end_date).limit(limit).offset(offset)
-        result = await session.execute(query)
-        quests = list(result.scalars().all())
-        quests_data = [item.model_dump() for item in quests]
-        await redis.set(quests_cache_key, quests_data, ttl=60 * 5)
+    response.headers["X-CACHED"] = "false"
+    query = select(Quest).order_by(Quest.end_date).limit(limit).offset(offset)
+    result = await session.execute(query)
+    quests = [item for item in result.scalars().all() if item is not None]
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
+    service_logger.info(f"Quest list fetched. count={count}, returned={len(quests)}, limit={limit}, offset={offset}")
 
-    return ResponseModel(success=True, data=quests)
+    return ResponseModel(success=True, data=[serialize_quest(item) for item in quests])
 
 
 @router.get(
@@ -162,20 +188,12 @@ async def list_quests(
 async def get_quest(quest_id: int, response: Response, session: SessionDep, auth_data: LoginDep):
     _user, _ = auth_data
 
-    cache_key = f"quest:{quest_id}"
-    cached_quest = await redis.get(cache_key)
+    response.headers["X-CACHED"] = "false"
+    quest = await session.get(Quest, quest_id)
+    if not quest:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
-    if cached_quest:
-        response.headers["X-CACHED"] = "true"
-        quest = Quest(**cached_quest)
-    else:
-        response.headers["X-CACHED"] = "false"
-        quest = await session.get(Quest, quest_id)
-        if not quest:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
-        await redis.set(cache_key, quest.model_dump(), ttl=60 * 5)
-
-    return ResponseModel(success=True, data=quest)
+    return ResponseModel(success=True, data=serialize_quest(quest))
 
 
 @router.put(
@@ -218,18 +236,20 @@ async def update_quest(
         )
 
     update_data = operation.model_dump(exclude_unset=True)
+    update_data.pop("max_repeat", None)
     for key, value in update_data.items():
         setattr(quest, key, value)
 
+    quest.max_repeat = 1
+
     session.add(quest)
     await session.commit()
-    await session.refresh(quest)
 
     await redis.delete(f"quest:{quest_id}")
     await redis.delete("quests_count")
     await redis.delete_pattern("quests:*")
 
-    return ResponseModel(success=True, data=quest)
+    return ResponseModel(success=True, data=serialize_quest(quest))
 
 
 @router.delete(
@@ -314,10 +334,10 @@ async def complete_quest(quest_id: int, auth_data: LoginDep, session: SessionDep
     result = await session.execute(count_query)
     completed_count = result.scalar_one()
 
-    if completed_count >= quest.max_repeat:
+    if completed_count >= 1:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="The maximum completion count for this quest has been reached.",
+            detail="This quest can only be completed once.",
         )
 
     result = await session.execute(select(Users).where(Users.id == user.id).with_for_update())
