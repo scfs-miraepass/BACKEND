@@ -1,6 +1,6 @@
 [project]
 name = "scfs-miraepass-backend"
-version = "1.6.0.dev5"
+version = "1.6.0.dev6"
 description = "순천미래과학고등학교 포인트 시스템, 미래 패스 - BACKEND"
 readme = "README.md"
 requires-python = ">=3.14"

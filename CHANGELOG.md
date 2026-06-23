@@ -1,3 +1,10 @@
+# [1.6.0-dev.6](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.5...v1.6.0-dev.6) (2026-06-23)
+
+
+### Bug Fixes
+
+* 아예 실행조차 안되는 현상 해결 ([88b03c5](https://git.rldn.xyz/scfs.miraepass/backend/commit/88b03c5675a57903244a9e924dfdc91169a369c7))
+
 # [1.6.0-dev.5](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.4...v1.6.0-dev.5) (2026-06-22)
 
 
