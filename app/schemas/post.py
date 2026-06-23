@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, func
 from sqlmodel import Field, SQLModel, Relationship, ForeignKey, Integer, JSON
-from typing import Optional, Any
+from typing import Optional, Any, TYPE_CHECKING
 from pydantic import field_serializer
 
-from .users import Users
+if TYPE_CHECKING:
+    from .users import Users
 
 
 class Post(SQLModel):
@@ -61,13 +62,9 @@ class PostContent(SQLModel, table=True):
     # 관계
     post: "Posts" = Relationship(back_populates="content")
     post_id: int = Field(
-        sa_column=Column(
-            Integer, ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
-        ),
+        sa_column=Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True),
         description="연결된 게시글 고유 ID",
     )
 
     # JSON 내용
-    data: dict = Field(
-        ..., description="게시글의 내용 JSON 데이터", sa_column=Column(JSON)
-    )
+    data: dict = Field(..., description="게시글의 내용 JSON 데이터", sa_column=Column(JSON))

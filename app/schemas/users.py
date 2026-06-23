@@ -9,9 +9,7 @@ from pydantic import field_serializer
 from app.core.loggers import service_logger
 from .point import PointHistory, PointHistoryType
 from .quest import Quest, QuestCompletion
-
-if TYPE_CHECKING:
-    from .post import Posts
+from .post import Posts
 
 
 class UserType(str, Enum):
@@ -67,12 +65,10 @@ class Users(User, table=True):
 
     search: List["UserSearch"] = Relationship(back_populates="user", passive_deletes=True)
     history: List["PointHistory"] = Relationship(back_populates="user", passive_deletes=True)
-<<<<<<< app/schemas/users.py
     created_quest: List["Quest"] = Relationship(back_populates="author", passive_deletes=True)
     completion_quest: List["QuestCompletion"] = Relationship(back_populates="user", passive_deletes=True)
-=======
+
     posts: List["Posts"] = Relationship(back_populates="author")
->>>>>>> app/schemas/users.py
 
 
 class UserSearch(SQLModel, table=True):
