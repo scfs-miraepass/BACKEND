@@ -1,3 +1,10 @@
+# [1.6.0-dev.8](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.7...v1.6.0-dev.8) (2026-06-23)
+
+
+### Features
+
+* 포인트 limit 관련에 관리자의 경우 항상 0으로 표기하도록 수정 ([b539d5b](https://git.rldn.xyz/scfs.miraepass/backend/commit/b539d5b302d36ac295dfade5ffd9e6344bf6cf75))
+
 # [1.6.0-dev.7](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.6...v1.6.0-dev.7) (2026-06-23)
 
 
