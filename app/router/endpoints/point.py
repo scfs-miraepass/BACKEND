@@ -3,7 +3,7 @@ from math import ceil
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import func, select, col
+from sqlmodel import func, col, select
 
 from app.core import LoginDep, SessionDep
 from app.core.loggers import service_logger
@@ -20,6 +20,7 @@ class PointOperation(BaseModel):
     target_user_id: int
     amount: int = Field(..., gt=0, description="처리할 포인트")
     change_type: PointHistoryType | None = Field(None, description="포인트를 처리하는 이유의 종류")
+    memo: str | None = Field(None, description="포인트를 처리하는 이유")
 
 
 class GetLimitResponse(BaseModel):
@@ -28,9 +29,12 @@ class GetLimitResponse(BaseModel):
 
 
 class RankingResponse(BaseModel):
-    id: int
-    name: str
-    total_point: int
+    id: int = Field(description="고유 ID. 교사, 서비스의 경우 자동생성. 학생의 경우 학번 사용")
+    name: str = Field(description="이름")
+    grade: int | None = Field(description="학년")
+    number: int | None = Field(description="반")
+    total_point: int = Field(description="누적 포인트")
+    rank: int = Field(description="현재 순위")
 
 
 async def _process_point_change(
@@ -40,6 +44,7 @@ async def _process_point_change(
     amount: int,
     is_deduction: bool = False,
     change_type: PointHistoryType | None = None,
+    memo: str | None = None,
 ) -> int:
     """포인트 변경 로직을 처리하는 내부 함수 (Locking 및 History 생성 포함)"""
     # 동시성 문제 해결을 위해 Row-level Lock 적용 (SELECT ... FOR UPDATE)
@@ -83,12 +88,7 @@ async def _process_point_change(
     # 포인트 이력 생성
     reason = f"{operator.name} 선생님" if operator.type == UserType.teacher else operator.name
     session.add(
-        PointHistory(
-            user_id=target_user.id,
-            changed_amount=change_amount,
-            reason=reason,
-            type=change_type,
-        )
+        PointHistory(user_id=target_user.id, changed_amount=change_amount, reason=reason, type=change_type, memo=memo)
     )
 
     # 교사가 포인트를 지급하는 경우, 교사에게도 지급
@@ -149,13 +149,16 @@ async def _process_point_change(
 )
 async def get_limit(auth_data: LoginDep, target_user_id: int):
     user, _ = auth_data
+    student_limit: int = await redis.get(f"point_limit:student:{target_user_id}")
+    if student_limit is None:
+        student_limit = STUDENT_POINT_LIMIT
+    if user.is_admin:
+        return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=0, target_limit=student_limit))
+
     limit_key = f"point_limit:teacher:{user.id}"
     limit: int = await redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
-    student_limit: int = await redis.get(f"point_limit:student:{target_user_id}")
-    if student_limit is None:
-        student_limit = STUDENT_POINT_LIMIT
 
     return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=limit, target_limit=student_limit))
 
@@ -182,6 +185,8 @@ async def get_limit_session(
     auth_data: LoginDep,
 ):
     user, _ = auth_data
+    if user.is_admin:
+        return ResponseModel[int](success=True, data=0)
     limit_key = f"point_limit:teacher:{user.id}"
     limit: int = await redis.get(limit_key)
     if limit is None:
@@ -252,6 +257,7 @@ async def grant_points(
         target_user_id=operation.target_user_id,
         amount=operation.amount,
         change_type=operation.change_type,
+        memo=operation.memo,
         is_deduction=False,
     )
 
@@ -305,6 +311,7 @@ async def deduct_points(
         target_user_id=operation.target_user_id,
         amount=operation.amount,
         change_type=operation.change_type,
+        memo=operation.memo,
         is_deduction=True,
     )
 
@@ -402,15 +409,28 @@ async def _get_ranking(
     if cached_ranking is not None:
         rankings = [RankingResponse(**item) for item in cached_ranking]
     else:
+        # 서브쿼리 없이 Users 모델 전체와 rank를 바로 선택 (SQLModel / Pydantic 경고 방지 및 성능 개선)
         query = (
-            select(Users.id, Users.name, Users.total_point)
+            select(Users, func.dense_rank().over(order_by=col(Users.total_point).desc()).label("rank"))
             .where(Users.type == user_type)
-            .order_by(col(Users.total_point).desc())
+            # 페이지네이션 시 동일 포인트의 정렬이 변경되지 않도록 tie-breaker (id) 추가
+            .order_by(col(Users.total_point).desc(), col(Users.id).asc())
             .limit(limit)
             .offset(offset)
         )
+
         result = await session.execute(query)
-        rankings = [RankingResponse(id=row.id, name=row.name, total_point=row.total_point) for row in result.all()]
+        rankings = [
+            RankingResponse(
+                rank=rank,
+                id=user.id,
+                name=user.name,
+                total_point=user.total_point,
+                grade=user.grade,
+                number=user.number,
+            )
+            for user, rank in result.all()
+        ]
 
         ranking_data = [item.model_dump() for item in rankings]
         await redis.set(ranking_cache_key, ranking_data, ttl=60 * 5)  # 5분 캐시

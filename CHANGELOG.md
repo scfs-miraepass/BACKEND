@@ -1,3 +1,64 @@
+# [1.6.0-dev.8](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.7...v1.6.0-dev.8) (2026-06-23)
+
+
+### Features
+
+* 포인트 limit 관련에 관리자의 경우 항상 0으로 표기하도록 수정 ([b539d5b](https://git.rldn.xyz/scfs.miraepass/backend/commit/b539d5b302d36ac295dfade5ffd9e6344bf6cf75))
+
+# [1.6.0-dev.7](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.6...v1.6.0-dev.7) (2026-06-23)
+
+
+### Features
+
+* **database:** b4da6e37f3a6 마이그레이션 생성 ([6abb057](https://git.rldn.xyz/scfs.miraepass/backend/commit/6abb057b951e5e1ad3cc0aab23a6adb2c0a8b389))
+
+# [1.6.0-dev.6](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.5...v1.6.0-dev.6) (2026-06-23)
+
+
+### Bug Fixes
+
+* 아예 실행조차 안되는 현상 해결 ([88b03c5](https://git.rldn.xyz/scfs.miraepass/backend/commit/88b03c5675a57903244a9e924dfdc91169a369c7))
+
+# [1.6.0-dev.5](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.4...v1.6.0-dev.5) (2026-06-22)
+
+
+### Features
+
+* 퀘스트 시스템 ([84aeb25](https://git.rldn.xyz/scfs.miraepass/backend/commit/84aeb256942b3cab339937f13fa0c2a5f75b74f1))
+
+# [1.6.0-dev.4](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.3...v1.6.0-dev.4) (2026-06-22)
+
+
+### Bug Fixes
+
+* **database:** 게시글 관련 스키마 메타데이터에 등록되지 않는 현상 해결 ([ec30bfa](https://git.rldn.xyz/scfs.miraepass/backend/commit/ec30bfa057d3f1d3051fd45430ddb836bc128603))
+
+
+### Performance Improvements
+
+* DB 마이그레이션을 고려해 PointHistoryType 검증 자체는 Python 단에서 DB는 String으로 처리 [skip ci] ([dec38fb](https://git.rldn.xyz/scfs.miraepass/backend/commit/dec38fb7a97315c50ec0b4b8fcee660948eb19df))
+
+# [1.6.0-dev.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.2...v1.6.0-dev.3) (2026-06-18)
+
+
+### Features
+
+* 게시글 시스템 ([4fc9a43](https://git.rldn.xyz/scfs.miraepass/backend/commit/4fc9a4303497b954f063a143c5da6cf5536ecfad))
+
+# [1.6.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.1...v1.6.0-dev.2) (2026-06-17)
+
+
+### Bug Fixes
+
+* 랭크 Endpoint들의 rank 순위가 포함되지 않던 문제 해결 ([9f8d76a](https://git.rldn.xyz/scfs.miraepass/backend/commit/9f8d76a9c55f74c05f4b1b0b4775a3ffd1cdbb3e))
+
+# [1.6.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.5.0...v1.6.0-dev.1) (2026-06-07)
+
+
+### Features
+
+* **point:** 포인트 차감및 지급 Endpoint Body에 기록 메모(지급/차감시 사유) 추가 ([ae2e524](https://git.rldn.xyz/scfs.miraepass/backend/commit/ae2e5247046a1ad2b377ddba04cfdbf221b37892))
+
 # [1.5.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.4.3...v1.5.0) (2026-06-01)
 
 

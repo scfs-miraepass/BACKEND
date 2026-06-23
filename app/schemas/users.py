@@ -1,16 +1,15 @@
 from sqlmodel import Field, SQLModel, Relationship, delete
 from sqlalchemy import event, Connection, insert
-from typing import Optional, TYPE_CHECKING, List, Any
+from typing import Optional, List, Any
 from enum import Enum
 from typing import cast
 from hangulpy import split_hangul_string, get_chosung_string
 from pydantic import field_serializer
 
 from app.core.loggers import service_logger
-from .point import PointHistoryType
-
-if TYPE_CHECKING:
-    from .point import PointHistory
+from .point import PointHistory, PointHistoryType
+from .quest import Quest, QuestCompletion
+from .post import Posts
 
 
 class UserType(str, Enum):
@@ -27,7 +26,7 @@ class User(SQLModel):
         index=True,
     )  # autoincrement
 
-    type: UserType = Field(description="유저 종류 (학생, 교사, 서비스)")
+    type: UserType = Field(description="유저 종류 (학생, 교사, 서비스)", index=True)
     name: str = Field(description="이름")
     grade: Optional[int] = Field(description="학년")
     number: Optional[int] = Field(description="반")
@@ -64,15 +63,19 @@ class User(SQLModel):
 class Users(User, table=True):
     password: Optional[str] = Field(description="비밀번호")
 
-    search: List["UserSearch"] = Relationship(back_populates="user", cascade_delete=True)
-    history: List["PointHistory"] = Relationship(back_populates="user", cascade_delete=True)
+    search: List["UserSearch"] = Relationship(back_populates="user", passive_deletes=True)
+    history: List["PointHistory"] = Relationship(back_populates="user", passive_deletes=True)
+    created_quest: List["Quest"] = Relationship(back_populates="author", passive_deletes=True)
+    completion_quest: List["QuestCompletion"] = Relationship(back_populates="user", passive_deletes=True)
+
+    posts: List["Posts"] = Relationship(back_populates="author")
 
 
 class UserSearch(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)  # autoincrement
 
     user: Users = Relationship(back_populates="search")
-    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
     value: str = Field(index=True)
 
 
