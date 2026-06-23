@@ -1,3 +1,10 @@
+# [1.6.0-dev.7](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.6...v1.6.0-dev.7) (2026-06-23)
+
+
+### Features
+
+* **database:** b4da6e37f3a6 마이그레이션 생성 ([6abb057](https://git.rldn.xyz/scfs.miraepass/backend/commit/6abb057b951e5e1ad3cc0aab23a6adb2c0a8b389))
+
 # [1.6.0-dev.6](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.5...v1.6.0-dev.6) (2026-06-23)
 
 
