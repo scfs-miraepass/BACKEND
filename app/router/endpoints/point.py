@@ -281,7 +281,7 @@ async def deduct_points(
     summary="포인트 기록",
     description="현재 로그인한 자기자신의 포인트 기록을 조회합니다.",
 )
-async def point_history(
+async def point_history(  # DB때문인지 뭔지는 모르겠는데 나한테선 안됨 아마 내가 테이블 만들 때 뭐 잘못한듯 ㅇㅇ
     response: Response,
     auth_data: LoginDep,
     limit: int = 20,

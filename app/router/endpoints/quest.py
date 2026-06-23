@@ -1,6 +1,6 @@
 from datetime import datetime
 from math import ceil
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
@@ -139,6 +139,7 @@ async def list_quests(
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
+    client.service_logger.info(f"Quest list fetched. count={count}, returned={len(quests)}, limit={limit}, offset={offset}")
 
     return ResponseModel(success=True, data=quests)
 
