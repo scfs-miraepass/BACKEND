@@ -1,3 +1,11 @@
+# [1.7.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.1...v1.7.0-dev.1) (2026-06-25)
+
+
+### Features
+
+* **point:** 포인트 교사 랭킹, 관리자 계정 랭킹에서 제외 ([54e4252](https://git.rldn.xyz/scfs.miraepass/backend/commit/54e4252035bc56af81e4269a846e754ad179509d))
+* 관리자 계정 포인트 학생 지급이 본인에게 지급하는트 포인트 동일하게 주당 1000 포인트 제한 ([0e33178](https://git.rldn.xyz/scfs.miraepass/backend/commit/0e3317827581d3e5954af3b190239e328223c2a6))
+
 ## [1.6.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0...v1.6.1) (2026-06-23)
 
 
