@@ -1,3 +1,10 @@
+# [1.7.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.7.0-dev.1...v1.7.0-dev.2) (2026-06-25)
+
+
+### Bug Fixes
+
+* **point:** 관리자계정 포인트 제한시 None 으로 인한 버그 수정 ([6993321](https://git.rldn.xyz/scfs.miraepass/backend/commit/699332155df4633bfb1e7341b83a0765fedae064))
+
 # [1.7.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.1...v1.7.0-dev.1) (2026-06-25)
 
 
