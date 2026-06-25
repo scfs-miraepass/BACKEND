@@ -1,10 +1,3 @@
-# [1.6.0-dev.9](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0-dev.8...v1.6.0-dev.9) (2026-06-23)
-
-
-### Bug Fixes
-
-* **point:** 관리자 권한 유저가 포인트 지급시 제한이 0으로 응답하여, 지급하지 못하는 현상  [skip ci] ([b46b52d](https://git.rldn.xyz/scfs.miraepass/backend/commit/b46b52d841a49ef7a5e73cea4a82fc37d5a51357))
-
 ## [1.6.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.0...v1.6.1) (2026-06-23)
 
 
