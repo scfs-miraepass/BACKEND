@@ -428,8 +428,15 @@ async def _get_ranking(
     if cached_count is not None:
         count = int(cached_count)
     else:
-        # Cache Miss: DB 조회
-        query = select(func.count()).select_from(Users).where(Users.type == user_type)
+        # 기본 쿼리
+        query = select(func.count()).select_from(Users)
+
+        # 조건 추가
+        conditions = [Users.type == user_type]
+        if user_type == UserType.teacher:
+            conditions.append(Users.is_admin == False)
+        query = query.where(*conditions)
+
         result = await session.execute(query)
         count = result.scalar() or 0
         await redis.set(count_cache_key, count, ttl=60 * 5)  # 5분 캐시
@@ -441,6 +448,10 @@ async def _get_ranking(
         rankings = [RankingResponse(**item) for item in cached_ranking]
     else:
         # 서브쿼리 없이 Users 모델 전체와 rank를 바로 선택 (SQLModel / Pydantic 경고 방지 및 성능 개선)
+        conditions = [Users.type == user_type]
+        if user_type == UserType.teacher:
+            conditions.append(Users.is_admin == False)
+
         query = (
             select(
                 Users,
@@ -448,8 +459,8 @@ async def _get_ranking(
                 .over(order_by=col(Users.total_point).desc())
                 .label("rank"),
             )
-            .where(Users.type == user_type)
             # 페이지네이션 시 동일 포인트의 정렬이 변경되지 않도록 tie-breaker (id) 추가
+            .where(*conditions)
             .order_by(col(Users.total_point).desc(), col(Users.id).asc())
             .limit(limit)
             .offset(offset)
