@@ -105,30 +105,44 @@ async def _process_point_change(
             changed_amount=change_amount,
             reason=reason,
             type=change_type,
-            memo=memo,
         )
     )
 
+    back_limit: int | None = None
+    if operator.is_admin:
+        back_limit_key = f"point_limit:teacher:{operator.id}"
+        back_limit = await redis.get(back_limit_key)
+        if back_limit is None:
+            back_limit = TEACHER_POINT_LIMIT
+
     # 교사가 포인트를 지급하는 경우, 교사에게도 지급
     if not is_deduction and operator.type == UserType.teacher and amount > 0:
-        op_result = await session.execute(
-            select(Users).where(Users.id == operator.id).with_for_update()
-        )
-        op_user = op_result.scalar_one()
-        op_user.point += amount
-        session.add(
-            PointHistory(
-                user_id=op_user.id,
-                changed_amount=amount,
-                reason=f"{target_user.name} 포인트 지급",
-                type=PointHistoryType.grant,
+        back_amount = min(back_limit, amount) if back_limit is not None else amount
+        if back_amount > 0:
+            op_result = await session.execute(
+                select(Users).where(Users.id == operator.id).with_for_update()
             )
-        )
+            op_user = op_result.scalar_one()
+            op_user.point += back_amount
+            session.add(
+                PointHistory(
+                    user_id=op_user.id,
+                    changed_amount=back_amount,
+                    reason=f"{target_user.name} 포인트 지급",
+                    type=PointHistoryType.grant,
+                    memo=memo,
+                )
+            )
 
-        await redis.delete(f"user:{op_user.id}")
-        await redis.delete(f"point_history_count:{op_user.id}")
-        await redis.delete_pattern(f"point_history:{op_user.id}:*")
-        await redis.delete_pattern("ranking:teacher:*")
+            if operator.is_admin:
+                await redis.set(
+                    back_limit_key, back_limit - back_amount, ttl=60 * 60 * 24 * 7
+                )
+
+            await redis.delete(f"user:{op_user.id}")
+            await redis.delete(f"point_history_count:{op_user.id}")
+            await redis.delete_pattern(f"point_history:{op_user.id}:*")
+            await redis.delete_pattern("ranking:teacher:*")
 
     await session.commit()
     await session.refresh(target_user)
@@ -428,8 +442,15 @@ async def _get_ranking(
     if cached_count is not None:
         count = int(cached_count)
     else:
-        # Cache Miss: DB 조회
-        query = select(func.count()).select_from(Users).where(Users.type == user_type)
+        # 기본 쿼리
+        query = select(func.count()).select_from(Users)
+
+        # 조건 추가
+        conditions = [Users.type == user_type]
+        if user_type == UserType.teacher:
+            conditions.append(Users.is_admin == False)
+        query = query.where(*conditions)
+
         result = await session.execute(query)
         count = result.scalar() or 0
         await redis.set(count_cache_key, count, ttl=60 * 5)  # 5분 캐시
@@ -441,6 +462,10 @@ async def _get_ranking(
         rankings = [RankingResponse(**item) for item in cached_ranking]
     else:
         # 서브쿼리 없이 Users 모델 전체와 rank를 바로 선택 (SQLModel / Pydantic 경고 방지 및 성능 개선)
+        conditions = [Users.type == user_type]
+        if user_type == UserType.teacher:
+            conditions.append(Users.is_admin == False)
+
         query = (
             select(
                 Users,
@@ -448,8 +473,8 @@ async def _get_ranking(
                 .over(order_by=col(Users.total_point).desc())
                 .label("rank"),
             )
-            .where(Users.type == user_type)
             # 페이지네이션 시 동일 포인트의 정렬이 변경되지 않도록 tie-breaker (id) 추가
+            .where(*conditions)
             .order_by(col(Users.total_point).desc(), col(Users.id).asc())
             .limit(limit)
             .offset(offset)
