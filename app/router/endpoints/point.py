@@ -112,7 +112,7 @@ async def _process_point_change(
     if operator.is_admin:
         back_limit_key = f"point_limit:teacher:{operator.id}"
         back_limit = await redis.get(back_limit_key)
-        if back_limit_key is None:
+        if back_limit is None:
             back_limit = TEACHER_POINT_LIMIT
 
     # 교사가 포인트를 지급하는 경우, 교사에게도 지급
