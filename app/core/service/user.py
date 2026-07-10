@@ -1,8 +1,8 @@
 from app.schemas import Users
 
-from .core import ServiceCore
-from .security import get_password_hash
-from .config import settings
+from core.core import ServiceCore
+from core.security import get_password_hash
+from core.config import settings
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

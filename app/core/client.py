@@ -1,5 +1,7 @@
 from .core import ServiceCore
-from .user import User, Users
+from .service import User
+
+from app.schemas import Users
 
 
 class ServiceClient(ServiceCore):

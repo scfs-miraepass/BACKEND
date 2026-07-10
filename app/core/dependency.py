@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, Request, status
 
 from app.schemas import Users
 from .config import settings
-from .user import User
+from .service import User
 from .client import ServiceClient
 
 
