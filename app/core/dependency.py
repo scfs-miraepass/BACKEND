@@ -2,12 +2,13 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
-from app.core.config import settings
 from app.schemas import Users
-from .core import ServiceClient
+from .config import settings
+from .user import User
+from .client import ServiceClient
 
 
-async def verify_session(request: Request) -> tuple[Users, str]:
+async def verify_session(request: Request) -> tuple[User, str]:
     client = ServiceClient()
     session_id = request.cookies.get(settings.service.session.cookie_name)
     if not session_id:
@@ -24,7 +25,7 @@ async def verify_session(request: Request) -> tuple[Users, str]:
     cached_user_data = await client.redis.get(user_cache_key)
     if cached_user_data:
         user = Users.model_validate(cached_user_data)
-        return user, session_id
+        return User(payload=user), session_id
 
     user = await client.get_user(user_id)
     if not user:
@@ -36,4 +37,4 @@ async def verify_session(request: Request) -> tuple[Users, str]:
     return user, session_id
 
 
-LoginDep = Annotated[tuple[Users, str], Depends(verify_session)]
+LoginDep = Annotated[tuple[User, str], Depends(verify_session)]

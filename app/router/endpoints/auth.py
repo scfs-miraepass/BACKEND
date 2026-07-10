@@ -1,17 +1,16 @@
 from uuid import uuid4
-from typing import cast
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
-from app.core import LoginDep, SessionDep, settings
-from app.core.redis import redis
-from app.core.security import get_password_hash, verify_password
+from app.core import LoginDep, settings, ServiceClient
+from app.core.security import verify_password
 from app.schemas import UserType
 from app.schemas.response import ErrorResponse, ResponseModel
-from app.schemas.users import User, Users
+from app.schemas.users import User
 
 router = APIRouter(prefix="/auth", tags=["users", "auth"])
+client = ServiceClient()
 
 
 class LoginForm(BaseModel):
@@ -59,10 +58,9 @@ def _set_session_cookie(response: Response, session_id: str):
 async def login(
     response: Response,
     form: LoginForm,
-    session: SessionDep,
 ):
     # 1. 유저 조회
-    user = cast(Users | None, await session.get(Users, form.id))
+    user = await client.get_user(form.id)
 
     # 2. 유저 검증 (비밀번호 비교)
     if not user or not user.password or not verify_password(form.password, user.password):
@@ -75,12 +73,10 @@ async def login(
     session_id = str(uuid4())
 
     # Redis에 세션 저장 (Key: session:{uuid}, Value: user_id)
-    # TTL 설정
-    await redis.set(f"session:{session_id}", user.id, ttl=settings.service.session.expire_seconds)
+    await client.redis.set(f"session:{session_id}", user.id, ttl=settings.service.session.expire_seconds)
 
     # 4. 유저 정보 캐싱 (Cache Warming)
-    # 로그인 시점에 미리 캐시에 올려두어 이후 요청 시 DB 접근을 줄임
-    await redis.set(f"user:{user.id}", user.model_dump(), ttl=settings.service.session.expire_seconds)
+    await user.cache_update()
 
     # 5. 쿠키 설정
     _set_session_cookie(response, session_id)
@@ -98,12 +94,12 @@ async def login(
 async def logout(response: Response, request: Request):
     session_id = request.cookies.get(settings.service.session.cookie_name)
     if session_id:
-        user_id = await redis.get(f"session:{session_id}")
+        user_id = await client.redis.get(f"session:{session_id}")
         # Redis에서 세션 삭제
-        await redis.delete(f"session:{session_id}")
+        await client.redis.delete(f"session:{session_id}")
         if user_id:
             # 유저 정보 캐시도 함께 삭제 (선택 사항이지만 보안상 권장)
-            await redis.delete(f"user:{user_id}")
+            await client.redis.delete(f"user:{user_id}")
 
     # 쿠키 삭제
     response.delete_cookie(settings.service.session.cookie_name)
@@ -130,13 +126,13 @@ async def get_current_user(
     user, session_id = auth_data
 
     # 1. 현재 세션의 남은 TTL(수명) 확인
-    current_ttl = await redis.ttl(f"session:{session_id}")
+    current_ttl = await client.redis.ttl(f"session:{session_id}")
 
     # 2. 남은 시간이 설정된 만료 시간의 50% 미만일 때만 연장 (조건부 갱신)
     # (current_ttl이 정상적인 양수일 때만 동작하도록 예외 처리 포함)
     if 0 <= current_ttl < (settings.service.session.expire_seconds * 0.5):
         # 3. Redis 파이프라인을 사용하여 네트워크 왕복(RTT) 최소화
-        async with redis.pipeline() as pipe:
+        async with client.redis.pipeline() as pipe:
             pipe.expire(f"session:{session_id}", settings.service.session.expire_seconds)
             pipe.expire(f"user:{user.id}", settings.service.session.expire_seconds)
             await pipe.execute()
@@ -164,8 +160,8 @@ async def get_current_user(
     summary="비밀번호 초기 변경",
     description="첫 로그인시 비밀번호 변경을 합니다.",
 )
-async def change_password_new(form: ChangePasswordNewForm, session: SessionDep):
-    user = cast(Users | None, await session.get(Users, form.user))
+async def change_password_new(form: ChangePasswordNewForm):
+    user = await client.get_user(form.user)
 
     if not user:
         raise HTTPException(
@@ -178,14 +174,8 @@ async def change_password_new(form: ChangePasswordNewForm, session: SessionDep):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password already set",
         )
-
-    # 새 비밀번호 해싱 및 저장
-    user.password = get_password_hash(form.password)
-    session.add(user)
-    await session.commit()
-
-    # 캐시 삭제
-    await redis.delete(f"user:{user.id}")
+    await user.update_password(form.password)
+    await user.cache_clear()
 
 
 @router.put(
@@ -209,7 +199,7 @@ async def change_password_new(form: ChangePasswordNewForm, session: SessionDep):
     summary="비밀번호 변경",
     description="로그인된 유저의 비밀번호를 변경합니다.",
 )
-async def change_password(form: ChangePasswordForm, auth_data: LoginDep, session: SessionDep):
+async def change_password(form: ChangePasswordForm, auth_data: LoginDep):
     user, session_id = auth_data
     if user.password is None:
         raise HTTPException(
@@ -225,14 +215,10 @@ async def change_password(form: ChangePasswordForm, auth_data: LoginDep, session
         )
 
     # 새 비밀번호 해싱 및 저장
-    user.password = get_password_hash(form.new_password)
-    session.add(user)
-    await session.commit()
+    await user.update_password(form.new_password)
+    await user.cache_clear()
 
-    # 캐시 및 세션 삭제 (비밀번호 변경 시 모든 기기 로그아웃 유도)
-    # 참고: 모든 세션을 추적하는 별도의 Set이 없다면 현재 세션과 유저 캐시를 우선 삭제합니다.
-    await redis.delete(f"user:{user.id}")
-    await redis.delete(f"session:{session_id}")
+    await client.redis.delete(f"session:{session_id}")
 
 
 @router.get(
@@ -251,9 +237,9 @@ async def change_password(form: ChangePasswordForm, auth_data: LoginDep, session
     summary="비밀번호 존재 여부 확인",
     description="특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다.",
 )
-async def check_password_exists(user_id: int, session: SessionDep, t: UserType | None = None):
+async def check_password_exists(user_id: int, t: UserType | None = None):
     """특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다. 로그인시 유저가 있는지 확인할때 사용합니다."""
-    user = cast(Users | None, await session.get(Users, user_id))
+    user = await client.get_user(user_id)
 
     if not user:
         raise HTTPException(
@@ -262,7 +248,7 @@ async def check_password_exists(user_id: int, session: SessionDep, t: UserType |
         )
 
     # 유저 캐시
-    await redis.set(f"user:{user.id}", user.model_dump(), ttl=settings.service.session.expire_seconds)
+    await user.cache_update()
     if t is not None and user.type != t:
         return HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
