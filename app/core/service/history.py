@@ -20,6 +20,9 @@ class History(ServiceCore[PointHistory], _Type):
         Args:
             revert: 유저가 현재 보유중인 포인트에서 기록만큼 포인트를 차감해 되돌립니다.
             total_revert: 유저의 받은 포인트에서 포인트를 제외합니다. 단, 차감의 경우 적용되지 않습니다.
+
+        Raises:
+            ServiceError.NotFound: PointHistory를 소유하고 있는 User 객체를 찾지 못할 경우 발생합니다. revert또는 total_revert 인수가 True일 경우에만 발생합니다.
         """
 
         async with self.session as session:

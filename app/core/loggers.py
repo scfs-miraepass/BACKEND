@@ -60,7 +60,7 @@ class LoggerCore:
     global_: logging.Logger = ...
     redis: logging.Logger = ...
     database: logging.Logger = ...
-    service: logging.Logger = ...
+    service_point: logging.Logger = ...
 
     def __new__(cls, *args, **kwargs):
         if cls.instance is None:
@@ -89,7 +89,8 @@ class LoggerCore:
         cls.global_ = self.get_logger("global", debug=settings.debug)
         cls.redis = self.get_logger("redis", debug=settings.debug)
         cls.database = self.get_logger("database", filename="database", debug=settings.debug)
-        cls.service = self.get_logger("service", debug=settings.debug)
+
+        cls.service_point = self.get_logger("service.point", filename="service", debug=settings.debug)
 
         cls.initialized = True
 
