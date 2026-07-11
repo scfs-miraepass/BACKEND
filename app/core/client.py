@@ -4,6 +4,7 @@ from app.schemas import Users
 
 from .core import BaseCore
 from .service import User
+from .config import settings
 
 
 class ServiceClient(BaseCore):
@@ -14,14 +15,17 @@ class ServiceClient(BaseCore):
             cls.instance = super().__new__(cls)
         return cls.instance
 
-    async def get_user(self, /, _id: int, *, cache: bool = False, lock: bool = False) -> User | None:
+    async def get_user(
+        self, /, _id: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
+    ) -> User | None:
         """
         ID를 이용해 사용자를 가져옵니다.
 
         Args:
             _id: 사용자 ID
             cache: 캐시 사용 여부 (lock이 True 일경우 무시됨)
-            lock: 조회후 Row-level Lock를 설정할 것 인가 여부
+            save_cache: 유저를 가져온 후 캐시를 저장 여부
+            lock: 조회후 Row-level Lock를 설정 여부
 
         Returns:
             User | None
@@ -38,4 +42,11 @@ class ServiceClient(BaseCore):
                 payload: Users | None = result.scalar_one_or_none()
             else:
                 payload = await session.get(Users, _id)
+
+        if save_cache and payload is not None:
+            await self.redis.set(
+                f"user:{payload.id}",
+                payload.model_dump(),
+                ttl=settings.service.session.expire_seconds,
+            )
         return User(payload=payload)

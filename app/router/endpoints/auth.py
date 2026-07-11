@@ -59,26 +59,16 @@ async def login(
     response: Response,
     form: LoginForm,
 ):
-    # 1. 유저 조회
-    user = await client.get_user(form.id)
+    user = await client.get_user(form.id, cache=True)
 
-    # 2. 유저 검증 (비밀번호 비교)
     if not user or not user.password or not verify_password(form.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
 
-    # 3. 세션 생성
     session_id = str(uuid4())
-
-    # Redis에 세션 저장 (Key: session:{uuid}, Value: user_id)
     await client.redis.set(f"session:{session_id}", user.id, ttl=settings.service.session.expire_seconds)
-
-    # 4. 유저 정보 캐싱 (Cache Warming)
-    await user.cache_update()
-
-    # 5. 쿠키 설정
     _set_session_cookie(response, session_id)
 
     return ResponseModel[User](success=True, data=user)
@@ -161,7 +151,7 @@ async def get_current_user(
     description="첫 로그인시 비밀번호 변경을 합니다.",
 )
 async def change_password_new(form: ChangePasswordNewForm):
-    user = await client.get_user(form.user)
+    user = await client.get_user(form.user, save_cache=False)
 
     if not user:
         raise HTTPException(
@@ -246,9 +236,6 @@ async def check_password_exists(user_id: int, t: UserType | None = None):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-
-    # 유저 캐시
-    await user.cache_update()
     if t is not None and user.type != t:
         return HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
