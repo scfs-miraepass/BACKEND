@@ -4,7 +4,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from math import ceil
 
-from app.core import SessionDep, LoginDep
+from app.core import LoginDep, ServiceClient
 from app.schemas import User, Users, UserType, PointHistory, PointHistoryType
 from app.schemas.response import ErrorResponse, ResponseModel
 
@@ -29,6 +29,7 @@ async def verify_admin(login_user: LoginDep) -> Users:
 
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(verify_admin)])
+client = ServiceClient()
 
 
 @router.get(
@@ -46,27 +47,26 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(verify
     description="전체 학생 목록을 조회합니다.",
 )
 async def get_students(
-    session: SessionDep,
     response: Response,
     page: int = Query(1, ge=1, description="페이지 번호"),
     size: int = Query(20, ge=1, le=100, description="페이지 당 유저 데이터 갯수 (최대 100)"),
 ):
-    # 전체 유저 수 조회
-    count_query = select(func.count()).select_from(Users).where(Users.type == UserType.student)
-    total_count = (await session.execute(count_query)).scalar_one()
+    async with client.session as session:
+        count_query = select(func.count()).select_from(Users).where(Users.type == UserType.student)
+        total_count = (await session.execute(count_query)).scalar_one()
 
-    # 최대 페이지 계산 (데이터가 없으면 1페이지)
-    max_page = ceil(total_count / size) if total_count > 0 else 1
+        # 최대 페이지 계산 (데이터가 없으면 1페이지)
+        max_page = ceil(total_count / size) if total_count > 0 else 1
 
-    # 클라이언트가 읽을 수 있도록 헤더에 최대 페이지 전달
-    response.headers["X-MAX-PAGE"] = str(max_page)
+        # 클라이언트가 읽을 수 있도록 헤더에 최대 페이지 전달
+        response.headers["X-MAX-PAGE"] = str(max_page)
 
-    # offset 계산 및 데이터 조회
-    offset = (page - 1) * size
-    query = select(Users).where(Users.type == UserType.student).offset(offset).limit(size)
+        # offset 계산 및 데이터 조회
+        offset = (page - 1) * size
+        query = select(Users).where(Users.type == UserType.student).offset(offset).limit(size)
 
-    result = await session.execute(query)
-    users = result.scalars().all()
+        result = await session.execute(query)
+        users = result.scalars().all()
 
     return ResponseModel[List[User]](success=True, data=users)
 
@@ -84,32 +84,34 @@ async def get_students(
     summary="포인트 일괄 처리",
     description="일괄적으로 포인트를 지급하거나 차감합니다.",
 )
-async def update_students_point(session: SessionDep, request: AdminPointRequest):
+async def update_students_point(request: AdminPointRequest):
     # 전체 학생 대상인지 여부에 따라 타겟 쿼리 설정
-    if request.is_all_students:
-        target_query = select(Users).where(Users.type == UserType.student)
-    else:
-        if not request.user_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="user_ids must be provided when not targeting all students.",
+    async with client.session as session:
+        if request.is_all_students:
+            target_query = select(Users).where(Users.type == UserType.student)
+        else:
+            if not request.user_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="user_ids must be provided when not targeting all students.",
+                )
+            target_query = select(Users).where(col(Users.id).in_(request.user_ids))
+
+        result = await session.execute(target_query)
+        target_users = result.scalars().all()
+
+        if not target_users:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No target students found.")
+
+        target_ids = [user.id for user in target_users]
+        update_stmt = update(Users).where(col(Users.id).in_(target_ids)).values(point=Users.point + request.amount)
+        await session.execute(update_stmt)
+
+        history_entries = [
+            PointHistory(
+                user_id=uid, changed_amount=request.amount, reason=request.reason, type=PointHistoryType.teacher
             )
-        target_query = select(Users).where(col(Users.id).in_(request.user_ids))
-
-    result = await session.execute(target_query)
-    target_users = result.scalars().all()
-
-    if not target_users:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No target students found.")
-
-    target_ids = [user.id for user in target_users]
-    update_stmt = update(Users).where(col(Users.id).in_(target_ids)).values(point=Users.point + request.amount)
-    await session.execute(update_stmt)
-
-    history_entries = [
-        PointHistory(user_id=uid, changed_amount=request.amount, reason=request.reason, type=PointHistoryType.teacher)
-        for uid in target_ids
-    ]
-    session.add_all(history_entries)
-
-    await session.commit()
+            for uid in target_ids
+        ]
+        session.add_all(history_entries)
+        # TODO: 이거 캐시 초기화는 안하는거임?
