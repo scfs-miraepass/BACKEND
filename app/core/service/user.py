@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from app.schemas import Users, PointHistory, PointHistoryType
+from app.schemas import Users, UserType, PointHistory, PointHistoryType
 
 from .history import History
 from ..core import ServiceCore
@@ -79,7 +79,9 @@ class User(ServiceCore[Users], _Type):
         )
         return History(payload=obj)
 
-    async def point_grant(self, amount: int, *, reason: str, memo: str | None = None):
+    async def point_grant(
+        self, amount: int, *, reason: str, memo: str | None = None, type: PointHistoryType | None = None
+    ):
         """
         포인트를 지급합니다.
 
@@ -87,16 +89,27 @@ class User(ServiceCore[Users], _Type):
             amount: 지급하려는 포인트
             reason: 포인트를 지급하는 이유
             memo: 포인트를 지급하는 추가적인 이유
+            type: 포인트를 지급하는 이유의 카테고리(종류)
         """
+        if type is None:
+            type = PointHistoryType.etc
+
         async with self.session as session:
             user = await session.merge(self._payload)
             user.point += amount
 
-            history = await self.create_history(changed=amount, reason=reason, memo=memo)
+            history = await self.create_history(changed=amount, reason=reason, memo=memo, type=type)
+
+        await self.cache_clear()
+        if user.type == UserType.teacher or user.type == UserType.student:
+            await self.redis.delete_pattern(f"ranking:{user.type}:*")
+
         self.logs.service_point.info(f"포인트 지급 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
 
-    async def point_deduct(self, amount: int, *, reason: str, memo: str | None = None):
+    async def point_deduct(
+        self, amount: int, *, reason: str, memo: str | None = None, type: PointHistoryType | None = None
+    ):
         """
         포인트를 차감합니다.
 
@@ -104,17 +117,26 @@ class User(ServiceCore[Users], _Type):
             amount: 차감하려는 포인트
             reason: 포인트를 차감하는 이유
             memo: 포인트를 차감하는 추가적인 이유
+            type: 포인트를 차감하는 이유의 카테고리(종류)
 
         Raises:
             ValueError: 보유중인 포인트가 부족할 경우 발생합니다.
         """
-        if self.point > amount:
+        if self.point < amount:
             raise ValueError("Insufficient points. Points cannot be less than 0.")
+
+        if type is None:
+            type = PointHistoryType.etc
 
         async with self.session as session:
             user = await session.merge(self._payload)
             user.point -= amount
 
-            history = await self.create_history(changed=(amount * -1), reason=reason, memo=memo)
+            history = await self.create_history(changed=(amount * -1), reason=reason, memo=memo, type=type)
+
+        await self.cache_clear()
+        if user.type == UserType.teacher or user.type == UserType.student:
+            await self.redis.delete_pattern(f"ranking:{user.type}:*")
+
         self.logs.service_point.info(f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
