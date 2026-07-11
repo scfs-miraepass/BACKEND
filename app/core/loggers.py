@@ -61,6 +61,7 @@ class LoggerCore:
     redis: logging.Logger = ...
     database: logging.Logger = ...
     service_point: logging.Logger = ...
+    service_post: logging.Logger = ...
 
     def __new__(cls, *args, **kwargs):
         if cls.instance is None:
@@ -91,6 +92,7 @@ class LoggerCore:
         cls.database = self.get_logger("database", filename="database", debug=settings.debug)
 
         cls.service_point = self.get_logger("service.point", filename="service", debug=settings.debug)
+        cls.service_post = self.get_logger("service.post", filename="service", debug=settings.debug)
 
         cls.initialized = True
 

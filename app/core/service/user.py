@@ -1,8 +1,9 @@
 from typing import TYPE_CHECKING
 
-from app.schemas import Users, UserType, PointHistory, PointHistoryType
+from app.schemas import Users, UserType, PointHistory, PointHistoryType, Posts, PostContent
 
 from .history import History
+from .post import Post
 from ..core import ServiceCore
 from ..security import get_password_hash
 from ..config import settings
@@ -59,6 +60,9 @@ class User(ServiceCore[Users], _Type):
             reason: 포인트가 변경된 주 된 이유
             memo: 포인트를 처리한 유저가 입력하거나, 시스템의 의해서 추가적으로 확인 할 수 있는 이유
             type: 포인트가 변경된 종류 입니다.
+
+        Returns:
+            History
         """
         async with self.session as session:
             obj = PointHistory(
@@ -140,3 +144,28 @@ class User(ServiceCore[Users], _Type):
 
         self.logs.service_point.info(f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
+
+    async def create_post(self, *, title: str, content: dict) -> Post:
+        """
+        게시글을 생성합니다.
+
+        Args:
+            title: 게시글의 제목
+            content: 게시글의 본문 데이터
+
+        Returns:
+            Post
+        """
+        async with self.session as session:
+            obj = Posts(title=title, author_id=self.id)
+            obj.content = PostContent(data=content)
+
+            session.add(obj)
+
+        await self.redis.delete("posts_count")
+        await self.edis.delete_pattern("posts:list:*")
+
+        self.logs.service_post.info(
+            f"게시글 생성 - ID {obj.id} ({obj.title[:10] + '...' if len(obj.title) > 10 else obj.title}) By. {self.name}({self.id})"
+        )
+        return Post(payload=obj)
