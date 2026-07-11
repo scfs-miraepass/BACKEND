@@ -1,10 +1,10 @@
-from .core import ServiceCore
+from .core import BaseCore
 from .service import User
 
 from app.schemas import Users
 
 
-class ServiceClient(ServiceCore):
+class ServiceClient(BaseCore):
     instance = None
 
     def __new__(cls, *args, **kwargs):

@@ -1,9 +1,13 @@
+from typing import TypeVar, Generic
+
 from .loggers import LoggerCore
 from .redis import RedisCore
 from .database import DatabaseCore
 
+T = TypeVar("T")
 
-class ServiceCore:
+
+class BaseCore:
     def __init__(self):
         self.logs: LoggerCore = LoggerCore()
         self.redis: RedisCore = RedisCore()
@@ -20,3 +24,29 @@ class ServiceCore:
     async def close(self):
         await self.redis.close()
         await self.database.dispose()
+
+
+class ServiceCore(BaseCore, Generic[T]):
+    def __new__(cls, payload: T | None):
+        if payload is None:
+            return None
+        return super().__new__(cls)
+
+    def __init__(self, payload: T | None):
+        super().__init__()
+        self._payload = payload
+
+    def __str__(self):
+        return str(self._payload)
+
+    def __repr__(self):
+        return repr(self._payload)
+
+    def __getattribute__(self, name):
+        if name == "_payload":
+            return super().__getattribute__(name)
+
+        payload = super().__getattribute__("_payload")
+        if hasattr(payload, name):
+            return getattr(payload, name)
+        return super().__getattribute__(name)
