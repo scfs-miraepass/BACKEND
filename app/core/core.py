@@ -50,3 +50,14 @@ class ServiceCore(BaseCore, Generic[T]):
         if hasattr(payload, name):
             return getattr(payload, name)
         return super().__getattribute__(name)
+
+    def __setattr__(self, name, value):
+        if name == "_payload":
+            super().__setattr__(name, value)
+            return
+
+        payload = super().__getattribute__("_payload")
+        if hasattr(payload, name):
+            setattr(payload, name, value)
+        else:
+            super().__setattr__(name, value)

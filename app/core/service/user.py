@@ -1,4 +1,4 @@
-from app.schemas import Users, PointHistoryType
+from app.schemas import Users, PointHistory, PointHistoryType
 
 from core.core import ServiceCore
 from core.security import get_password_hash
@@ -6,7 +6,10 @@ from core.config import settings
 from typing import TYPE_CHECKING
 
 
-_Type = Users if TYPE_CHECKING else object
+if TYPE_CHECKING:
+    _Type = Users
+else:
+    _Type = object
 
 
 class User(ServiceCore[Users], _Type):
@@ -18,9 +21,10 @@ class User(ServiceCore[Users], _Type):
             _new: 새로운 비밀번호
         """
         async with self.session as session:
-            self._payload.password = get_password_hash(_new)
-            session.add(self)
+            user = await session.merge(self._payload)
+            user.password = get_password_hash(_new)
             await session.commit()
+        self._payload = user
 
     async def cache_clear(self):
         """
@@ -44,7 +48,7 @@ class User(ServiceCore[Users], _Type):
         reason: str,
         *,
         memo: str | None = None,
-        type: PointHistoryType | None = PointHistoryType.etc,
+        type: PointHistoryType = PointHistoryType.etc,
     ):
         """
         포인트 기록을 생성합니다.
@@ -55,4 +59,17 @@ class User(ServiceCore[Users], _Type):
             memo: 포인트를 처리한 유저가 입력하거나, 시스템의 의해서 추가적으로 확인 할 수 있는 이유
             type: 포인트가 변경된 종류 입니다.
         """
-        ...
+        async with self.session as session:
+            session.add(
+                PointHistory(
+                    user_id=self.id,
+                    changed_amount=changed,
+                    reason=reason,
+                    memo=memo,
+                    type=type,
+                )
+            )
+
+        # 포인트 기록 변경에 따른 캐시 삭제
+        await self.redis.delete(f"point_history_count:{self.id}")
+        await self.redis.delete_pattern(f"point_history:{self.id}:*")
