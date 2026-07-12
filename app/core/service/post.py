@@ -65,6 +65,7 @@ class Post(ServiceCore[Posts], _Type):
                     post.content.data = content
                 else:
                     post.content = PostContent(data=content)
+            await session.flush()
 
         await self.redis.delete(f"post:{self.id}")
         await self.redis.delete_pattern("posts:list:*")
