@@ -1,3 +1,10 @@
+# [1.8.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.8.0-dev.1...v1.8.0-dev.2) (2026-07-12)
+
+
+### Features
+
+* 스템프 시스템 ([928e1b4](https://git.rldn.xyz/scfs.miraepass/backend/commit/928e1b4d72b12ca229b416326803c57faf97db59))
+
 # [1.8.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.7.0...v1.8.0-dev.1) (2026-07-12)
 
 
