@@ -93,7 +93,7 @@ def user_search_insert(mapper, connection: Connection, target: Users):
     if not target.name or not target.id:
         return
 
-    LoggerCore.service.info(f"Generating search entries for new user: {target.name} (ID: {target.id})")
+    LoggerCore.service_quest.info(f"Generating search entries for new user: {target.name} (ID: {target.id})")
     search_entries = _generate_search_entries(target)
     # 성능을 위해 대량 삽입을 사용하거나 세션에 추가
     connection.execute(
