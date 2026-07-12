@@ -1,3 +1,38 @@
+# [1.8.0-dev.1](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.7.0...v1.8.0-dev.1) (2026-07-12)
+
+
+### Bug Fixes
+
+* redis가 정상적으로 초기화 되지 않던 현상 해결 ([46e0358](https://git.rldn.xyz/scfs.miraepass/backend/commit/46e03582a756786ba9c6c21e3269557e9da16ada))
+* ServiceCore에서 _payload가 불러와지지 않아 AttributeError가 발생하는 현상 해결 ([47ab770](https://git.rldn.xyz/scfs.miraepass/backend/commit/47ab770ecd02869811e927aa998791c4e4bee26e))
+* 포인트 지급시 포인트 기록 ID가 정상적으로 로그에 뜨지 않는 현상 해결 ([7300fb3](https://git.rldn.xyz/scfs.miraepass/backend/commit/7300fb3daa8d7d3257993ae72a5d745097b92b12))
+* 포인트 지급시 포인트 기록 ID가 정상적으로 로그에 뜨지 않는 현상 해결 ([237e490](https://git.rldn.xyz/scfs.miraepass/backend/commit/237e490c12427fea8503c536c3fa6379af375be3))
+
+
+### Features
+
+* CLI, ImportUsers Client 작업 ([26ab473](https://git.rldn.xyz/scfs.miraepass/backend/commit/26ab473e7c2d35e69a30cd800a3ed27959da171f))
+* Client에서 유저를 가지고 올때, cache를 사용하는 옵션 추가 ([f37e139](https://git.rldn.xyz/scfs.miraepass/backend/commit/f37e139daa7ca793409851ddf91c40bace657eef))
+* Client에서 유저를 가지고 올때, lock 옵션 추가 ([186659d](https://git.rldn.xyz/scfs.miraepass/backend/commit/186659da79697e287116e33226d74f46c24ef148))
+* **CLI:** 한국어 패치 ([3497b29](https://git.rldn.xyz/scfs.miraepass/backend/commit/3497b297e25df908c19b5ab8bead2198c3639861))
+* point API Client 사용 ([99832e9](https://git.rldn.xyz/scfs.miraepass/backend/commit/99832e9c0e906996001871e62a832f41f95fa1fe))
+* 검색 API client 적용 ([aa7bde6](https://git.rldn.xyz/scfs.miraepass/backend/commit/aa7bde6a4b2d2e607959bedcb5515b5661eb0422))
+* 게시글 API Client 적용 ([b74fe62](https://git.rldn.xyz/scfs.miraepass/backend/commit/b74fe62fe6abb4594916b20ac584c90141a2991c))
+* 게시글 객체 기초 및 게시글 삭제, 게시글 생성 ([8f9694f](https://git.rldn.xyz/scfs.miraepass/backend/commit/8f9694fc32b12cf35c66f0d30b588785fe46b325))
+* 게시글 내용 데이터 가져오는 함수 추가 ([28e4f3b](https://git.rldn.xyz/scfs.miraepass/backend/commit/28e4f3b200cc012126ac7f940a45b3a0efab92a8))
+* 관리자 API client 적용 ([d8fd055](https://git.rldn.xyz/scfs.miraepass/backend/commit/d8fd05596c0e89d3f61f618b9134d25ee319f04f))
+* 아키텍처 변경에 따른 dependency.py 수정 ([e80d780](https://git.rldn.xyz/scfs.miraepass/backend/commit/e80d780af0103aeb153c8a43e96b746d5b0dec77))
+* 유저 검색용 처리 로그에 LoggerCore 적용 ([ceda9ae](https://git.rldn.xyz/scfs.miraepass/backend/commit/ceda9ae8b9f9b4e03fbc67fd5d2c0d2a545c58ea))
+* 유저 아키텍쳐 기반 구성 및 auth 에 필요한 함수 추가 ([88f910f](https://git.rldn.xyz/scfs.miraepass/backend/commit/88f910f7cb1adba57d3c0f6fe503f6ee7993ba2b))
+* 인증 API, 세션 검증 Dep 유저 캐시 수정 ([37428b6](https://git.rldn.xyz/scfs.miraepass/backend/commit/37428b6db4e4669b926483310ea5f4674caade58))
+* 퀘스트 API Client 적용 ([9b2db17](https://git.rldn.xyz/scfs.miraepass/backend/commit/9b2db17ea2e66427998c5237f0df4b4c84283fdd))
+* 퀘스트 객체 가져오기 함수 추가 ([8d8a317](https://git.rldn.xyz/scfs.miraepass/backend/commit/8d8a3173b5131bf239fa635fcd41f3db7abc36b8))
+* 퀘스트 삭제, 수정, 완료 등 관련 함수 추가 ([2281cec](https://git.rldn.xyz/scfs.miraepass/backend/commit/2281cec49c2f233db027beb4ff37acffb17ac457))
+* 퀘스트 생성및 퀘스트 객체 생성 ([26f7296](https://git.rldn.xyz/scfs.miraepass/backend/commit/26f72961dcfc242e2301760127c05278676975b3))
+* 포인트 기록 추가/삭제 ([44affdc](https://git.rldn.xyz/scfs.miraepass/backend/commit/44affdc83db5922be0cfc747d08e15abd6bca093))
+* 포인트 지급/차감 ([8916bab](https://git.rldn.xyz/scfs.miraepass/backend/commit/8916bab06b57b35385e3c1e8cf4e6234b1c05f42))
+* 프로젝트 중앙 아키텍처 구성 ([2ca778b](https://git.rldn.xyz/scfs.miraepass/backend/commit/2ca778b39d35da44b79f6d546b9adc59fba849dd))
+
 # [1.7.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.6.1...v1.7.0) (2026-06-25)
 
 
