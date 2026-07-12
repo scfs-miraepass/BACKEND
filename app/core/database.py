@@ -51,7 +51,7 @@ class DatabaseCore:
     @classmethod
     async def initialize(cls) -> None:
         if cls.async_engine is None:
-            LoggerCore.database.info("Database Initializing...")
+            LoggerCore.database.info("데이터베이스 초기화 중...")
             if settings.debug:
                 cls.async_engine = create_async_engine(
                     str(settings.database.url),
@@ -69,7 +69,7 @@ class DatabaseCore:
                     pool_pre_ping=True,  # 연결 유효성 검사
                 )
                 LoggerCore.database.debug(
-                    f"AsyncEngine connected to '{settings.database.url}' with "
+                    f"AsyncEngine 연결되었습니다."
                     f"pool_size={settings.database.pool_size}, max_overflow={settings.database.max_overflow}, "
                     f"pool_timeout={settings.database.pool_timeout}"
                 )
@@ -81,17 +81,17 @@ class DatabaseCore:
                 autoflush=False,  # 자동 flush (쿼리 전 변경사항 반영)
                 autocommit=False,  # 수동 트랜잭션 관리
             )
-            LoggerCore.database.info("Database Initialized.")
+            LoggerCore.database.info("데이터베이스 초기화 완료")
         else:
-            LoggerCore.database.warning("Database is already initialized.")
+            LoggerCore.database.warning("데이터베이스는 이미 초기화가 되었습니다.")
 
     @classmethod
     async def dispose(cls) -> None:
         if cls.async_engine:
-            LoggerCore.database.info("Database Disposing...")
+            LoggerCore.database.info("데이터베이스 폐기 중...")
             await cls.async_engine.dispose()
             cls.async_engine = None
             cls.AsyncSessionLocal = None
-            LoggerCore.database.info("Database Disposed.")
+            LoggerCore.database.info("데이터베이스 폐기 완료")
         else:
-            LoggerCore.database.warning("Database is not initialized.")
+            LoggerCore.database.warning("데이터베이스가 초기화 되지 않았습니다.")
