@@ -16,3 +16,19 @@ class Forbidden(ServiceError):
     """
 
     pass
+
+
+class LimitExceeded(ServiceError):
+    """
+    제한을 초과했을 때 발생합니다.
+    """
+
+    pass
+
+
+class ExpiredError(ServiceError):
+    """
+    만료되었을 때 발생합니다.
+    """
+
+    pass

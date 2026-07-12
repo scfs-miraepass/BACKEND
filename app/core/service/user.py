@@ -91,7 +91,7 @@ class User(ServiceCore[Users], _Type):
 
             history = await self.create_history(changed=amount, reason=reason, memo=memo, type=type)
 
-        await self.cache_clear()
+        await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
             await self.redis.delete_pattern(f"ranking:{user.type}:*")
 
