@@ -58,7 +58,6 @@ class DatabaseCore:
                     echo=settings.debug,
                     poolclass=NullPool,
                 )
-                LoggerCore.database.debug(f"AsyncEngine connected to '{settings.database.url}' in debug mode.")
             else:
                 cls.async_engine = create_async_engine(
                     str(settings.database.url),
