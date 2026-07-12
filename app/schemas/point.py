@@ -16,6 +16,8 @@ class PointHistoryType(str, Enum):
     etc = "etc"  # 기타
     grant = "grant"  # 학생 포인트 지급에 대한 교사 포인트 지급
     quest = "quest"  # 퀘스트 보상
+    stamp = "stamp"  # 스탬프 발급
+    stamp_bonus = "stamp_bonus"  # 스탬프 보너스
 
 
 class PointHistory(SQLModel, table=True):

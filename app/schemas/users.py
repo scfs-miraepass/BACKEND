@@ -10,6 +10,7 @@ from app.core import LoggerCore
 from .point import PointHistory, PointHistoryType
 from .quest import Quests, QuestCompletion
 from .post import Posts
+from .stamp import Stamps
 
 
 class UserType(str, Enum):
@@ -67,6 +68,7 @@ class Users(User, table=True):
     history: List["PointHistory"] = Relationship(back_populates="user", passive_deletes=True)
     created_quest: List["Quests"] = Relationship(back_populates="author", passive_deletes=True)
     completion_quest: List["QuestCompletion"] = Relationship(back_populates="user", passive_deletes=True)
+    stamps: List["Stamps"] = Relationship(back_populates="user", passive_deletes=True)
 
     posts: List["Posts"] = Relationship(back_populates="author")
 
