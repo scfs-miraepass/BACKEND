@@ -62,6 +62,7 @@ class LoggerCore:
     database: logging.Logger = ...
     service_point: logging.Logger = ...
     service_post: logging.Logger = ...
+    service_quest: logging.Logger = ...
 
     def __new__(cls, *args, **kwargs):
         if cls.instance is None:
@@ -93,6 +94,7 @@ class LoggerCore:
 
         cls.service_point = self.get_logger("service.point", filename="service", debug=settings.debug)
         cls.service_post = self.get_logger("service.post", filename="service", debug=settings.debug)
+        cls.service_quest = self.get_logger("service.quest", filename="service", debug=settings.debug)
 
         cls.initialized = True
 

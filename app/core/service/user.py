@@ -1,12 +1,15 @@
 from typing import TYPE_CHECKING
+from datetime import datetime
 
-from app.schemas import Users, UserType, PointHistory, PointHistoryType, Posts, PostContent
+from app.schemas import Users, UserType, PointHistory, PointHistoryType, Posts, PostContent, Quests
 
 from .history import History
 from .post import Post
+from .quest import Quest
 from ..core import ServiceCore
 from ..security import get_password_hash
 from ..config import settings
+from ..error import Forbidden
 
 
 if TYPE_CHECKING:
@@ -169,3 +172,45 @@ class User(ServiceCore[Users], _Type):
             f"게시글 생성 - ID {obj.id} ({obj.title[:10] + '...' if len(obj.title) > 10 else obj.title}) By. {self.name}({self.id})"
         )
         return Post(payload=obj)
+
+    async def create_quest(
+        self, *, title: str, description: str, reward: int, end_date: datetime, max_repeat: int = 1
+    ) -> Quest:
+        """
+        **[교사 전용]**
+        퀘스트를 생성합니다.
+
+        Args:
+            title: 퀘스트의 제목
+            description: 퀘스트의 내용
+            reward: 퀘스트 완료시 지급할 포인트
+            end_date: 퀘스트 모집 마감일자
+            max_repeat: 퀘스트 중복 참가 횟수
+
+        Raises:
+           ServiceError.Forbidden: 사용자가 교사 또는 관리자가 아닐경우 발생합니다.
+
+        Returns:
+            Quest
+        """
+        if not self.is_admin and self.type != UserType.teacher:
+            raise Forbidden("Quest create is for teachers only")
+
+        async with self.session as session:
+            obj = Quests(
+                title=title,
+                description=description,
+                reward=reward,
+                end_date=end_date,
+                max_repeat=max_repeat,
+                created_by_teacher_id=self.id,
+            )
+
+            session.add(obj)
+        await self.redis.delete("quests_count")
+        await self.redis.delete_pattern("quests:*")
+
+        self.logs.service_quest.info(
+            f"퀘스트 생성 - {self.id}({self.name}) 생성. ID {obj.id}({title[:10] if len(title) > 10 else title})"
+        )
+        return Quest(payload=obj)

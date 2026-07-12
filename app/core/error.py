@@ -8,3 +8,11 @@ class NotFound(ServiceError):
     """
 
     pass
+
+
+class Forbidden(ServiceError):
+    """
+    권한이 없을경우 발생합니다.
+    """
+
+    pass

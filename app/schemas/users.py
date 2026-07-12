@@ -8,7 +8,7 @@ from pydantic import field_serializer
 
 from app.core import LoggerCore
 from .point import PointHistory, PointHistoryType
-from .quest import Quest, QuestCompletion
+from .quest import Quests, QuestCompletion
 from .post import Posts
 
 
@@ -65,7 +65,7 @@ class Users(User, table=True):
 
     search: List["UserSearch"] = Relationship(back_populates="user", passive_deletes=True)
     history: List["PointHistory"] = Relationship(back_populates="user", passive_deletes=True)
-    created_quest: List["Quest"] = Relationship(back_populates="author", passive_deletes=True)
+    created_quest: List["Quests"] = Relationship(back_populates="author", passive_deletes=True)
     completion_quest: List["QuestCompletion"] = Relationship(back_populates="user", passive_deletes=True)
 
     posts: List["Posts"] = Relationship(back_populates="author")

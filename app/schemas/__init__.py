@@ -1,6 +1,6 @@
 from .users import User, Users, UserType, UserSearch
 from .point import PointHistory, PointHistoryType
-from .quest import Quest, QuestCompletion
+from .quest import Quests, QuestCompletion
 from .post import Post, Posts, PostContent
 
 __all__ = [
@@ -10,9 +10,9 @@ __all__ = [
     "UserSearch",
     "PointHistory",
     "PointHistoryType",
-    "Quest",
+    "Quests",
     "QuestCompletion",
     "Post",
     "Posts",
-    "PostContent"
+    "PostContent",
 ]

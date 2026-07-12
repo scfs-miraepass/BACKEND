@@ -14,7 +14,7 @@ from app.core.loggers import service_logger
 from app.core.redis import redis
 from app.schemas import (
     PointHistory,
-    Quest,
+    Quests,
     QuestCompletion,
     Users,
     UserType,
@@ -44,7 +44,7 @@ class QuestUpdate(BaseModel):
 
 @router.post(
     "/create",
-    response_model=ResponseModel[Quest],
+    response_model=ResponseModel[Quests],
     responses={
         201: {"description": "퀘스트 생성 성공"},
         401: {"model": ErrorResponse, "description": "세션이 만료되었거나 유효하지 않음"},
@@ -77,7 +77,7 @@ async def create_quest(
             detail=f"The maximum point reward for a quest is {QUEST_MAX_POINT_LIMIT}.",
         )
 
-    quest = Quest(
+    quest = Quests(
         title=operation.title,
         description=operation.description,
         reward=operation.reward,
@@ -98,7 +98,7 @@ async def create_quest(
 
 @router.get(
     "",
-    response_model=ResponseModel[List[Quest]],
+    response_model=ResponseModel[List[Quests]],
     responses={
         200: {"description": "퀘스트 목록 조회 성공"},
         401: {"model": ErrorResponse, "description": "세션이 만료되었거나 유효하지 않음"},
@@ -122,7 +122,7 @@ async def list_quests(
     if cached_count is not None:
         count = int(cached_count)
     else:
-        count_query = select(func.count()).select_from(Quest)
+        count_query = select(func.count()).select_from(Quests)
         count_result = await session.execute(count_query)
         count = count_result.scalar() or 0
         await redis.set(count_cache_key, count, ttl=60 * 5)
@@ -131,11 +131,11 @@ async def list_quests(
     cached_quests = await redis.get(quests_cache_key)
 
     if cached_quests is not None:
-        quests = [Quest(**item) for item in cached_quests]
+        quests = [Quests(**item) for item in cached_quests]
         response.headers["X-CACHED"] = "true"
     else:
         response.headers["X-CACHED"] = "false"
-        query = select(Quest).order_by(Quest.end_date).limit(limit).offset(offset)
+        query = select(Quests).order_by(Quests.end_date).limit(limit).offset(offset)
         result = await session.execute(query)
         quests = list(result.scalars().all())
         quests_data = [item.model_dump() for item in quests]
@@ -149,7 +149,7 @@ async def list_quests(
 
 @router.get(
     "/{quest_id}",
-    response_model=ResponseModel[Quest],
+    response_model=ResponseModel[Quests],
     responses={
         200: {"description": "퀘스트 조회 성공"},
         401: {"model": ErrorResponse, "description": "세션이 만료되었거나 유효하지 않음"},
@@ -167,10 +167,10 @@ async def get_quest(quest_id: int, response: Response, session: SessionDep, auth
 
     if cached_quest:
         response.headers["X-CACHED"] = "true"
-        quest = Quest(**cached_quest)
+        quest = Quests(**cached_quest)
     else:
         response.headers["X-CACHED"] = "false"
-        quest = await session.get(Quest, quest_id)
+        quest = await session.get(Quests, quest_id)
         if not quest:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
         await redis.set(cache_key, quest.model_dump(), ttl=60 * 5)
@@ -180,7 +180,7 @@ async def get_quest(quest_id: int, response: Response, session: SessionDep, auth
 
 @router.put(
     "/{quest_id}",
-    response_model=ResponseModel[Quest],
+    response_model=ResponseModel[Quests],
     responses={
         200: {"description": "퀘스트 수정 성공"},
         401: {"model": ErrorResponse, "description": "세션이 만료되었거나 유효하지 않음"},
@@ -199,7 +199,7 @@ async def update_quest(
     session: SessionDep,
 ):
     user, _ = auth_data
-    quest = await session.get(Quest, quest_id)
+    quest = await session.get(Quests, quest_id)
 
     if not quest:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
@@ -246,7 +246,7 @@ async def update_quest(
 )
 async def delete_quest(quest_id: int, auth_data: LoginDep, session: SessionDep):
     user, _ = auth_data
-    quest = await session.get(Quest, quest_id)
+    quest = await session.get(Quests, quest_id)
 
     if not quest:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
@@ -293,9 +293,9 @@ async def complete_quest(quest_id: int, auth_data: LoginDep, session: SessionDep
             detail="Only students can complete quests.",
         )
 
-    query = select(Quest).where(Quest.id == quest_id).options(joinedload(Quest.author))
+    query = select(Quests).where(Quests.id == quest_id).options(joinedload(Quests.author))
     result = await session.execute(query)
-    quest: Quest | None = result.scalar_one_or_none()
+    quest: Quests | None = result.scalar_one_or_none()
     if not quest:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 

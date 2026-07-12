@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from .users import Users
 
 
-class Quest(SQLModel, table=True):
+class Quests(SQLModel, table=True):
     id: Optional[int] = Field(
         primary_key=True,
         default=None,
@@ -63,7 +63,7 @@ class QuestCompletion(SQLModel, table=True):
         description="퀘스트 완료한 일자",
     )
 
-    quest: Quest = Relationship(back_populates="completions")
+    quest: Quests = Relationship(back_populates="completions")
     quest_id: int = Field(foreign_key="quest.id", ondelete="CASCADE", description="완료한 퀘스트 ID", index=True)
 
     user: "Users" = Relationship(back_populates="completion_quest")
