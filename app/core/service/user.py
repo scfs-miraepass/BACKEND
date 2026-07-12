@@ -8,7 +8,6 @@ from .post import Post
 from .quest import Quest
 from ..core import ServiceCore
 from ..security import get_password_hash
-from ..config import settings
 from ..error import Forbidden
 
 
@@ -30,22 +29,7 @@ class User(ServiceCore[Users], _Type):
             user = await session.merge(self._payload)
             user.password = get_password_hash(_new)
         self._payload = user
-
-    async def cache_clear(self):
-        """
-        사용자의 캐시를 삭제합니다.
-        """
         await self.redis.delete(f"user:{self.id}")
-
-    async def cache_update(self):
-        """
-        사용자의 데이터 캐시를 업데이트 합니다.
-        """
-        await self.redis.set(
-            f"user:{self.id}",
-            self.model_dump(),
-            ttl=settings.service_point.session.expire_seconds,
-        )
 
     async def create_history(
         self,
@@ -141,7 +125,7 @@ class User(ServiceCore[Users], _Type):
 
             history = await self.create_history(changed=(amount * -1), reason=reason, memo=memo, type=type)
 
-        await self.cache_clear()
+        await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
             await self.redis.delete_pattern(f"ranking:{user.type}:*")
 

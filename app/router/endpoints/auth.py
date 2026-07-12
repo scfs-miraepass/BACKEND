@@ -165,7 +165,6 @@ async def change_password_new(form: ChangePasswordNewForm):
             detail="Password already set",
         )
     await user.update_password(form.password)
-    await user.cache_clear()
 
 
 @router.put(
@@ -206,7 +205,6 @@ async def change_password(form: ChangePasswordForm, auth_data: LoginDep):
 
     # 새 비밀번호 해싱 및 저장
     await user.update_password(form.new_password)
-    await user.cache_clear()
 
     await client.redis.delete(f"session:{session_id}")
 
