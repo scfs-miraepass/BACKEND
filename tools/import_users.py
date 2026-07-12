@@ -1,23 +1,28 @@
-import asyncio
+# ruff: noqa: E402
 import os
 import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import asyncio
 import pandas as pd
 from sqlalchemy import select
+from sqlmodel import col
+from app.core.config import settings
 
-# 프로젝트 루트 디렉토리를 sys.path에 추가하여 app 모듈을 임포트할 수 있도록 합니다.
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from app.core.database import database_init, database_close, get_async_session
+settings.debug = False
+from app.core import ServiceClient
 from app.schemas.users import Users, UserType
+
+client = ServiceClient()
 
 
 async def import_students(session):
     file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "student.xlsx")
     if not os.path.exists(file_path):
-        print(f"학생 엑셀 파일을 찾을 수 없습니다: {file_path}")
+        client.logs.service.info(f"학생 엑셀 파일을 찾을 수 없습니다: {file_path}")
         return
 
-    print("학생 데이터 가져오는 중...")
+    client.logs.service.info("학생 데이터 가져오는 중...")
     df = pd.read_excel(file_path)
 
     added_count = 0
@@ -40,7 +45,7 @@ async def import_students(session):
         student_id = int(f"{grade}{number}{student_no:02d}")
 
         # 이미 존재하는 학생인지 확인
-        result = await session.execute(select(Users).where(Users.id == student_id))
+        result = await session.execute(select(Users).where(col(Users.id) == student_id))
         existing_user = result.scalars().first()
 
         if not existing_user:
@@ -49,16 +54,16 @@ async def import_students(session):
             added_count += 1
 
     await session.commit()
-    print(f"학생 등록 완료! (새로 등록된 학생 수: {added_count}명)")
+    client.logs.service.info(f"학생 등록 완료! (새로 등록된 학생 수: {added_count}명)")
 
 
 async def import_teachers(session):
     file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "teacher.xlsx")
     if not os.path.exists(file_path):
-        print(f"교사 엑셀 파일을 찾을 수 없습니다: {file_path}")
+        client.logs.service.info(f"교사 엑셀 파일을 찾을 수 없습니다: {file_path}")
         return
 
-    print("교사 데이터 가져오는 중...")
+    client.logs.service.info("교사 데이터 가져오는 중...")
     df = pd.read_excel(file_path)
 
     # 교사 ID를 4000번대부터 시작
@@ -75,13 +80,15 @@ async def import_teachers(session):
         name = str(name).strip()
 
         # 이름으로 중복 확인
-        result = await session.execute(select(Users).where(Users.name == name, Users.type == UserType.teacher))
+        result = await session.execute(
+            select(Users).where(col(Users.name) == name, col(Users.type) == UserType.teacher)
+        )
         existing_user = result.scalars().first()
 
         if not existing_user:
             # 빈 ID 찾기 (4000번대)
             while True:
-                id_check = await session.execute(select(Users).where(Users.id == current_teacher_id))
+                id_check = await session.execute(select(Users).where(col(Users.id) == current_teacher_id))
                 if not id_check.scalars().first():
                     break
                 current_teacher_id += 1
@@ -92,21 +99,18 @@ async def import_teachers(session):
             current_teacher_id += 1  # 다음 교사를 위해 ID 증가
 
     await session.commit()
-    print(f"교사 등록 완료! (새로 등록된 교사 수: {added_count}명)")
+    client.logs.service.info(f"교사 등록 완료! (새로 등록된 교사 수: {added_count}명)")
 
 
 async def main():
-    # 데이터베이스 초기화
-    print("데이터베이스 초기화")
-    await database_init()
-    _ = get_async_session()
+    await client.initialize()
 
-    async for session in _:
-        await import_students(session)
-        await import_teachers(session)
-
-    # 데이터베이스 연결 종료
-    await database_close()
+    try:
+        async with client.session as session:
+            await import_students(session)
+            await import_teachers(session)
+    finally:
+        await client.close()
 
 
 if __name__ == "__main__":

@@ -1,28 +1,31 @@
-import asyncio
-import os
+# ruff: noqa: E402
+
 import sys
-from typing import Optional
-import json
+import os
 import logging
 
-import typer
-from sqlalchemy import select, desc
-
-# 프로젝트 루트 디렉토리를 sys.path에 추가하여 app 모듈을 임포트할 수 있도록 합니다.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 logging.disable(logging.CRITICAL)
 
-from app.core.config import settings  # noqa: E402
-from app.core.database import database_init, database_close, get_async_session  # noqa: E402
-from app.core.redis import redis  # noqa: E402
-from app.schemas.users import Users, UserType  # noqa: E402
-from app.schemas.point import PointHistory, PointHistoryType  # noqa: E402
+import asyncio
+import json
+import typer
+from typing import Optional
+from sqlalchemy import select, desc
+from sqlmodel import col
+
+from app.core import ServiceClient
+from app.core.service import History
+from app.core.config import settings
+from app.schemas.users import Users, UserType
+from app.schemas.point import PointHistory, PointHistoryType
+
 
 # CLI를 실행할 때는 기본적으로 DB 쿼리 로그(echo)를 끕니다.
 settings.debug = False
 
 app = typer.Typer()
+client = ServiceClient()
 
 
 def get_visual_width(s: str) -> int:
@@ -43,32 +46,20 @@ def get_visual_width(s: str) -> int:
     return width
 
 
-async def get_session_context():
-    await database_init()
-    session_generator = get_async_session()
-    # PEP-525 anext()
-    session = await session_generator.__anext__()
-    try:
-        yield session
-    finally:
-        await session.commit()
-        await database_close()
-
-
-async def run_with_redis(coroutine):
-    await redis.init()
+async def run_with_client(coroutine):
+    await client.initialize()
     try:
         await coroutine
     finally:
-        await redis.close()
+        await client.close()
 
 
 async def clear_user_cache(user_id: int):
     """Clears the cache for a specific user."""
-    await redis.delete(f"user:{user_id}")
-    await redis.delete(f"point_history_count:{user_id}")
-    await redis.delete_pattern(f"point_history:{user_id}:*")
-    await redis.delete_pattern("search_users:*")
+    await client.redis.delete(f"user:{user_id}")
+    await client.redis.delete(f"point_history_count:{user_id}")
+    await client.redis.delete_pattern(f"point_history:{user_id}:*")
+    await client.redis.delete_pattern("search_users:*")
     print(f"Cache cleared for user ID: {user_id}")
 
 
@@ -85,7 +76,7 @@ def add_user(
     """
 
     async def _add_user():
-        async for session in get_session_context():
+        async with client.session as session:
             if user_type == UserType.student:
                 if not all([grade, number, student_no]):
                     print("Error: For student, grade, number, and student_no are required.")
@@ -133,7 +124,7 @@ def add_user(
                 session.add(new_user)
                 print(f"Service user '{name}' with ID {current_service_id} added successfully.")
 
-    asyncio.run(_add_user())
+    asyncio.run(run_with_client(_add_user()))
 
 
 @app.command()
@@ -148,27 +139,20 @@ def manage_point(
     """
 
     async def _manage_point():
-        async for session in get_session_context():
-            user = await session.get(Users, user_id)
+        async with client.session:
+            user = await client.get_user(user_id, save_cache=False)
             if not user:
                 print(f"Error: User with ID {user_id} not found.")
                 return
 
-            user.point += amount
+            if amount >= 0:
+                await user.point_grant(amount=amount, reason=reason, type=history_type)
+            else:
+                await user.point_deduct(amount=amount * -1, reason=reason, type=history_type)
+        await client.redis.delete_pattern("search_users:*")
+        print(f"Successfully changed points for user {user_id}. New balance: {user.point}")
 
-            history_entry = PointHistory(
-                user_id=user_id,
-                changed_amount=amount,
-                reason=reason,
-                type=history_type,
-            )
-            session.add(history_entry)
-            await session.commit()  # Commit before clearing cache
-
-            await clear_user_cache(user_id)
-            print(f"Successfully changed points for user {user_id}. New balance: {user.point}")
-
-    asyncio.run(run_with_redis(_manage_point()))
+    asyncio.run(run_with_client(_manage_point()))
 
 
 @app.command()
@@ -181,10 +165,10 @@ def list_users(
     """
 
     async def _list_users():
-        async for session in get_session_context():
+        async with client.session as session:
             query = select(Users)
             if user_type:
-                query = query.where(Users.type == user_type)
+                query = query.where(col(Users.type) == user_type)
             query = query.limit(limit)
 
             result = await session.execute(query)
@@ -207,7 +191,7 @@ def list_users(
 
                 print(f"{u.id:<10} | {u.type.value:<10} | {padded_name} | {u.point:<10} | {admin_str}")
 
-    asyncio.run(_list_users())
+    asyncio.run(run_with_client(_list_users()))
 
 
 @app.command()
@@ -217,7 +201,7 @@ def user_info(user_id: int = typer.Option(..., help="User ID to lookup")):
     """
 
     async def _user_info():
-        async for session in get_session_context():
+        async with client.session as session:
             user = await session.get(Users, user_id)
             if not user:
                 print(f"User with ID {user_id} not found.")
@@ -232,7 +216,7 @@ def user_info(user_id: int = typer.Option(..., help="User ID to lookup")):
             print(f"Total Point (Accumulated): {user.total_point}")
             print(f"Is Admin: {user.is_admin}")
 
-    asyncio.run(_user_info())
+    asyncio.run(run_with_client(_user_info()))
 
 
 @app.command()
@@ -245,7 +229,7 @@ def delete_user(
     """
 
     async def _delete_user():
-        async for session in get_session_context():
+        async with client.session as session:
             user = await session.get(Users, user_id)
             if not user:
                 print(f"User with ID {user_id} not found.")
@@ -263,7 +247,7 @@ def delete_user(
             await clear_user_cache(user_id)
             print(f"User '{user.name}' (ID: {user.id}) has been successfully deleted.")
 
-    asyncio.run(run_with_redis(_delete_user()))
+    asyncio.run(run_with_client(_delete_user()))
 
 
 @app.command()
@@ -276,7 +260,7 @@ def reset_password(
     """
 
     async def _reset_password():
-        async for session in get_session_context():
+        async with client.session as session:
             user = await session.get(Users, user_id)
             if not user:
                 print(f"User with ID {user_id} not found.")
@@ -296,7 +280,7 @@ def reset_password(
             await clear_user_cache(user_id)
             print(f"Password for user '{user.name}' (ID: {user.id}) has been reset to None.")
 
-    asyncio.run(run_with_redis(_reset_password()))
+    asyncio.run(run_with_client(_reset_password()))
 
 
 @app.command()
@@ -309,10 +293,10 @@ def point_history(
     """
 
     async def _point_history():
-        async for session in get_session_context():
-            query = select(PointHistory).order_by(desc(PointHistory.created_at))
+        async with client.session as session:
+            query = select(PointHistory).order_by(desc(col(PointHistory.created_at)))
             if user_id:
-                query = query.where(PointHistory.user_id == user_id)
+                query = query.where(col(PointHistory.user_id) == user_id)
             query = query.limit(limit)
 
             result = await session.execute(query)
@@ -331,7 +315,7 @@ def point_history(
                     f"{h.id:<8} | {h.user_id:<10} | {h.changed_amount:<10} | {h_type:<10} | {h.reason:<20} | {date_str}"
                 )
 
-    asyncio.run(_point_history())
+    asyncio.run(run_with_client(_point_history()))
 
 
 @app.command()
@@ -344,43 +328,27 @@ def delete_point_history(
     """
 
     async def _delete_point_history():
-        async for session in get_session_context():
-            history_to_delete = await session.get(PointHistory, history_id)
+        async with client.session as session:
+            history_payload = await session.get(PointHistory, history_id)
 
-            if not history_to_delete:
+            if not history_payload:
                 print(f"Point history with ID {history_id} not found.")
                 return
 
-            user_id = history_to_delete.user_id
-            changed_amount = history_to_delete.changed_amount
+            history = History(payload=history_payload)
 
             if not force:
                 confirm = input(
-                    f"Are you sure you want to delete history ID {history_id} (User: {user_id}, Amount: {changed_amount})? This will affect user's points. [y/N]: "
+                    f"Are you sure you want to delete history ID {history.id} (User: {history.user_id}, Amount: {history.changed_amount})? This will affect user's points. [y/N]: "
                 )
                 if confirm.lower() != "y":
                     print("Deletion cancelled.")
                     return
 
-            # Get the associated user
-            user = await session.get(Users, user_id)
-            if not user:
-                print(f"Error: User with ID {user_id} not found, cannot recalculate points. Deletion aborted.")
-                return
+            await history.delete()
+            print(f"Point history ID {history_id} deleted. User {history.user_id}'s points have been recalculated.")
 
-            # Revert the point change
-            user.point -= changed_amount
-            if changed_amount > 0:  # If it was a point gain, revert total_point as well
-                user.total_point -= changed_amount
-
-            await session.delete(history_to_delete)
-            await session.commit()
-
-            await clear_user_cache(user_id)
-            print(f"Point history ID {history_id} deleted. User {user_id}'s points have been recalculated.")
-            print(f"New point balance for user {user_id}: {user.point}")
-
-    asyncio.run(run_with_redis(_delete_point_history()))
+    asyncio.run(run_with_client(_delete_point_history()))
 
 
 # --- Redis Commands ---
@@ -393,14 +361,14 @@ def redis_get(key: str = typer.Argument(..., help="Redis key to get")):
     """
 
     async def _redis_get():
-        value = await redis.get(key)
+        value = await client.redis.get(key)
         if value is not None:
             print(f"Key: {key}")
             print(f"Value: {json.dumps(value, indent=2, ensure_ascii=False)}")
         else:
             print(f"Key '{key}' not found or is None.")
 
-    asyncio.run(run_with_redis(_redis_get()))
+    asyncio.run(run_with_client(_redis_get()))
 
 
 @app.command()
@@ -410,10 +378,10 @@ def redis_delete(key: str = typer.Argument(..., help="Redis key to delete")):
     """
 
     async def _redis_delete():
-        await redis.delete(key)
+        await client.redis.delete(key)
         print(f"Key '{key}' deleted (or didn't exist).")
 
-    asyncio.run(run_with_redis(_redis_delete()))
+    asyncio.run(run_with_client(_redis_delete()))
 
 
 @app.command()
@@ -425,10 +393,10 @@ def redis_delete_pattern(pattern: str = typer.Argument(..., help="Redis key patt
     async def _redis_delete_pattern():
         # RedisCore doesn't have a direct way to count deleted keys easily without changing it,
         # but it will log it. We just call it.
-        await redis.delete_pattern(pattern)
+        await client.redis.delete_pattern(pattern)
         print(f"Pattern '{pattern}' deletion triggered. Check logs for details.")
 
-    asyncio.run(run_with_redis(_redis_delete_pattern()))
+    asyncio.run(run_with_client(_redis_delete_pattern()))
 
 
 if __name__ == "__main__":
