@@ -49,7 +49,6 @@ class RedisCore:
                 health_check_interval=30,
                 decode_responses=True,
             )
-            LoggerCore.redis.info("Redis initialized.")
 
             # noinspection PyUnresolvedReferences
             ping_result = cls.redis_instance.ping()
@@ -60,7 +59,7 @@ class RedisCore:
 
             if not ping_result:
                 raise ConnectionError("Redis ping failed: no response")
-            LoggerCore.redis.info("Redis Connected.")
+            LoggerCore.redis.info("Redis initialized.")
         except Exception as e:
             LoggerCore.redis.error(f"Failed to connect to Redis: {e}", exc_info=True)
             cls.redis_instance = None
