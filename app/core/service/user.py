@@ -60,6 +60,7 @@ class User(ServiceCore[Users], _Type):
                 type=type,
             )
             session.add(obj)
+            await session.flush()
 
         # 포인트 기록 변경에 따른 캐시 삭제
         await self.redis.delete(f"point_history_count:{self.id}")
@@ -93,7 +94,7 @@ class User(ServiceCore[Users], _Type):
 
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{user.type}:*")
+            await self.redis.delete_pattern(f"ranking:{str(user.type)}:*")
 
         self.logs.service_point.info(f"포인트 지급 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
@@ -127,7 +128,7 @@ class User(ServiceCore[Users], _Type):
 
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{user.type}:*")
+            await self.redis.delete_pattern(f"ranking:{str(user.type)}:*")
 
         self.logs.service_point.info(f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
@@ -148,6 +149,7 @@ class User(ServiceCore[Users], _Type):
             obj.content = PostContent(data=content)
 
             session.add(obj)
+            await session.flush()
 
         await self.redis.delete("posts_count")
         await self.edis.delete_pattern("posts:list:*")
@@ -191,6 +193,7 @@ class User(ServiceCore[Users], _Type):
             )
 
             session.add(obj)
+            await session.flush()
         await self.redis.delete("quests_count")
         await self.redis.delete_pattern("quests:*")
 
