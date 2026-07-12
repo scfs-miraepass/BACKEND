@@ -50,7 +50,7 @@ class DatabaseCore:
 
     @classmethod
     async def initialize(cls) -> None:
-        if cls.async_engine:
+        if cls.async_engine is None:
             LoggerCore.database.info("Database Initializing...")
             if settings.debug:
                 cls.async_engine = create_async_engine(

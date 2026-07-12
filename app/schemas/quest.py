@@ -64,7 +64,7 @@ class QuestCompletion(SQLModel, table=True):
     )
 
     quest: Quests = Relationship(back_populates="completions")
-    quest_id: int = Field(foreign_key="quest.id", ondelete="CASCADE", description="완료한 퀘스트 ID", index=True)
+    quest_id: int = Field(foreign_key="quests.id", ondelete="CASCADE", description="완료한 퀘스트 ID", index=True)
 
     user: "Users" = Relationship(back_populates="completion_quest")
     user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", description="퀘스트를 완료한 유저 ID", index=True)
