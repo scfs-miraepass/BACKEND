@@ -1,119 +1,160 @@
 import json
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from redis.asyncio import Redis
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
+from inspect import isawaitable
+
 from .config import settings
-from .loggers import redis_logger
+from .loggers import LoggerCore
 
 
 class DateTimeEncoder(json.JSONEncoder):
-    def default(self, obj):
+    def default(cls, obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
         return super().default(obj)
 
 
 class RedisCore:
-    def __init__(self):
-        self.redis: Optional[Redis] = None
+    instance = None
+    redis_instance: Redis | None = None
 
-    def __getattr__(self, name):
-        if self.redis:
-            return getattr(self.redis, name)
-        redis_logger.warning(f"Redis is not available. Accessing '{name}' failed.")
-        raise AttributeError(f"Redis is not initialized. Cannot access '{name}'")
+    def __new__(cls, *args, **kwargs):
+        if cls.instance is None:
+            cls.instance = super().__new__(cls)
+        return cls.instance
 
-    async def init(self):
+    @classmethod
+    def __getattr__(cls, name):
+        if cls.redis_instance is not None:
+            return getattr(cls.redis_instance, name)
+        LoggerCore.redis.error(f"Redis가 초기화 되지 않았습니다. '{name}'에 접근할 수 없습니다.")
+        raise RuntimeError(f"Redis is not initialized. Cannot access '{name}'")
+
+    @classmethod
+    async def connect(cls):
+        if cls.redis_instance is not None:
+            LoggerCore.redis.warning("Redis가 이미 초기화 되어있습니다.")
+            return
+        LoggerCore.redis.info("Redis 초기화 중...")
         try:
             retry = Retry(ExponentialBackoff(), 3)
-            self.redis = Redis.from_url(
+            cls.redis_instance = Redis.from_url(
                 str(settings.redis.url),
                 retry=retry,
                 retry_on_timeout=True,
                 health_check_interval=30,
                 decode_responses=True,
             )
-            await self.redis.ping()
-            redis_logger.info("Redis initialized and connected successfully.")
+
+            # noinspection PyUnresolvedReferences
+            ping_result = cls.redis_instance.ping()
+
+            # 비동기(awaitable) 환경을 지원하기 위한 처리
+            if isawaitable(ping_result):
+                ping_result = await ping_result
+
+            if not ping_result:
+                raise ConnectionError("Redis ping failed: no response")
+            LoggerCore.redis.info("Redis 초기화 완료")
         except Exception as e:
-            redis_logger.error(f"Failed to connect to Redis: {e}", exc_info=True)
-            self.redis = None
+            LoggerCore.redis.error(f"Redis 초기화에 실패했습니다. {e}", exc_info=True)
+            cls.redis_instance = None
 
-    async def close(self):
-        if self.redis:
-            await self.redis.close()
-            redis_logger.info("Redis connection closed.")
-
-    async def get(self, key: str) -> Any:
-        if not self.redis:
-            return None
-        try:
-            value = await self.redis.get(key)
-            if value:
-                redis_logger.debug(f"HIT: {key}")
-                return json.loads(value)
-            redis_logger.debug(f"MISS: {key}")
-            return None
-        except Exception as e:
-            redis_logger.error(f"Error getting key '{key}': {e}", exc_info=True)
-            return None
-
-    async def set(self, key: str, value: Any, ttl: int = 60):
-        if not self.redis:
+    @classmethod
+    async def close(cls):
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning("Redis가 초기화 되지 않았습니다. 연결을 닫을 수 없습니다.")
             return
+        LoggerCore.redis.info("Redis 연결 닫는 중...")
+        await cls.redis_instance.close()
+        LoggerCore.redis.info("Redis 연결이 닫혔습니다.")
+
+    @classmethod
+    async def get(cls, key: str) -> Any:
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{key}'에 대한 값을 가져올 수 없습니다.")
+            return None
+
+        try:
+            value = await cls.redis_instance.get(key)
+            if value:
+                LoggerCore.redis.debug(f"'{key}' 가져옴")
+                return json.loads(value)
+            LoggerCore.redis.debug(f"'{key}' 존재하지 않음")
+            return None
+        except Exception as e:
+            LoggerCore.redis.error(f"'{key}'에 대한 값을 가져오는데 실패했습니다: {e}", exc_info=True)
+            return None
+
+    @classmethod
+    async def set(cls, key: str, value: Any, ttl: int = 60):
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{key}'에 대한 값을 저장할 수 없습니다.")
+            return
+
         try:
             json_value = json.dumps(value, cls=DateTimeEncoder)
-            await self.redis.set(key, json_value, ex=ttl)
-            redis_logger.debug(f"SET: {key} (TTL: {ttl}s, Size: {len(json_value)} bytes)")
+            await cls.redis_instance.set(key, json_value, ex=ttl)
+            LoggerCore.redis.debug(f"'{key}'를 설정했습니다. (TTL: {ttl}초, 크기: {len(json_value)} bytes)")
         except Exception as e:
-            redis_logger.error(f"Error setting key '{key}': {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{key}'에 대한 값을 저정하는데 실패했습니다: {e}", exc_info=True)
 
-    async def delete(self, key: str):
-        if not self.redis:
+    @classmethod
+    async def delete(cls, key: str):
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{key}'에 대한 값을 삭제할 수 없습니다.")
             return
+
         try:
-            await self.redis.delete(key)
-            redis_logger.debug(f"DELETE: {key}")
+            await cls.redis_instance.delete(key)
+            LoggerCore.redis.debug(f"'{key}'를 삭제했습니다.")
         except Exception as e:
-            redis_logger.error(f"Error deleting key '{key}': {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{key}'에 대한 값을 삭제하는데 실패했습니다: {e}", exc_info=True)
 
-    async def delete_pattern(self, pattern: str):
-        if not self.redis:
+    @classmethod
+    async def delete_pattern(cls, pattern: str):
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{pattern}' 패턴의 값들을 삭제할 수 없습니다.")
             return
+
         try:
-            keys = await self.redis.keys(pattern)
+            keys = await cls.redis_instance.keys(pattern)
             if keys:
-                await self.redis.delete(*keys)
-                redis_logger.debug(f"DELETE PATTERN: {pattern} ({len(keys)} keys)")
+                await cls.redis_instance.delete(*keys)
+                LoggerCore.redis.debug(f"'{pattern}' 패턴의 값들 {len(keys)}개를 삭제했습니다.")
             else:
-                redis_logger.debug(f"`DELETE PATTERN: {pattern} (0 keys)")
+                LoggerCore.redis.debug(f"'{pattern}' 패턴의 값들 0개를 삭제했습니다.")
         except Exception as e:
-            redis_logger.error(f"Error deleting pattern '{pattern}': {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{pattern}' 패턴의 값들을 삭제하는데 실패했습니다: {e}", exc_info=True)
 
-    async def expire(self, key: str, time: int, **kwargs) -> bool:
-        if not self.redis:
+    @classmethod
+    async def expire(cls, key: str, time: int, **kwargs) -> bool:
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{key}'의 만료 시간을 설정할 수 없습니다.")
             return False
+
         try:
-            result = await self.redis.expire(key, time, **kwargs)
-            redis_logger.debug(f"EXPIRE: {key} set to {time}s")
+            result = await cls.redis_instance.expire(key, time, **kwargs)
+            LoggerCore.redis.debug(f"'{key}'의 만료 시간을 '{time}초'로 설정했습니다.")
             return result
         except Exception as e:
-            redis_logger.error(f"Error setting expire for key '{key}': {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{key}'의 만료시간 설정에 실패했습니다: {e}", exc_info=True)
             return False
 
-    async def ttl(self, key: str) -> int:
-        if not self.redis:
+    @classmethod
+    async def ttl(cls, key: str) -> int:
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{key}'의 TTL 값을 가져올 수 없습니다.")
             return -2
+
         try:
-            ttl = await self.redis.ttl(key)
-            redis_logger.debug(f"TTL: {key} is {ttl}s")
+            ttl = await cls.redis_instance.ttl(key)
+            LoggerCore.redis.debug(f"'{key}'는 '{ttl}초' 후에 만료됩니다.")
             return ttl
         except Exception as e:
-            redis_logger.error(f"Error getting TTL for key '{key}': {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{key}'의 TTL 값을 가져오는데 실패했습니다: {e}", exc_info=True)
             return -2
-
-
-redis = RedisCore()

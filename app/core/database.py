@@ -1,4 +1,6 @@
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -8,91 +10,88 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 from .config import settings
-
-# 전역 변수 선언 (초기화는 database_init에서)
-async_engine: AsyncEngine | None = None
-AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
+from .loggers import LoggerCore
 
 
-def _create_engine() -> AsyncEngine:
-    """비동기 엔진을 생성합니다."""
-    if settings.debug:
-        return create_async_engine(
-            str(settings.database.url),
-            echo=settings.debug,
-            poolclass=NullPool,
-        )
+class DatabaseCore:
+    instance = None
+    async_engine: AsyncEngine | None = None
+    AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
 
-    return create_async_engine(
-        str(settings.database.url),
-        echo=settings.debug,
-        pool_size=settings.database.pool_size,
-        max_overflow=settings.database.max_overflow,
-        pool_timeout=settings.database.pool_timeout,
-        pool_recycle=3600,
-        pool_pre_ping=True,  # 연결 유효성 검사
-    )
+    _session_context: ContextVar[AsyncSession] = ContextVar("db_session_context")
 
+    def __new__(cls, *args, **kwargs):
+        if cls.instance is None:
+            cls.instance = super().__new__(cls)
+        return cls.instance
 
-def _create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
-    """비동기 세션 팩토리를 생성합니다."""
-    return async_sessionmaker(
-        bind=engine,
-        class_=AsyncSession,
-        expire_on_commit=False,  # 트랜잭션 커밋 후 객체 만료 방지
-        autoflush=False,  # 자동 flush (쿼리 전 변경사항 반영)
-        autocommit=False,  # 수동 트랜잭션 관리
-    )
+    @classmethod
+    @asynccontextmanager
+    async def session(cls) -> AsyncGenerator[AsyncSession, None]:
+        if cls.AsyncSessionLocal is None:
+            raise RuntimeError("Call DatabaseCore.initialize() first.")
 
-
-async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """
-    비동기 데이터베이스 세션을 생성하고 반환합니다.
-    FastAPI의 Depends와 함께 사용할 수 있는 의존성 함수입니다.
-
-    Yields:
-        AsyncSession: 비동기 데이터베이스 세션
-
-    Raises:
-        RuntimeError: 데이터베이스가 초기화되지 않은 경우
-    """
-    if AsyncSessionLocal is None:
-        raise RuntimeError("Call database_init() first.")
-
-    # noinspection PyCallingNonCallable
-    async with AsyncSessionLocal() as session:
         try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+            existing_session = cls._session_context.get()
+            yield existing_session
 
+        except LookupError:
+            async with cls.AsyncSessionLocal() as session:
+                token = cls._session_context.set(session)
+                try:
+                    yield session
+                    await session.commit()
+                except Exception:
+                    await session.rollback()
+                    raise
+                finally:
+                    await session.close()
+                    cls._session_context.reset(token)
 
-async def database_init() -> None:
-    """
-    데이터베이스 엔진과 세션을 초기화하고 테이블을 생성합니다.
-    애플리케이션 시작 시 호출됩니다.
-    """
-    global async_engine, AsyncSessionLocal
+    @classmethod
+    async def initialize(cls) -> None:
+        if cls.async_engine is None:
+            LoggerCore.database.info("데이터베이스 초기화 중...")
+            if settings.debug:
+                cls.async_engine = create_async_engine(
+                    str(settings.database.url),
+                    echo=settings.debug,
+                    poolclass=NullPool,
+                )
+            else:
+                cls.async_engine = create_async_engine(
+                    str(settings.database.url),
+                    echo=settings.debug,
+                    pool_size=settings.database.pool_size,
+                    max_overflow=settings.database.max_overflow,
+                    pool_timeout=settings.database.pool_timeout,
+                    pool_recycle=3600,
+                    pool_pre_ping=True,  # 연결 유효성 검사
+                )
+                LoggerCore.database.debug(
+                    f"AsyncEngine 연결되었습니다."
+                    f"pool_size={settings.database.pool_size}, max_overflow={settings.database.max_overflow}, "
+                    f"pool_timeout={settings.database.pool_timeout}"
+                )
 
-    if async_engine is None:
-        # 엔진 생성
-        async_engine = _create_engine()
+            cls.AsyncSessionLocal = async_sessionmaker(
+                bind=cls.async_engine,
+                class_=AsyncSession,
+                expire_on_commit=False,  # 트랜잭션 커밋 후 객체 만료 방지
+                autoflush=False,  # 자동 flush (쿼리 전 변경사항 반영)
+                autocommit=False,  # 수동 트랜잭션 관리
+            )
+            LoggerCore.database.info("데이터베이스 초기화 완료")
+        else:
+            LoggerCore.database.warning("데이터베이스는 이미 초기화가 되었습니다.")
 
-        # 세션 팩토리 생성
-        AsyncSessionLocal = _create_session_factory(async_engine)
-
-
-async def database_close() -> None:
-    """
-    데이터베이스 연결을 정리합니다.
-    애플리케이션 종료 시 호출됩니다.
-    """
-    global async_engine, AsyncSessionLocal
-
-    if async_engine is not None:
-        await async_engine.dispose()
-        async_engine = None
-        AsyncSessionLocal = None
+    @classmethod
+    async def dispose(cls) -> None:
+        if cls.async_engine:
+            LoggerCore.database.info("데이터베이스 폐기 중...")
+            await cls.async_engine.dispose()
+            cls.async_engine = None
+            cls.AsyncSessionLocal = None
+            LoggerCore.database.info("데이터베이스 폐기 완료")
+        else:
+            LoggerCore.database.warning("데이터베이스가 초기화 되지 않았습니다.")
