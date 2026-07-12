@@ -29,13 +29,13 @@ with open(pyproject_path, "rb") as f:
 @scheduler.scheduled_job(CronTrigger(day_of_week="mon", hour=0, minute=0))
 async def reset_teacher_limit():
     await client.redis.delete_pattern("point_limit:teacher:*")
-    client.logs.service.info("Teacher point distribution limits have been reset.")
+    client.logs.service.info("교사 포인트 지급 제한을 초기화 했습니다.")
 
 
 @scheduler.scheduled_job(CronTrigger(hour=0, minute=0))
 async def reset_student_limit():
     await client.redis.delete_pattern("point_limit:student:*")
-    client.logs.service.info("Student point distribution limits have been reset.")
+    client.logs.service.info("학생 포인트 제한을 초기화 했습니다.")
 
 
 @asynccontextmanager
@@ -45,16 +45,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     시작 시 데이터베이스 초기화, 종료 시 연결 정리
     """
     if settings.debug:
-        client.logs.global_.warning("Enable Debug Mode!")
+        client.logs.global_.warning("디버그 모드가 활성화 되어있습니다!")
 
     await client.initialize()
     scheduler.start()
-    client.logs.global_.info("Scheduler Start")
+    client.logs.global_.info("Scheduler 시작")
 
     yield
 
     scheduler.shutdown()
-    client.logs.global_.info("Scheduler Stop")
+    client.logs.global_.info("Scheduler 종료")
     await client.close()
 
 
