@@ -82,12 +82,12 @@ class RedisCore:
         try:
             value = await cls.redis_instance.get(key)
             if value:
-                LoggerCore.redis.debug(f"HIT: {key}")
+                LoggerCore.redis.debug(f"'{key}' 가져옴")
                 return json.loads(value)
-            LoggerCore.redis.debug(f"MISS: {key}")
+            LoggerCore.redis.debug(f"'{key}' 존재하지 않음")
             return None
         except Exception as e:
-            LoggerCore.redis.error(f"Error getting key '{key}': {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{key}'에 대한 값을 가져오는데 실패했습니다: {e}", exc_info=True)
             return None
 
     @classmethod
@@ -99,9 +99,9 @@ class RedisCore:
         try:
             json_value = json.dumps(value, cls=DateTimeEncoder)
             await cls.redis_instance.set(key, json_value, ex=ttl)
-            LoggerCore.redis.debug(f"SET: {key} (TTL: {ttl}s, Size: {len(json_value)} bytes)")
+            LoggerCore.redis.debug(f"'{key}'를 설정했습니다. (TTL: {ttl}초, 크기: {len(json_value)} bytes)")
         except Exception as e:
-            LoggerCore.redis.error(f"Error setting key '{key}': {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{key}'에 대한 값을 저정하는데 실패했습니다: {e}", exc_info=True)
 
     @classmethod
     async def delete(cls, key: str):
@@ -111,9 +111,9 @@ class RedisCore:
 
         try:
             await cls.redis_instance.delete(key)
-            LoggerCore.redis.debug(f"DELETE: {key}")
+            LoggerCore.redis.debug(f"'{key}'를 삭제했습니다.")
         except Exception as e:
-            LoggerCore.redis.error(f"'{key}'에 대한 값을 삭제하는데 실패 했습니다: {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{key}'에 대한 값을 삭제하는데 실패했습니다: {e}", exc_info=True)
 
     @classmethod
     async def delete_pattern(cls, pattern: str):
@@ -129,7 +129,7 @@ class RedisCore:
             else:
                 LoggerCore.redis.debug(f"'{pattern}' 패턴의 값들 0개를 삭제했습니다.")
         except Exception as e:
-            LoggerCore.redis.error(f"'{pattern}' 패턴의 값들을 삭제하는데 실패 했습니다: {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{pattern}' 패턴의 값들을 삭제하는데 실패했습니다: {e}", exc_info=True)
 
     @classmethod
     async def expire(cls, key: str, time: int, **kwargs) -> bool:
@@ -142,7 +142,7 @@ class RedisCore:
             LoggerCore.redis.debug(f"'{key}'의 만료 시간을 '{time}초'로 설정했습니다.")
             return result
         except Exception as e:
-            LoggerCore.redis.error(f"'{key}'의 만료시간 설정에 실패 했습니다: {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{key}'의 만료시간 설정에 실패했습니다: {e}", exc_info=True)
             return False
 
     @classmethod
@@ -156,5 +156,5 @@ class RedisCore:
             LoggerCore.redis.debug(f"'{key}'는 '{ttl}초' 후에 만료됩니다.")
             return ttl
         except Exception as e:
-            LoggerCore.redis.error(f"'{key}'의 TTL 값을 가져오는데 실패 했습니다: {e}", exc_info=True)
+            LoggerCore.redis.error(f"'{key}'의 TTL 값을 가져오는데 실패했습니다: {e}", exc_info=True)
             return -2
