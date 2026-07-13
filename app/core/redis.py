@@ -40,29 +40,25 @@ class RedisCore:
             LoggerCore.redis.warning("Redis가 이미 초기화 되어있습니다.")
             return
         LoggerCore.redis.info("Redis 초기화 중...")
-        try:
-            retry = Retry(ExponentialBackoff(), 3)
-            cls.redis_instance = Redis.from_url(
-                str(settings.redis.url),
-                retry=retry,
-                retry_on_timeout=True,
-                health_check_interval=30,
-                decode_responses=True,
-            )
+        retry = Retry(ExponentialBackoff(), 3)
+        cls.redis_instance = Redis.from_url(
+            str(settings.redis.url),
+            retry=retry,
+            retry_on_timeout=True,
+            health_check_interval=30,
+            decode_responses=True,
+        )
 
-            # noinspection PyUnresolvedReferences
-            ping_result = cls.redis_instance.ping()
+        # noinspection PyUnresolvedReferences
+        ping_result = cls.redis_instance.ping()
 
-            # 비동기(awaitable) 환경을 지원하기 위한 처리
-            if isawaitable(ping_result):
-                ping_result = await ping_result
+        # 비동기(awaitable) 환경을 지원하기 위한 처리
+        if isawaitable(ping_result):
+            ping_result = await ping_result
 
-            if not ping_result:
-                raise ConnectionError("Redis ping failed: no response")
-            LoggerCore.redis.info("Redis 초기화 완료")
-        except Exception as e:
-            LoggerCore.redis.error(f"Redis 초기화에 실패했습니다. {e}", exc_info=True)
-            cls.redis_instance = None
+        if not ping_result:
+            raise ConnectionError("Redis ping failed: no response")
+        LoggerCore.redis.info("Redis 초기화 완료")
 
     @classmethod
     async def close(cls):

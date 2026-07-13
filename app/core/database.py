@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -53,13 +54,13 @@ class DatabaseCore:
         if cls.async_engine is None:
             LoggerCore.database.info("데이터베이스 초기화 중...")
             if settings.debug:
-                cls.async_engine = create_async_engine(
+                _engine = create_async_engine(
                     str(settings.database.url),
                     echo=settings.debug,
                     poolclass=NullPool,
                 )
             else:
-                cls.async_engine = create_async_engine(
+                _engine = create_async_engine(
                     str(settings.database.url),
                     echo=settings.debug,
                     pool_size=settings.database.pool_size,
@@ -69,18 +70,23 @@ class DatabaseCore:
                     pool_pre_ping=True,  # 연결 유효성 검사
                 )
                 LoggerCore.database.debug(
-                    f"AsyncEngine 연결되었습니다."
+                    f"AsyncEngine가 생성되었습니다."
                     f"pool_size={settings.database.pool_size}, max_overflow={settings.database.max_overflow}, "
                     f"pool_timeout={settings.database.pool_timeout}"
                 )
 
             cls.AsyncSessionLocal = async_sessionmaker(
-                bind=cls.async_engine,
+                bind=_engine,
                 class_=AsyncSession,
                 expire_on_commit=False,  # 트랜잭션 커밋 후 객체 만료 방지
                 autoflush=False,  # 자동 flush (쿼리 전 변경사항 반영)
                 autocommit=False,  # 수동 트랜잭션 관리
             )
+            async with _engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            LoggerCore.database.info("데이터베이스 연결 테스트 성공")
+
+            cls.async_engine = _engine
             LoggerCore.database.info("데이터베이스 초기화 완료")
         else:
             LoggerCore.database.warning("데이터베이스는 이미 초기화가 되었습니다.")
