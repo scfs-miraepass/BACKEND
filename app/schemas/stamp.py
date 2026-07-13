@@ -18,11 +18,10 @@ class StampType(str, Enum):
 
     BOOTH_1 = "쓰레기 투호"
     BOOTH_3 = "철권 한판"
-    BOOTH_4 = "뉴페이스"
     BOOTH_5 = "큐피트의 다트"
     BOOTH_6 = "제기찰겨? 날찰겨?"
     BOOTH_7 = "팔씨름 최강자전"
-    BOOTH_8 = "농구한판"
+    BOOTH_8 = "부적꾸미기"
     BOOTH_9 = "누르기 챌린지"
     BOOTH_11 = "공놀이 괴물"
     BOOTH_12 = "철면피 노래방"
@@ -30,6 +29,7 @@ class StampType(str, Enum):
     BOOTH_15 = "런닝맨"
     BOOTH_16 = "의자뺏기"
     BOOTH_17 = "단체줄넘기"
+    BOOTH_18 = "수학 키캡"
 
 
 class Stamps(SQLModel, table=True):
