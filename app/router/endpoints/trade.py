@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import select, col
 
-from app.schemas import PointHistoryType, Trades
+from app.schemas import PointHistoryType, Trades, TradeStatus
 from app.schemas.response import ErrorResponse, ResponseModel
 from app.core import ServiceClient, LoginDep
 
@@ -71,7 +71,34 @@ async def list_all_trades(auth_data: LoginDep):
     description="거래를 승인합니다.",
 )
 async def approval(trade_id: int, auth_data: LoginDep):
+    user, _ = auth_data
+    if user.type != user.type.service:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    async with client.session as session:
+        trade = await session.get(Trades, trade_id)
+        if trade is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trade not found.")
+
+        trade.status = TradeStatus.approval
+        seller = await client.get_user(trade.seller_id, cache=True)
+        buyer = await client.get_user(trade.buyer_id, cache=True)
+
+        if seller is None or buyer is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="WTF")
+
+        await seller.point_grant(
+            amount=trade.amount,
+            reason=f"'{buyer.name}' 거래",
+            type=PointHistoryType.trade,
+        )
     await client.redis.delete(CACHE_KEY_LIST_ALL)
+    client.logs.service.info(
+        f"{seller.id}({seller.name})와 {buyer.id}({buyer.name})의 거래가 승인 되었습니다. (id {trade.id})"
+    )
 
 
 @router.post(
@@ -92,7 +119,34 @@ async def approval(trade_id: int, auth_data: LoginDep):
     description="거래를 거부합니다.",
 )
 async def refusal(trade_id: int, auth_data: LoginDep):
+    user, _ = auth_data
+    if user.type != user.type.service:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    async with client.session as session:
+        trade = await session.get(Trades, trade_id)
+        if trade is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trade not found.")
+
+        trade.status = TradeStatus.refusal
+        seller = await client.get_user(trade.seller_id, cache=True)
+        buyer = await client.get_user(trade.buyer_id, cache=True)
+
+        if seller is None or buyer is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="WTF")
+
+        await buyer.point_grant(
+            amount=trade.amount,
+            reason=f"'{seller.name}' 거래 거부",
+            type=PointHistoryType.trade,
+        )
     await client.redis.delete(CACHE_KEY_LIST_ALL)
+    client.logs.service.info(
+        f"{seller.id}({seller.name})와 {buyer.id}({buyer.name})의 거래가 거부 되었습니다. (id {trade.id})"
+    )
 
 
 @router.post(
