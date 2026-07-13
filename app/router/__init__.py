@@ -6,6 +6,7 @@ from .endpoints import admin
 from .endpoints import quest
 from .endpoints import posts
 from .endpoints import stamp
+from .endpoints import trade
 
 router = APIRouter()
 
@@ -16,3 +17,4 @@ router.include_router(admin.router)
 router.include_router(quest.router)
 router.include_router(posts.router)
 router.include_router(stamp.router)
+router.include_router(trade.router)
