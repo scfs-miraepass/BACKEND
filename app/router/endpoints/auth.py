@@ -151,7 +151,7 @@ async def get_current_user(
     description="첫 로그인시 비밀번호 변경을 합니다.",
 )
 async def change_password_new(form: ChangePasswordNewForm):
-    user = await client.get_user(form.user, save_cache=False)
+    user = await client.get_user(form.user, cache=True, save_cache=False)
 
     if not user:
         raise HTTPException(
@@ -213,6 +213,7 @@ async def change_password(form: ChangePasswordForm, auth_data: LoginDep):
     "/password/exists/{user_id}",
     response_model=ResponseModel[bool],
     responses={
+        200: {"description": "정상 조회"},
         404: {
             "model": ErrorResponse,
             "description": "유저를 찾을 수 없음",
@@ -222,12 +223,13 @@ async def change_password(form: ChangePasswordForm, auth_data: LoginDep):
             "description": "해당 유저의 타입이 지정된 타입과 일치하지 않음",
         },
     },
+    status_code=status.HTTP_200_OK,
     summary="비밀번호 존재 여부 확인",
     description="특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다.",
 )
 async def check_password_exists(user_id: int, t: UserType | None = None):
     """특정 ID의 유저가 비밀번호를 가지고 있는지(None이 아닌지) 여부를 확인합니다. 로그인시 유저가 있는지 확인할때 사용합니다."""
-    user = await client.get_user(user_id)
+    user = await client.get_user(user_id, cache=True)
 
     if not user:
         raise HTTPException(
@@ -235,7 +237,7 @@ async def check_password_exists(user_id: int, t: UserType | None = None):
             detail="User not found",
         )
     if t is not None and user.type != t:
-        return HTTPException(
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User type does not match",
         )
