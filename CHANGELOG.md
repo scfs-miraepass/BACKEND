@@ -1,3 +1,11 @@
+# [1.8.0-dev.3](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.8.0-dev.2...v1.8.0-dev.3) (2026-07-13)
+
+
+### Bug Fixes
+
+* 서비스 계정 로그인시, 서비스 계정이 아닌 타입의 계정 ID 입력시 에러가 발생하는 현상 해결 ([66875fb](https://git.rldn.xyz/scfs.miraepass/backend/commit/66875fb44024cb477823d37acbcd9ea9abfa6498))
+* 스탬프가 정상적으로 되지 않던 현상 및 스탬프 오타 정정 등 ([e928090](https://git.rldn.xyz/scfs.miraepass/backend/commit/e928090db055bcc739a3beebcbbd57492a6ed17b))
+
 # [1.8.0-dev.2](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.8.0-dev.1...v1.8.0-dev.2) (2026-07-12)
 
 
