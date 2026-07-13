@@ -18,6 +18,7 @@ class PointHistoryType(str, Enum):
     quest = "quest"  # 퀘스트 보상
     stamp = "stamp"  # 스탬프 발급
     stamp_bonus = "stamp_bonus"  # 스탬프 보너스
+    trade = "trade"  # 거래
 
 
 class PointHistory(SQLModel, table=True):

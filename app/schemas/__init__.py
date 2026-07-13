@@ -3,6 +3,7 @@ from .point import PointHistory, PointHistoryType
 from .quest import Quests, QuestCompletion
 from .post import Post, Posts, PostContent
 from .stamp import Stamps, StampType
+from .trade import Trades, TradeStatus
 
 __all__ = [
     "User",
@@ -18,4 +19,6 @@ __all__ = [
     "PostContent",
     "Stamps",
     "StampType",
+    "Trades",
+    "TradeStatus",
 ]

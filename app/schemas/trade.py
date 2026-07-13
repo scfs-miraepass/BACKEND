@@ -3,9 +3,16 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import Column, DateTime, func
 from datetime import datetime, timezone
 from pydantic import field_serializer
+from enum import Enum
 
 if TYPE_CHECKING:
     from .users import Users
+
+
+class TradeStatus(int, Enum):
+    pending = 2
+    approval = 1
+    refusal = 0
 
 
 class Trades(SQLModel, table=True):
@@ -29,6 +36,8 @@ class Trades(SQLModel, table=True):
         ondelete="CASCADE",
         description="구매자 유저의 ID",
     )
+
+    status: TradeStatus = Field(TradeStatus.pending, description="거래 상태")
 
     amount: int = Field(description="거래 금액")
     reason: str = Field(description="거래 이유")
