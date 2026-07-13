@@ -62,10 +62,12 @@ async def create_stamp(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         # 2. 스탬프 중복 수령 확인
-        existing_stamp = await session.execute(
-            select(Stamps).where(Stamps.user_id == user.id, Stamps.stamp_type == stamp_data.stamp_type)
-        )
-        if existing_stamp:
+        existing_stamp = (
+            await session.execute(
+                select(Stamps).where(Stamps.user_id == user.id, Stamps.stamp_type == stamp_data.stamp_type)
+            )
+        ).scalar_one_or_none()
+        if existing_stamp is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Stamp already exists for this user")
 
         # 3. 스탬프 생성 및 저장
@@ -80,7 +82,10 @@ async def create_stamp(
 
         # 5. 보너스 포인트 지급 조건 확인
         # 현재 세션에 추가된 스탬프를 포함하여 개수를 세어야 하므로, DB 쿼리 후 +1
-        user_stamps_count = session.exec(select(func.count(Stamps.id)).where(Stamps.user_id == user.id)).one()
+        user_stamps_count = (
+            await session.execute(select(func.count(Stamps.id)).where(Stamps.user_id == user.id))
+        ).one()[0]
+        print(user_stamps_count, user_stamps_count == 5)
         if user_stamps_count == BONUS_STAMP_COUNT:
             await user.point_grant(
                 amount=BONUS_POINT,

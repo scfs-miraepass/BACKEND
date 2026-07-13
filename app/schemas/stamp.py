@@ -1,7 +1,7 @@
 from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum
 from typing import TYPE_CHECKING, Any
-from sqlalchemy import Column, DateTime, func
+from sqlalchemy import Column, DateTime, func, String
 from datetime import datetime, timezone
 from pydantic import field_serializer
 
@@ -25,7 +25,7 @@ class StampType(str, Enum):
     BOOTH_9 = "누르기 챌린지"
     BOOTH_11 = "공놀이 괴물"
     BOOTH_12 = "철면피 노래방"
-    BOOTH_13 = "전대음감"
+    BOOTH_13 = "절대음감"
     BOOTH_15 = "런닝맨"
     BOOTH_16 = "의자뺏기"
     BOOTH_17 = "단체줄넘기"
@@ -34,7 +34,7 @@ class StampType(str, Enum):
 
 class Stamps(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True, description="고유 ID")
-    stamp_type: StampType = Field(description="스탬프 종류")
+    stamp_type: StampType = Field(description="스탬프 종류", sa_column=Column(String(20)))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
