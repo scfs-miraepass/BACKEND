@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from datetime import datetime
 
-from app.schemas import Users, UserType, PointHistory, PointHistoryType, Posts, PostContent, Quests
+from app.schemas import Users, UserType, PointHistory, PointHistoryType, Posts, PostContent, Quests, UserPermission
 
 from .history import History
 from .post import Post
@@ -18,6 +18,10 @@ else:
 
 
 class User(ServiceCore[Users], _Type):
+    @property
+    def permission(self) -> UserPermission:
+        return UserPermission(self.permissions)
+
     async def update_password(self, _new: str):
         """
         사용자의 비밀번호를 업데이트 합니다
@@ -201,3 +205,65 @@ class User(ServiceCore[Users], _Type):
             f"퀘스트 생성 - {self.id}({self.name}) 생성. ID {obj.id}({title[:10] if len(title) > 10 else title})"
         )
         return Quest(payload=obj)
+
+    def has_permission(self, perm: UserPermission | int) -> bool:
+        """
+        권한을 소유중인지 확인합니다.
+
+        Args:
+            perm: 추가하려는 권한
+
+        Returns:
+            Bool
+        """
+        if isinstance(perm, int):
+            perm = UserPermission(perm)
+        return perm in self.permission
+
+    async def add_permission(self, perm: UserPermission | int):
+        """
+        권한을 추가합니다.
+
+        Args:
+            perm: 추가하려는 권한
+
+        Raises:
+            ValueError: 추가하려는 권한이 이미 사용자에게 있는 경우 발생합니다.
+        """
+        if isinstance(perm, int):
+            perm = UserPermission(perm)
+        if self.has_permission(perm):
+            raise ValueError("already have permission")
+
+        async with self.session as session:
+            user = await session.merge(self._payload)
+            user.permissions = (self.permission | perm).value
+
+        await self.redis.delete(f"user:{self.id}")
+        self._payload = user
+
+        self.logs.service.info(f"{self.id}({self.name})의 권한을 추가했습니다. (+{perm.name})")
+
+    async def remove_permission(self, perm: UserPermission | int):
+        """
+        권한을 제거합니다.
+
+        Args:
+            perm: 제거하려는 권한
+
+        Raises:
+            ValueError: 제거하려는 권한이 사용자에게 없는 경우 발생합니다.
+        """
+        if isinstance(perm, int):
+            perm = UserPermission(perm)
+        if not self.has_permission(perm):
+            raise ValueError("not have permission")
+
+        async with self.session as session:
+            user = await session.merge(self._payload)
+            user.permissions = (self.permission & ~perm).value
+
+        await self.redis.delete(f"user:{self.id}")
+        self._payload = user
+
+        self.logs.service.info(f"{self.id}({self.name})의 권한을 제거했습니다. (-{perm.name})")
