@@ -29,13 +29,9 @@ class UserPermission(IntFlag):
     """포인트를 지급할 수 있는 권한"""
 
     NO_LIMIT_POINT = 2**2
-    """제한 없이 포인트를 지급할 수 있는 권한"""
-
-    MANAGE_USER = 2**3
     """
-    유저 관리 권한
-    - 유저 생성, 수정, 삭제
-    - 일괄 포인트 지급 ('POINT_GRANT' 권한 필요)
+    제한 없이 포인트를 지급할 수 있는 권한
+    **해당 권한을 가진 사용자는 포인트 랭킹에 표기되지 않습니다**
     """
 
     QUEST_CREATE = 2**3
@@ -68,9 +64,19 @@ class UserPermission(IntFlag):
     POST_CREATE = 2**10
     """게시글 생성 권한"""
 
+    VIEW_USER_POINT = 2**11
+    """다른 사용자의 보유중인 포인트를 확인 할 수 있는 권한"""
+
+    MANAGE_USER = 2**3 | VIEW_USER_POINT | POINT_GRANT | NO_LIMIT_POINT
+    """
+    유저 관리 권한
+    - 유저 생성, 수정, 삭제
+    - 일괄 포인트 지급
+    """
+
     STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY
-    TEACHER = POINT_GRANT | QUEST_CREATE | VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY
-    ADMIN = POINT_GRANT | NO_LIMIT_POINT | MANAGE_USER | MANAGE_POST | MANAGE_QUEST | POST_CREATE
+    TEACHER = POINT_GRANT | QUEST_CREATE | VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | VIEW_USER_POINT
+    ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | POST_CREATE
 
 
 class User(SQLModel):
