@@ -1,7 +1,7 @@
 from sqlmodel import Field, SQLModel, Relationship, delete
 from sqlalchemy import event, Connection, insert
 from typing import Optional, List, Any
-from enum import Enum
+from enum import Enum, IntFlag
 from typing import cast
 from hangulpy import split_hangul_string, get_chosung_string
 from pydantic import field_serializer
@@ -19,6 +19,60 @@ class UserType(str, Enum):
     service = "service"
 
 
+class UserPermission(IntFlag):
+    NONE = 0
+
+    POINT_DEDUCT = 2**0
+    """포인트를 차감할 수 있는 권한"""
+
+    POINT_GRANT = 2**1
+    """포인트를 지급할 수 있는 권한"""
+
+    NO_LIMIT_POINT = 2**2
+    """제한 없이 포인트를 지급할 수 있는 권한"""
+
+    MANAGE_USER = 2**3
+    """
+    유저 관리 권한
+    - 유저 생성, 수정, 삭제
+    - 일괄 포인트 지급 ('POINT_GRANT' 권한 필요)
+    """
+
+    QUEST_CREATE = 2**3
+    """퀘스트 신청 권한"""
+
+    MANAGE_QUEST = 2**4
+    """
+    퀘스트 관리 권한
+    - 다른 유저의 퀘스트 삭제
+    """
+
+    STAMP_GIVE = 2**5
+    """스탬프를 다른 유저에게 지급할 권한"""
+
+    VIEW_RANK = 2**6
+    """포인트 랭크를 확인 할 수 있는 권한"""
+
+    VIEW_POINT = 2**7
+    """보유중인 포인트를 확인 할 수 있는 권한"""
+
+    VIEW_POINT_HISTORY = 2**8
+    """자기 자신의 포인트 기록을 확인 할 수 있는 권한"""
+
+    MANAGE_POST = 2**9
+    """
+    게시글 관리 권한
+    - 다른 유저의 게시글 삭제
+    """
+
+    POST_CREATE = 2**10
+    """게시글 생성 권한"""
+
+    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY
+    TEACHER = POINT_GRANT | QUEST_CREATE | VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY
+    ADMIN = POINT_GRANT | NO_LIMIT_POINT | MANAGE_USER | MANAGE_POST | MANAGE_QUEST | POST_CREATE
+
+
 class User(SQLModel):
     id: Optional[int] = Field(
         primary_key=True,
@@ -33,7 +87,8 @@ class User(SQLModel):
     number: Optional[int] = Field(description="반")
     point: int = Field(0, description="보유 포인트")
     total_point: int = Field(0, description="누적 포인트")
-    is_admin: bool = Field(False, description="관리자 여부")
+
+    permissions: int = Field(UserPermission.NONE.value, description="관리자 여부")
 
     history_type: Optional[PointHistoryType] = Field(
         None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입"
