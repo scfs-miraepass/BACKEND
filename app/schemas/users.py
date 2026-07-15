@@ -6,10 +6,11 @@ from typing import cast
 from hangulpy import split_hangul_string, get_chosung_string
 from pydantic import field_serializer
 
-from app.core.loggers import service_logger
+from app.core import LoggerCore
 from .point import PointHistory, PointHistoryType
-from .quest import Quest, QuestCompletion
+from .quest import Quests, QuestCompletion
 from .post import Posts
+from .stamp import Stamps
 
 
 class UserType(str, Enum):
@@ -65,8 +66,9 @@ class Users(User, table=True):
 
     search: List["UserSearch"] = Relationship(back_populates="user", passive_deletes=True)
     history: List["PointHistory"] = Relationship(back_populates="user", passive_deletes=True)
-    created_quest: List["Quest"] = Relationship(back_populates="author", passive_deletes=True)
+    created_quest: List["Quests"] = Relationship(back_populates="author", passive_deletes=True)
     completion_quest: List["QuestCompletion"] = Relationship(back_populates="user", passive_deletes=True)
+    stamps: List["Stamps"] = Relationship(back_populates="user", passive_deletes=True)
 
     posts: List["Posts"] = Relationship(back_populates="author")
 
@@ -93,7 +95,7 @@ def user_search_insert(mapper, connection: Connection, target: Users):
     if not target.name or not target.id:
         return
 
-    service_logger.info(f"Generating search entries for new user: {target.name} (ID: {target.id})")
+    LoggerCore.service_quest.info(f"Generating search entries for new user: {target.name} (ID: {target.id})")
     search_entries = _generate_search_entries(target)
     # 성능을 위해 대량 삽입을 사용하거나 세션에 추가
     connection.execute(
@@ -111,7 +113,7 @@ def user_search_update(mapper, connection: Connection, target: Users):
         if not history.has_changes():
             return
 
-    service_logger.info(f"Updating search entries for user ID: {target.id} due to name change")
+    LoggerCore.service.info(f"Updating search entries for user ID: {target.id} due to name change")
     connection.execute(delete(UserSearch).where(cast(Any, UserSearch.user_id == target.id)))
     if target.name:
         search_entries = _generate_search_entries(target)

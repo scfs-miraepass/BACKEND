@@ -1,32 +1,35 @@
-import asyncio
-import os
+# ruff: noqa: E402
+
 import sys
-from typing import Optional
-import json
+import os
 import logging
 
-import typer
-from sqlalchemy import select, desc
-
-# 프로젝트 루트 디렉토리를 sys.path에 추가하여 app 모듈을 임포트할 수 있도록 합니다.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 logging.disable(logging.CRITICAL)
 
-from app.core.config import settings  # noqa: E402
-from app.core.database import database_init, database_close, get_async_session  # noqa: E402
-from app.core.redis import redis  # noqa: E402
-from app.schemas.users import Users, UserType  # noqa: E402
-from app.schemas.point import PointHistory, PointHistoryType  # noqa: E402
+import asyncio
+import json
+import typer
+from typing import Optional
+from sqlalchemy import select, desc
+from sqlmodel import col
+
+from app.core import ServiceClient
+from app.core.service import History
+from app.core.config import settings
+from app.schemas.users import Users, UserType
+from app.schemas.point import PointHistory, PointHistoryType
+
 
 # CLI를 실행할 때는 기본적으로 DB 쿼리 로그(echo)를 끕니다.
 settings.debug = False
 
 app = typer.Typer()
+client = ServiceClient()
 
 
 def get_visual_width(s: str) -> int:
-    """Calculates the visual width of a string, accounting for wide characters like Hangul."""
+    """문자열의 시각적 너비를 계산합니다. 한글과 같은 넓은 문자를 고려합니다."""
     width = 0
     for char in s:
         # East Asian characters (Hangul, CJK, etc.) are typically 2 cells wide
@@ -43,58 +46,47 @@ def get_visual_width(s: str) -> int:
     return width
 
 
-async def get_session_context():
-    await database_init()
-    session_generator = get_async_session()
-    # PEP-525 anext()
-    session = await session_generator.__anext__()
-    try:
-        yield session
-    finally:
-        await session.commit()
-        await database_close()
-
-
-async def run_with_redis(coroutine):
-    await redis.init()
+async def run_with_client(coroutine):
+    """서비스 클라이언트를 초기화하고 코루틴을 실행합니다."""
+    await client.initialize()
     try:
         await coroutine
     finally:
-        await redis.close()
+        await client.close()
 
 
 async def clear_user_cache(user_id: int):
-    """Clears the cache for a specific user."""
-    await redis.delete(f"user:{user_id}")
-    await redis.delete(f"point_history_count:{user_id}")
-    await redis.delete_pattern(f"point_history:{user_id}:*")
-    await redis.delete_pattern("search_users:*")
-    print(f"Cache cleared for user ID: {user_id}")
+    """특정 사용자의 캐시를 지웁니다."""
+    await client.redis.delete(f"user:{user_id}")
+    await client.redis.delete(f"point_history_count:{user_id}")
+    await client.redis.delete_pattern(f"point_history:{user_id}:*")
+    await client.redis.delete_pattern("search_users:*")
+    print(f"사용자 ID {user_id}의 캐시가 삭제되었습니다.")
 
 
 @app.command()
 def add_user(
-    name: str = typer.Option(..., help="User's name"),
-    user_type: UserType = typer.Option(..., help="User's type (student, teacher, or service)"),
-    grade: Optional[int] = typer.Option(None, help="Grade (for students)"),
-    number: Optional[int] = typer.Option(None, help="Class number (for students)"),
-    student_no: Optional[int] = typer.Option(None, help="Student number (for students)"),
+    name: str = typer.Option(..., help="사용자 이름"),
+    user_type: UserType = typer.Option(..., help="사용자 유형 (student, teacher, or service)"),
+    grade: Optional[int] = typer.Option(None, help="학년 (학생용)"),
+    number: Optional[int] = typer.Option(None, help="반 (학생용)"),
+    student_no: Optional[int] = typer.Option(None, help="학번 (학생용)"),
 ):
     """
-    Add a new user.
+    새로운 사용자를 추가합니다.
     """
 
     async def _add_user():
-        async for session in get_session_context():
+        async with client.session as session:
             if user_type == UserType.student:
                 if not all([grade, number, student_no]):
-                    print("Error: For student, grade, number, and student_no are required.")
+                    print("오류: 학생 유형은 학년, 반, 번호가 모두 필요합니다.")
                     return
 
                 user_id = int(f"{grade}{number}{student_no:02d}")
                 existing_user = await session.get(Users, user_id)
                 if existing_user:
-                    print(f"Error: Student with ID {user_id} already exists.")
+                    print(f"오류: ID가 {user_id}인 학생이 이미 존재합니다.")
                     return
 
                 new_user = Users(
@@ -105,7 +97,7 @@ def add_user(
                     number=number,
                 )
                 session.add(new_user)
-                print(f"Student '{name}' with ID {user_id} added successfully.")
+                print(f"ID {user_id}의 학생 '{name}'이(가) 성공적으로 추가되었습니다.")
 
             elif user_type == UserType.teacher:
                 # Find the next available ID for a teacher (starting from 4000)
@@ -118,7 +110,7 @@ def add_user(
 
                 new_user = Users(id=current_teacher_id, type=UserType.teacher, name=name)
                 session.add(new_user)
-                print(f"Teacher '{name}' with ID {current_teacher_id} added successfully.")
+                print(f"ID {current_teacher_id}의 교사 '{name}'이(가) 성공적으로 추가되었습니다.")
 
             elif user_type == UserType.service:
                 # Find the next available ID for a service user (starting from 5000)
@@ -131,70 +123,63 @@ def add_user(
 
                 new_user = Users(id=current_service_id, type=UserType.service, name=name)
                 session.add(new_user)
-                print(f"Service user '{name}' with ID {current_service_id} added successfully.")
+                print(f"ID {current_service_id}의 서비스 사용자 '{name}'이(가) 성공적으로 추가되었습니다.")
 
-    asyncio.run(_add_user())
+    asyncio.run(run_with_client(_add_user()))
 
 
 @app.command()
 def manage_point(
-    user_id: int = typer.Option(..., help="User ID to manage points for"),
-    amount: int = typer.Option(..., help="Amount of points to add (positive) or subtract (negative)"),
-    reason: str = typer.Option(..., help="Reason for the point change"),
-    history_type: PointHistoryType = typer.Option(PointHistoryType.etc, help="Type of point history"),
+    user_id: int = typer.Option(..., help="포인트를 관리할 사용자 ID"),
+    amount: int = typer.Option(..., help="추가(양수) 또는 차감(음수)할 포인트 양"),
+    reason: str = typer.Option(..., help="포인트 변경 사유"),
+    history_type: PointHistoryType = typer.Option(PointHistoryType.etc, help="포인트 내역 유형"),
 ):
     """
-    Manage a user's points.
+    사용자의 포인트를 관리합니다.
     """
 
     async def _manage_point():
-        async for session in get_session_context():
-            user = await session.get(Users, user_id)
+        async with client.session:
+            user = await client.get_user(user_id, save_cache=False)
             if not user:
-                print(f"Error: User with ID {user_id} not found.")
+                print(f"오류: ID가 {user_id}인 사용자를 찾을 수 없습니다.")
                 return
 
-            user.point += amount
+            if amount >= 0:
+                await user.point_grant(amount=amount, reason=reason, type=history_type)
+            else:
+                await user.point_deduct(amount=amount * -1, reason=reason, type=history_type)
+        await client.redis.delete_pattern("search_users:*")
+        print(f"사용자 {user_id}의 포인트를 성공적으로 변경했습니다. 현재 포인트: {user.point}")
 
-            history_entry = PointHistory(
-                user_id=user_id,
-                changed_amount=amount,
-                reason=reason,
-                type=history_type,
-            )
-            session.add(history_entry)
-            await session.commit()  # Commit before clearing cache
-
-            await clear_user_cache(user_id)
-            print(f"Successfully changed points for user {user_id}. New balance: {user.point}")
-
-    asyncio.run(run_with_redis(_manage_point()))
+    asyncio.run(run_with_client(_manage_point()))
 
 
 @app.command()
 def list_users(
-    user_type: Optional[UserType] = typer.Option(None, help="Filter by user type (student, teacher, service)"),
-    limit: int = typer.Option(50, help="Max number of users to return"),
+    user_type: Optional[UserType] = typer.Option(None, help="사용자 유형(student, teacher, service)으로 필터링"),
+    limit: int = typer.Option(50, help="반환할 최대 사용자 수"),
 ):
     """
-    List users in the system.
+    시스템의 사용자 목록을 보여줍니다.
     """
 
     async def _list_users():
-        async for session in get_session_context():
+        async with client.session as session:
             query = select(Users)
             if user_type:
-                query = query.where(Users.type == user_type)
+                query = query.where(col(Users.type) == user_type)
             query = query.limit(limit)
 
             result = await session.execute(query)
             users = result.scalars().all()
 
             if not users:
-                print("No users found.")
+                print("사용자를 찾을 수 없습니다.")
                 return
 
-            print(f"{'ID':<10} | {'Type':<10} | {'Name':<15} | {'Point':<10} | {'Admin'}")
+            print(f"{'ID':<10} | {'유형':<10} | {'이름':<15} | {'포인트':<10} | {'관리자'}")
             print("-" * 65)
             for u in users:
                 admin_str = "O" if u.is_admin else "X"
@@ -207,122 +192,120 @@ def list_users(
 
                 print(f"{u.id:<10} | {u.type.value:<10} | {padded_name} | {u.point:<10} | {admin_str}")
 
-    asyncio.run(_list_users())
+    asyncio.run(run_with_client(_list_users()))
 
 
 @app.command()
-def user_info(user_id: int = typer.Option(..., help="User ID to lookup")):
+def user_info(user_id: int = typer.Option(..., help="조회할 사용자 ID")):
     """
-    Get detailed information about a specific user.
+    특정 사용자의 상세 정보를 가져옵니다.
     """
 
     async def _user_info():
-        async for session in get_session_context():
+        async with client.session as session:
             user = await session.get(Users, user_id)
             if not user:
-                print(f"User with ID {user_id} not found.")
+                print(f"ID가 {user_id}인 사용자를 찾을 수 없습니다.")
                 return
 
-            print(f"--- User Info (ID: {user.id}) ---")
-            print(f"Name: {user.name}")
-            print(f"Type: {user.type.value}")
+            print(f"--- 사용자 정보 (ID: {user.id}) ---")
+            print(f"이름: {user.name}")
+            print(f"유형: {user.type.value}")
             if user.type == UserType.student:
-                print(f"Grade/Class: {user.grade}학년 {user.number}반")
-            print(f"Current Point: {user.point}")
-            print(f"Total Point (Accumulated): {user.total_point}")
-            print(f"Is Admin: {user.is_admin}")
+                print(f"학년/반: {user.grade}학년 {user.number}반")
+            print(f"현재 포인트: {user.point}")
+            print(f"총 포인트 (누적): {user.total_point}")
+            print(f"관리자 여부: {user.is_admin}")
 
-    asyncio.run(_user_info())
+    asyncio.run(run_with_client(_user_info()))
 
 
 @app.command()
 def delete_user(
-    user_id: int = typer.Option(..., help="User ID to delete"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force deletion without prompt"),
+    user_id: int = typer.Option(..., help="삭제할 사용자 ID"),
+    force: bool = typer.Option(False, "--force", "-f", help="확인 프롬프트 없이 강제 삭제"),
 ):
     """
-    Delete a user from the system.
+    시스템에서 사용자를 삭제합니다.
     """
 
     async def _delete_user():
-        async for session in get_session_context():
+        async with client.session as session:
             user = await session.get(Users, user_id)
             if not user:
-                print(f"User with ID {user_id} not found.")
+                print(f"ID가 {user_id}인 사용자를 찾을 수 없습니다.")
                 return
 
             if not force:
-                confirm = input(f"Are you sure you want to delete user '{user.name}' (ID: {user.id})? [y/N]: ")
+                confirm = input(f"정말로 '{user.name}' 사용자(ID: {user.id})를 삭제하시겠습니까? [y/N]: ")
                 if confirm.lower() != "y":
-                    print("Deletion cancelled.")
+                    print("삭제가 취소되었습니다.")
                     return
 
             await session.delete(user)
             await session.commit()  # Commit before clearing cache
 
             await clear_user_cache(user_id)
-            print(f"User '{user.name}' (ID: {user.id}) has been successfully deleted.")
+            print(f"'{user.name}' 사용자(ID: {user.id})가 성공적으로 삭제되었습니다.")
 
-    asyncio.run(run_with_redis(_delete_user()))
+    asyncio.run(run_with_client(_delete_user()))
 
 
 @app.command()
 def reset_password(
-    user_id: int = typer.Option(..., help="User ID to reset password for"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force reset without prompt"),
+    user_id: int = typer.Option(..., help="비밀번호를 초기화할 사용자 ID"),
+    force: bool = typer.Option(False, "--force", "-f", help="확인 프롬프트 없이 강제 초기화"),
 ):
     """
-    Reset a user's password to None.
+    사용자의 비밀번호를 None으로 초기화합니다.
     """
 
     async def _reset_password():
-        async for session in get_session_context():
+        async with client.session as session:
             user = await session.get(Users, user_id)
             if not user:
-                print(f"User with ID {user_id} not found.")
+                print(f"ID가 {user_id}인 사용자를 찾을 수 없습니다.")
                 return
 
             if not force:
-                confirm = input(
-                    f"Are you sure you want to reset the password for user '{user.name}' (ID: {user.id})? [y/N]: "
-                )
+                confirm = input(f"정말로 '{user.name}' 사용자(ID: {user.id})의 비밀번호를 초기화하시겠습니까? [y/N]: ")
                 if confirm.lower() != "y":
-                    print("Password reset cancelled.")
+                    print("비밀번호 초기화가 취소되었습니다.")
                     return
 
             user.password = None
             await session.commit()  # Commit before clearing cache
 
             await clear_user_cache(user_id)
-            print(f"Password for user '{user.name}' (ID: {user.id}) has been reset to None.")
+            print(f"'{user.name}' 사용자(ID: {user.id})의 비밀번호가 None으로 초기화되었습니다.")
 
-    asyncio.run(run_with_redis(_reset_password()))
+    asyncio.run(run_with_client(_reset_password()))
 
 
 @app.command()
 def point_history(
-    user_id: Optional[int] = typer.Option(None, help="Filter history by user ID"),
-    limit: int = typer.Option(20, help="Number of records to show"),
+    user_id: Optional[int] = typer.Option(None, help="사용자 ID로 내역 필터링"),
+    limit: int = typer.Option(20, help="표시할 레코드 수"),
 ):
     """
-    View point history log.
+    포인트 변경 내역을 봅니다.
     """
 
     async def _point_history():
-        async for session in get_session_context():
-            query = select(PointHistory).order_by(desc(PointHistory.created_at))
+        async with client.session as session:
+            query = select(PointHistory).order_by(desc(col(PointHistory.created_at)))
             if user_id:
-                query = query.where(PointHistory.user_id == user_id)
+                query = query.where(col(PointHistory.user_id) == user_id)
             query = query.limit(limit)
 
             result = await session.execute(query)
             histories = result.scalars().all()
 
             if not histories:
-                print("No point history found.")
+                print("포인트 내역을 찾을 수 없습니다.")
                 return
 
-            print(f"{'ID':<8} | {'User ID':<10} | {'Amount':<10} | {'Type':<10} | {'Reason':<20} | {'Date'}")
+            print(f"{'ID':<8} | {'사용자 ID':<10} | {'변동량':<10} | {'유형':<10} | {'사유':<20} | {'날짜'}")
             print("-" * 90)
             for h in histories:
                 h_type = h.type.value if h.type else "N/A"
@@ -331,104 +314,90 @@ def point_history(
                     f"{h.id:<8} | {h.user_id:<10} | {h.changed_amount:<10} | {h_type:<10} | {h.reason:<20} | {date_str}"
                 )
 
-    asyncio.run(_point_history())
+    asyncio.run(run_with_client(_point_history()))
 
 
 @app.command()
 def delete_point_history(
-    history_id: int = typer.Option(..., help="Point history ID to delete"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force deletion without prompt"),
+    history_id: int = typer.Option(..., help="삭제할 포인트 내역 ID"),
+    force: bool = typer.Option(False, "--force", "-f", help="확인 프롬프트 없이 강제 삭제"),
 ):
     """
-    Delete a point history record and recalculate user points.
+    포인트 내역을 삭제하고 사용자의 포인트를 재계산합니다.
     """
 
     async def _delete_point_history():
-        async for session in get_session_context():
-            history_to_delete = await session.get(PointHistory, history_id)
+        async with client.session as session:
+            history_payload = await session.get(PointHistory, history_id)
 
-            if not history_to_delete:
-                print(f"Point history with ID {history_id} not found.")
+            if not history_payload:
+                print(f"ID가 {history_id}인 포인트 내역을 찾을 수 없습니다.")
                 return
 
-            user_id = history_to_delete.user_id
-            changed_amount = history_to_delete.changed_amount
+            history = History(payload=history_payload)
 
             if not force:
                 confirm = input(
-                    f"Are you sure you want to delete history ID {history_id} (User: {user_id}, Amount: {changed_amount})? This will affect user's points. [y/N]: "
+                    f"정말로 내역 ID {history.id}(사용자: {history.user_id}, 변동량: {history.changed_amount})을(를) 삭제하시겠습니까? 이 작업은 사용자 포인트에 영향을 줍니다. [y/N]: "
                 )
                 if confirm.lower() != "y":
-                    print("Deletion cancelled.")
+                    print("삭제가 취소되었습니다.")
                     return
 
-            # Get the associated user
-            user = await session.get(Users, user_id)
-            if not user:
-                print(f"Error: User with ID {user_id} not found, cannot recalculate points. Deletion aborted.")
-                return
+            await history.delete()
+            print(
+                f"포인트 내역 ID {history_id}이(가) 삭제되었습니다. 사용자 {history.user_id}의 포인트가 재계산되었습니다."
+            )
 
-            # Revert the point change
-            user.point -= changed_amount
-            if changed_amount > 0:  # If it was a point gain, revert total_point as well
-                user.total_point -= changed_amount
-
-            await session.delete(history_to_delete)
-            await session.commit()
-
-            await clear_user_cache(user_id)
-            print(f"Point history ID {history_id} deleted. User {user_id}'s points have been recalculated.")
-            print(f"New point balance for user {user_id}: {user.point}")
-
-    asyncio.run(run_with_redis(_delete_point_history()))
+    asyncio.run(run_with_client(_delete_point_history()))
 
 
 # --- Redis Commands ---
 
 
 @app.command()
-def redis_get(key: str = typer.Argument(..., help="Redis key to get")):
+def redis_get(key: str = typer.Argument(..., help="가져올 Redis 키")):
     """
-    Get a value from Redis.
+    Redis에서 값을 가져옵니다.
     """
 
     async def _redis_get():
-        value = await redis.get(key)
+        value = await client.redis.get(key)
         if value is not None:
-            print(f"Key: {key}")
-            print(f"Value: {json.dumps(value, indent=2, ensure_ascii=False)}")
+            print(f"키: {key}")
+            print(f"값: {json.dumps(value, indent=2, ensure_ascii=False)}")
         else:
-            print(f"Key '{key}' not found or is None.")
+            print(f"키 '{key}'를 찾을 수 없거나 값이 없습니다.")
 
-    asyncio.run(run_with_redis(_redis_get()))
+    asyncio.run(run_with_client(_redis_get()))
 
 
 @app.command()
-def redis_delete(key: str = typer.Argument(..., help="Redis key to delete")):
+def redis_delete(key: str = typer.Argument(..., help="삭제할 Redis 키")):
     """
-    Delete a key from Redis.
+    Redis에서 키를 삭제합니다.
     """
 
     async def _redis_delete():
-        await redis.delete(key)
-        print(f"Key '{key}' deleted (or didn't exist).")
+        await client.redis.delete(key)
+        print(f"키 '{key}'가 삭제되었거나 존재하지 않았습니다.")
 
-    asyncio.run(run_with_redis(_redis_delete()))
+    asyncio.run(run_with_client(_redis_delete()))
 
 
 @app.command()
-def redis_delete_pattern(pattern: str = typer.Argument(..., help="Redis key pattern to delete (e.g., 'cache:*')")):
+def redis_delete_pattern(pattern: str = typer.Argument(..., help="삭제할 Redis 키 패턴 (예: 'cache:*')")):
     """
-    Delete keys matching a pattern from Redis.
+    Redis에서 패턴과 일치하는 키를 삭제합니다.
     """
 
     async def _redis_delete_pattern():
         # RedisCore doesn't have a direct way to count deleted keys easily without changing it,
         # but it will log it. We just call it.
-        await redis.delete_pattern(pattern)
-        print(f"Pattern '{pattern}' deletion triggered. Check logs for details.")
+        await client.redis.delete_pattern(pattern)
+        print(f"패턴 '{pattern}' 삭제가 시작되었습니다. 자세한 내용은 로그를 확인하세요.")
 
-    asyncio.run(run_with_redis(_redis_delete_pattern()))
+    asyncio.run(run_with_client(_redis_delete_pattern()))
 
 
 if __name__ == "__main__":

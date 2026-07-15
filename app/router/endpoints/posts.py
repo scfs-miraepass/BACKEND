@@ -5,12 +5,12 @@ from fastapi import APIRouter, status, HTTPException, Response, Query
 from pydantic import BaseModel, Field
 from sqlmodel import select, func
 
-from app.core import SessionDep, LoginDep
-from app.core.redis import redis
-from app.schemas.post import Posts, PostContent
+from app.core import LoginDep, ServiceClient
+from app.schemas.post import Posts
 from app.schemas.response import ResponseModel, ErrorResponse
 
 router = APIRouter(prefix="/posts", tags=["posts"])
+client = ServiceClient()
 
 
 class PostCreateRequest(BaseModel):
@@ -36,46 +36,43 @@ class PostUpdateRequest(BaseModel):
 )
 async def get_posts(
     response: Response,
-    auth_data: LoginDep,
-    session: SessionDep,
     page: int = Query(1, ge=1, description="페이지 번호"),
-    size: int = Query(
-        20, ge=1, le=100, description="페이지 당 게시글 데이터 갯수 (최대 100)"
-    ),
+    size: int = Query(20, ge=1, le=100, description="페이지 당 게시글 데이터 갯수 (최대 100)"),
 ):
     # 1. 총 게시글 수 조회 (캐싱 적용)
     count_cache_key = "posts_count"
-    cached_count = await redis.get(count_cache_key)
+    cached_count = await client.redis.get(count_cache_key)
 
-    if cached_count is not None:
-        total_count = int(cached_count)
-    else:
-        count_query = select(func.count()).select_from(Posts)
-        total_count = (await session.execute(count_query)).scalar_one()
-        # 캐시 저장 (TTL: 1일)
-        await redis.set(count_cache_key, total_count, ttl=60 * 60 * 24)
+    async with client.session as session:
+        if cached_count is not None:
+            total_count = int(cached_count)
+        else:
+            count_query = select(func.count()).select_from(Posts)
+            total_count = (await session.execute(count_query)).scalar_one()
+            # 캐시 저장 (TTL: 1일)
+            await client.redis.set(count_cache_key, total_count, ttl=60 * 60 * 24)
 
-    # 최대 페이지 계산 (데이터가 없으면 1페이지)
-    max_page = ceil(total_count / size) if total_count > 0 else 1
+        # 최대 페이지 계산 (데이터가 없으면 1페이지)
+        max_page = ceil(total_count / size) if total_count > 0 else 1
 
-    response.headers["X-MAX-PAGE"] = str(max_page)
+        response.headers["X-MAX-PAGE"] = str(max_page)
 
-    # 2. 목록 데이터 조회 (캐싱 적용)
-    list_cache_key = f"posts:list:{page}:{size}"
-    cached_list = await redis.get(list_cache_key)
+        # 2. 목록 데이터 조회 (캐싱 적용)
+        list_cache_key = f"posts:list:{page}:{size}"
+        cached_list = await client.redis.get(list_cache_key)
 
-    if cached_list is not None:
-        posts = [Posts(**item) for item in cached_list]
-        response.headers["X-CACHED"] = "true"
-    else:
-        response.headers["X-CACHED"] = "false"
-        offset = (page - 1) * size
-        query = select(Posts).order_by(Posts.id.desc()).offset(offset).limit(size)
+        if cached_list is not None:
+            posts = [Posts(**item) for item in cached_list]
+            response.headers["X-CACHED"] = "true"
+        else:
+            response.headers["X-CACHED"] = "false"
+            offset = (page - 1) * size
+            query = select(Posts).order_by(Posts.id.desc()).offset(offset).limit(size)
 
-        result = await session.execute(query)
-        posts = list(result.scalars().all())
-        posts_data = [item.model_dump() for item in posts]
-        await redis.set(list_cache_key, posts_data, ttl=60 * 60 * 24)
+            result = await session.execute(query)
+            posts = list(result.scalars().all())
+            posts_data = [item.model_dump() for item in posts]
+            await client.redis.set(list_cache_key, posts_data, ttl=60 * 60 * 24)
 
     return ResponseModel[List[Posts]](success=True, data=posts)
 
@@ -94,27 +91,13 @@ async def get_posts(
 )
 async def get_post(
     post_id: int,
-    auth_data: LoginDep,
-    session: SessionDep,
 ):
-    # 게시글 단일 조회 (캐싱 적용)
-    cache_key = f"post:{post_id}"
-    cached_post = await redis.get(cache_key)
-
-    if cached_post is not None:
-        return ResponseModel[Posts](success=True, data=Posts(**cached_post))
-
-    result = await session.execute(select(Posts).where(Posts.id == post_id))
-    post = result.scalar_one_or_none()
-
+    post = await client.get_post(post_id, cache=True)
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found.",
         )
-
-    # 캐시 저장 (TTL: 1일)
-    await redis.set(cache_key, post.model_dump(), ttl=60 * 60 * 24)
 
     return ResponseModel[Posts](success=True, data=post)
 
@@ -131,11 +114,7 @@ async def get_post(
     summary="게시글 작성",
     description="새로운 게시글을 작성합니다.",
 )
-async def create_post(
-    request: PostCreateRequest,
-    auth_data: LoginDep,
-    session: SessionDep,
-):
+async def create_post(request: PostCreateRequest, auth_data: LoginDep):
     user, _ = auth_data
 
     # 관리자 권한 확인
@@ -145,19 +124,8 @@ async def create_post(
             detail="Permission denied.",
         )
 
-    # 관계형 데이터(PostContent)를 객체 생성 시 직접 할당합니다.
-    new_post = Posts(title=request.title, author_id=user.id)
-    new_post.content = PostContent(data=request.content_data)
-
-    session.add(new_post)
-    await session.commit()
-    await session.refresh(new_post)
-
-    # 데이터 변경 시 목록 관련 캐시 무효화
-    await redis.delete("posts_count")
-    await redis.delete_pattern("posts:list:*")
-
-    return ResponseModel[Posts](success=True, data=new_post)
+    post = await user.create_post(title=request.title, content=request.content_data)
+    return ResponseModel[Posts](success=True, data=post)
 
 
 @router.patch(
@@ -173,49 +141,22 @@ async def create_post(
     summary="게시글 수정",
     description="기존 게시글을 수정합니다.",
 )
-async def update_post(
-    post_id: int,
-    request: PostUpdateRequest,
-    auth_data: LoginDep,
-    session: SessionDep,
-):
+async def update_post(post_id: int, request: PostUpdateRequest, auth_data: LoginDep):
     user, _ = auth_data
-
-    # 관리자 권한 확인
-    if not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
-        )
-
-    # 게시글 조회
-    result = await session.execute(select(Posts).where(Posts.id == post_id))
-    post = result.scalar_one_or_none()
+    post = await client.get_post(post_id)
 
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found.",
         )
+    if not user.is_admin and post.author_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
 
-    # 데이터 업데이트
-    if request.title is not None:
-        post.title = request.title
-
-    if request.content_data is not None:
-        if post.content:
-            post.content.data = request.content_data
-        else:
-            post.content = PostContent(data=request.content_data)
-
-    session.add(post)
-    await session.commit()
-    await session.refresh(post)
-
-    # 데이터 변경 시 관련된 캐시 무효화
-    await redis.delete(f"post:{post_id}")
-    await redis.delete_pattern("posts:list:*")
-
+    await post.edit(title=request.title, content=request.content_data)
     return ResponseModel[Posts](success=True, data=post)
 
 
@@ -234,32 +175,19 @@ async def update_post(
 async def delete_post(
     post_id: int,
     auth_data: LoginDep,
-    session: SessionDep,
 ):
     user, _ = auth_data
-
-    # 관리자 권한 확인
-    if not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
-        )
-
-    # 게시글 조회
-    result = await session.execute(select(Posts).where(Posts.id == post_id))
-    post = result.scalar_one_or_none()
+    post = await client.get_post(post_id)
 
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found.",
         )
+    if not user.is_admin and post.author_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
 
-    # 데이터 삭제
-    await session.delete(post)
-    await session.commit()
-
-    # 데이터 변경 시 관련된 캐시 무효화
-    await redis.delete(f"post:{post_id}")
-    await redis.delete("posts_count")
-    await redis.delete_pattern("posts:list:*")
+    await post.delete()
