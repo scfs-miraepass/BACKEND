@@ -5,12 +5,12 @@ from fastapi import APIRouter, status, HTTPException, Query
 from hangulpy import split_hangul_string
 from sqlmodel import select, col
 
-from app.core import SessionDep, LoginDep
-from app.core.redis import redis
+from app.core import LoginDep, ServiceClient
 from app.schemas import User, Users, UserSearch, UserType
 from app.schemas.response import ResponseModel, ErrorResponse
 
 router = APIRouter(prefix="/search", tags=["search"])
+client = ServiceClient()
 
 
 @lru_cache(maxsize=128)
@@ -40,7 +40,7 @@ def normalize_and_decompose(query: str) -> str:
     summary="유저 검색",
     description="유저를 이름 또는 ID(학번)으로 검색합니다.",
 )
-async def search(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
+async def search(auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
     """
     사용자 검색 API
 
@@ -72,47 +72,48 @@ async def search(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserT
     cache_key = f"search_users:{q},{','.join(t)}"
 
     # Redis 캐시 조회
-    cached_data = await redis.get(cache_key)
+    cached_data = await client.redis.get(cache_key)
     if cached_data is not None:
         # 캐시된 데이터 반환 (JSON -> Dict List -> Pydantic Model List)
         # cached_data는 이미 dict 형태의 리스트
         return ResponseModel(success=True, data=cached_data)
 
-    # 1. 숫자만 있는 경우: ID(학번) 검색
-    if q.isdigit():
-        # 학번은 총 4자이므로 4자 미만일 경우 빈 결과 반환
-        if len(q) < 4:
-            return ResponseModel(success=True, data=[])
+    async with client.session as session:
+        # 1. 숫자만 있는 경우: ID(학번) 검색
+        if q.isdigit():
+            # 학번은 총 4자이므로 4자 미만일 경우 빈 결과 반환
+            if len(q) < 4:
+                return ResponseModel(success=True, data=[])
 
-        # ID로 정확히 일치하는 사용자 검색
-        stmt = select(Users).where(Users.id == int(q))
-        result = await session.execute(stmt)
-        users = result.scalars().all()
+            # ID로 정확히 일치하는 사용자 검색
+            stmt = select(Users).where(Users.id == int(q))
+            result = await session.execute(stmt)
+            users = result.scalars().all()
 
-    # 2. 문자가 포함된 경우: 이름 검색 (한글 자모 분리)
-    else:
-        # 캐시된 자모 분리 함수 사용
-        decomposed_query = normalize_and_decompose(q)
+        # 2. 문자가 포함된 경우: 이름 검색 (한글 자모 분리)
+        else:
+            # 캐시된 자모 분리 함수 사용
+            decomposed_query = normalize_and_decompose(q)
 
-        # UserSearch 테이블과 조인하여 검색
-        # 학생 타입(UserType.student)인 유저만 필터링
-        # like 검색을 통해 부분 일치(prefix) 검색 수행
-        stmt = (
-            select(Users)
-            .join(UserSearch, cast(Any, Users.id == UserSearch.user_id))
-            .where(col(UserSearch.value).like(f"%{decomposed_query}%"))
-        )
-        if t:
-            stmt = stmt.where(col(Users.type).in_(t))
+            # UserSearch 테이블과 조인하여 검색
+            # 학생 타입(UserType.student)인 유저만 필터링
+            # like 검색을 통해 부분 일치(prefix) 검색 수행
+            stmt = (
+                select(Users)
+                .join(UserSearch, cast(Any, Users.id == UserSearch.user_id))
+                .where(col(UserSearch.value).like(f"%{decomposed_query}%"))
+            )
+            if t:
+                stmt = stmt.where(col(Users.type).in_(t))
 
-        result = await session.execute(stmt)
-        # 중복 제거 (Users 객체 기준)
-        users = result.scalars().unique().all()
+            result = await session.execute(stmt)
+            # 중복 제거 (Users 객체 기준)
+            users = result.scalars().unique().all()
 
     # DB 조회 결과를 Redis에 캐싱 (TTL: 300초 = 5분)
     # Users 객체 리스트를 dict 리스트로 변환하여 저장
     users_data = [user.model_dump() for user in users]
-    await redis.set(cache_key, users_data, ttl=300)
+    await client.redis.set(cache_key, users_data, ttl=300)
 
     return ResponseModel(success=True, data=users)
 
@@ -131,10 +132,11 @@ async def search(session: SessionDep, auth_data: LoginDep, q: str, t: list[UserT
     summary="교사 데이터",
     description="교사의 정확한 이름을 가지고 교사의 데이터를 가져옵니다.",
 )
-async def teacher_get_by_name(session: SessionDep, user_name: str):
-    stmt = select(Users).where(Users.name == user_name, Users.type == UserType.teacher)
-    result = await session.execute(stmt)
-    teacher = result.scalar_one_or_none()
+async def teacher_get_by_name(user_name: str):
+    async with client.session as session:
+        stmt = select(Users).where(Users.name == user_name, Users.type == UserType.teacher)
+        result = await session.execute(stmt)
+        teacher = result.scalar_one_or_none()
 
     if not teacher:
         raise HTTPException(
