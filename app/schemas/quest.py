@@ -38,8 +38,12 @@ class Quests(SQLModel, table=True):
         description="퀘스트 생성 유저의 고유 ID",
     )
 
-    completions: List["QuestCompletion"] = Relationship(back_populates="quest", passive_deletes=True)
-    acceptances: List["QuestAccept"] = Relationship(back_populates="quest", passive_deletes=True)
+    completions: List["QuestCompletion"] = Relationship(
+        back_populates="quest", passive_deletes=True
+    )
+    acceptances: List["QuestAccept"] = Relationship(
+        back_populates="quest", passive_deletes=True
+    )
 
     @field_serializer("created_at")
     def serialize_created_at(self, dt: Any, _info):
@@ -49,7 +53,9 @@ class Quests(SQLModel, table=True):
 
 
 class QuestCompletion(SQLModel, table=True):
-    __table_args__ = (Index("ix_questcompletion_user_id_quest_id", "user_id", "quest_id"),)
+    __table_args__ = (
+        Index("ix_questcompletion_user_id_quest_id", "user_id", "quest_id"),
+    )
 
     id: Optional[int] = Field(
         primary_key=True,
@@ -64,10 +70,20 @@ class QuestCompletion(SQLModel, table=True):
     )
 
     quest: Quests = Relationship(back_populates="completions")
-    quest_id: int = Field(foreign_key="quests.id", ondelete="CASCADE", description="완료한 퀘스트 ID", index=True)
+    quest_id: int = Field(
+        foreign_key="quests.id",
+        ondelete="CASCADE",
+        description="완료한 퀘스트 ID",
+        index=True,
+    )
 
     user: "Users" = Relationship(back_populates="completion_quest")
-    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", description="퀘스트를 완료한 유저 ID", index=True)
+    user_id: int = Field(
+        foreign_key="users.id",
+        ondelete="CASCADE",
+        description="퀘스트를 완료한 유저 ID",
+        index=True,
+    )
 
     @field_serializer("completed_at")
     def serialize_completed_at(self, dt: Any, _info):
@@ -93,10 +109,20 @@ class QuestAccept(SQLModel, table=True):
     )
 
     quest: Quests = Relationship(back_populates="acceptances")
-    quest_id: int = Field(foreign_key="quests.id", ondelete="CASCADE", description="수락한 퀘스트 ID", index=True)
+    quest_id: int = Field(
+        foreign_key="quests.id",
+        ondelete="CASCADE",
+        description="수락한 퀘스트 ID",
+        index=True,
+    )
 
     user: "Users" = Relationship(back_populates="accepted_quests")
-    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", description="퀘스트를 수락한 유저 ID", index=True)
+    user_id: int = Field(
+        foreign_key="users.id",
+        ondelete="CASCADE",
+        description="퀘스트를 수락한 유저 ID",
+        index=True,
+    )
 
     @field_serializer("accepted_at")
     def serialize_accepted_at(self, dt: Any, _info):
