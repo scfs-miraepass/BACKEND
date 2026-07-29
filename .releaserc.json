@@ -20,6 +20,6 @@
         "message": "chore(release): ${nextRelease.version} [skip ci]"
       }
     ],
-    "@semantic-release/gitlab"
+    "@semantic-release/github"
   ]
 }

@@ -1,0 +1,133 @@
+name: Docker Image Release
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+  workflow_dispatch:
+    inputs:
+      manual_version:
+        description: '수동으로 빌드와 릴리즈를 진행할 때, 버전을 지정합니다. 값을 넣을 경우 semantic-release를 스킵합니다.'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  semantic-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    if: ${{ github.event.inputs.manual_version == '' }}
+    outputs:
+      new_version: ${{ steps.extract.outputs.NEW_VERSION }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: |
+          yarn add --dev @semantic-release/changelog @semantic-release/git @semantic-release/github @semantic-release/exec @semantic-release/commit-analyzer @semantic-release/release-notes-generator
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          touch build.env
+          npx semantic-release
+      - name: Export version variable
+
+        id: extract
+        run: |
+          if [ -f build.env ]; then
+            source build.env
+            echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+          fi
+
+#      - name: Upload package.json
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: package-json
+#          path: package.json
+#          if-no-files-found: ignore
+#          retention-days: 1
+
+  docker-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    needs: [semantic-release]
+    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+#      - name: Download package.json artifact
+#        if: ${{ needs.semantic-release.result == 'success' }}
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: package-json
+#          path: .
+#        continue-on-error: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Docker Metadata
+        id: meta-prepare
+        run: |
+          MANUAL_VERSION="${{ github.event.inputs.manual_version }}"
+          NEW_VERSION="${{ needs.semantic-release.outputs.new_version }}"
+          FINAL_VERSION="${MANUAL_VERSION:-$NEW_VERSION}"
+          
+          if [ -z "$FINAL_VERSION" ]; then
+            echo "skip_build=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "final_version=$FINAL_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Extract Docker metadata
+        id: meta
+        if: steps.meta-prepare.outputs.skip_build != 'true'
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.meta-prepare.outputs.final_version }}
+            
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+
+      - name: Build and Push Docker image
+        if: steps.meta-prepare.outputs.skip_build != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
