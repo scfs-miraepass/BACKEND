@@ -18,5 +18,5 @@ __all__ = [
     "Posts",
     "PostContent",
     "Stamps",
-    "StampType",
+    "StampType"
 ]
