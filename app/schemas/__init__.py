@@ -13,6 +13,7 @@ __all__ = [
     "PointHistoryType",
     "Quests",
     "QuestCompletion",
+    "QuestAccept",
     "Post",
     "Posts",
     "PostContent",

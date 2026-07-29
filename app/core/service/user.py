@@ -189,7 +189,7 @@ class User(ServiceCore[Users], _Type):
                 reward=reward,
                 end_date=end_date,
                 max_repeat=max_repeat,
-                created_by_teacher_id=self.id,
+                author_id=self.id
             )
 
             session.add(obj)
