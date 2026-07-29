@@ -25,7 +25,7 @@ class User(SQLModel):
         default=None,
         description="고유 ID. 교사, 서비스의 경우 자동생성. 학생의 경우 학번 사용",
         index=True,
-    )  # autoincrement
+    )
 
     type: UserType = Field(description="유저 종류 (학생, 교사, 서비스)", index=True)
     name: str = Field(description="이름")

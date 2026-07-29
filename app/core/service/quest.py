@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, TypedDict, Unpack
 from sqlmodel import delete, select, col, func
 
-from app.schemas import Users, Quests, QuestCompletion, PointHistoryType
+from app.schemas import Users, Quests, QuestCompletion, PointHistoryType, QuestAccept
 
 from ..core import ServiceCore
 from ..error import LimitExceeded, ExpiredError
@@ -111,3 +111,74 @@ class Quest(ServiceCore[Quests], _Type):
             result = await session.execute(query)
             count = result.scalar_one()
         return count
+
+    async def accept(self, user: "User"):
+        """
+        학생이 퀘스트를 수락하도록 기록합니다. 중복 수락은 허용하지 않습니다.
+        """
+        async with self.session as session:
+            query = (
+                select(func.count())
+                .select_from(QuestAccept)
+                .where(
+                    QuestAccept.quest_id == self.id,
+                    QuestAccept.user_id == user.id,
+                )
+            )
+            result = await session.execute(query)
+            count = result.scalar_one()
+            if count > 0:
+                return
+
+            session.add(QuestAccept(quest_id=self.id, user_id=user.id))
+            await session.flush()
+
+        try:
+            await self._cache_clear()
+        except Exception:
+            pass
+
+        self.logs.service_quest.info(f"퀘스트 수락 - {user.id}({user.name}) 가 {self.id} 수락")
+
+    async def list_acceptances(self):
+        """
+        수락한 유저 목록을 반환합니다.
+        """
+        async with self.session as session:
+            query = (
+                select(Users).join(QuestAccept, QuestAccept.user_id == Users.id).where(QuestAccept.quest_id == self.id)
+            )
+            result = await session.execute(query)
+            users = list(result.scalars().all())
+        return users
+
+    async def has_accepted(self, user: "User") -> bool:
+        async with self.session as session:
+            query = (
+                select(func.count())
+                .select_from(QuestAccept)
+                .where(
+                    QuestAccept.quest_id == self.id,
+                    QuestAccept.user_id == user.id,
+                )
+            )
+            result = await session.execute(query)
+            count = result.scalar_one()
+        return count > 0
+
+    async def remove_accept(self, user: "User"):
+        async with self.session as session:
+            exc = delete(QuestAccept).where(
+                QuestAccept.quest_id == self.id,
+                QuestAccept.user_id == user.id,
+            )
+            await session.execute(exc)
+            await session.flush()
+
+        # invalidate cache after removal
+        try:
+            await self._cache_clear()
+        except Exception:
+            pass
+
+        self.logs.service_quest.info(f"퀘스트 수락 취소 - {user.id}({user.name}) 가 {self.id} 취소")
