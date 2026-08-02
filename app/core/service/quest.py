@@ -133,14 +133,10 @@ class Quest(ServiceCore[Quests], _Type):
             session.add(QuestAccept(quest_id=self.id, user_id=user.id))
             await session.flush()
 
-        try:
-            await self._cache_clear()
-        except Exception:
-            pass
-
+        await self._cache_clear()
         self.logs.service_quest.info(f"퀘스트 수락 - {user.id}({user.name}) 가 {self.id} 수락")
 
-    async def list_acceptances(self):
+    async def list_acceptances(self) -> list[Users]:
         """
         수락한 유저 목록을 반환합니다.
         """
@@ -153,6 +149,9 @@ class Quest(ServiceCore[Quests], _Type):
         return users
 
     async def has_accepted(self, user: "User") -> bool:
+        """
+        해당 유저가 퀘스트를 수락했는지 여부를 반환합니다.
+        """
         async with self.session as session:
             query = (
                 select(func.count())
@@ -166,7 +165,10 @@ class Quest(ServiceCore[Quests], _Type):
             count = result.scalar_one()
         return count > 0
 
-    async def remove_accept(self, user: "User"):
+    async def cancel_accept(self, user: "User"):
+        """
+        해당 유저가 퀘스트 수락을 취소처리 합니다.
+        """
         async with self.session as session:
             exc = delete(QuestAccept).where(
                 QuestAccept.quest_id == self.id,
@@ -175,10 +177,5 @@ class Quest(ServiceCore[Quests], _Type):
             await session.execute(exc)
             await session.flush()
 
-        # invalidate cache after removal
-        try:
-            await self._cache_clear()
-        except Exception:
-            pass
-
+        await self._cache_clear()
         self.logs.service_quest.info(f"퀘스트 수락 취소 - {user.id}({user.name}) 가 {self.id} 취소")

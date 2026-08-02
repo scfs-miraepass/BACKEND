@@ -92,8 +92,8 @@ class QuestAccept(SQLModel, table=True):
         description="퀘스트 수락한 일자",
     )
 
-    quest: Quest = Relationship(back_populates="acceptances")
-    quest_id: int = Field(foreign_key="quest.id", ondelete="CASCADE", description="수락한 퀘스트 ID", index=True)
+    quest: Quests = Relationship(back_populates="acceptances")
+    quest_id: int = Field(foreign_key="quests.id", ondelete="CASCADE", description="수락한 퀘스트 ID", index=True)
 
     user: "Users" = Relationship(back_populates="accepted_quests")
     user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", description="퀘스트를 수락한 유저 ID", index=True)
