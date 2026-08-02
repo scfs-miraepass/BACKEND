@@ -1,3 +1,16 @@
+# [1.8.0-dev.4](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.3...v1.8.0-dev.4) (2026-08-02)
+
+
+### Bug Fixes
+
+* **quest:** 퀘스트 조회 안되는 문제 해결 ([e026303](https://github.com/scfs-miraepass/BACKEND/commit/e026303be0b8cd93318b188529917e93ab781004))
+
+
+### Features
+
+* 퀘스트 수락 기능 추가 ([3fc839a](https://github.com/scfs-miraepass/BACKEND/commit/3fc839af79a6c762f502471a94ae89b9e2ce8df4))
+* 퀘스트 수락, 취소시 기존 상태 확인 로직 추가 ([12c24f3](https://github.com/scfs-miraepass/BACKEND/commit/12c24f33353f61c7fe33358a81bc4df5974edb71))
+
 # [1.8.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.7.0...v1.8.0) (2026-07-15)
 
 
