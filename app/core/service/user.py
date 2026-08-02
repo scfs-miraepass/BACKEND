@@ -62,7 +62,6 @@ class User(ServiceCore[Users], _Type):
             session.add(obj)
             await session.flush()
 
-        # 포인트 기록 변경에 따른 캐시 삭제
         await self.redis.delete(f"point_history_count:{self.id}")
         await self.redis.delete_pattern(f"point_history:{self.id}:*")
 
