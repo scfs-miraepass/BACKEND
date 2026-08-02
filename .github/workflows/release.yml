@@ -36,9 +36,12 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv
+
       - name: Install dependencies
         run: |
-          yarn add --dev @semantic-release/changelog @semantic-release/git @semantic-release/github @semantic-release/exec @semantic-release/commit-analyzer @semantic-release/release-notes-generator
+          npm install -g @semantic-release/changelog @semantic-release/git @semantic-release/github @semantic-release/exec @semantic-release/commit-analyzer @semantic-release/release-notes-generator
 
       - name: Run semantic-release
         env:
@@ -63,6 +66,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+      - name: Upload uv.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-lock
+          path: uv.lock
+          if-no-files-found: ignore
+          retention-days: 1
+
   docker-build:
     runs-on: ubuntu-latest
     permissions:
@@ -80,6 +91,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: pyproject-toml
+          path: .
+        continue-on-error: true
+
+      - name: Download uv.lock artifact
+        if: ${{ needs.semantic-release.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: uv-lock
           path: .
         continue-on-error: true
 
