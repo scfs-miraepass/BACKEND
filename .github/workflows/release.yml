@@ -36,48 +36,43 @@ jobs:
               with:
                   node-version: "24"
 
-<<<<<<< HEAD
             - name: Install the latest version of uv
               uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
-=======
-      - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
->>>>>>> 57c0a59 (ci: uv 액션을 찾지 못하던 현상 해결)
 
             - name: Install dependencies
               run: |
-                  npm install -g semantic-release @semantic-release/changelog @semantic-release/git @semantic-release/github @semantic-release/exec @semantic-release/commit-analyzer @semantic-release/release-notes-generator
+                npm install -g semantic-release @semantic-release/changelog @semantic-release/git @semantic-release/github @semantic-release/exec @semantic-release/commit-analyzer @semantic-release/release-notes-generator
 
             - name: Run semantic-release
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
-                  touch build.env
-                  semantic-release
-
+                touch build.env
+                semantic-release
             - name: Export version variable
+
               id: extract
               run: |
-                  if [ -f build.env ]; then
-                    source build.env
-                    echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
-                  fi
+                if [ -f build.env ]; then
+                  source build.env
+                  echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+                fi
 
-            - name: Upload pyproject.toml
-              uses: actions/upload-artifact@v4
-              with:
-                  name: pyproject-toml
-                  path: pyproject.toml
-                  if-no-files-found: ignore
-                  retention-days: 1
+                  - name: Upload pyproject.toml
+                    uses: actions/upload-artifact@v4
+                    with:
+                        name: pyproject-toml
+                        path: pyproject.toml
+                        if-no-files-found: ignore
+                        retention-days: 1
 
-            - name: Upload uv.lock
-              uses: actions/upload-artifact@v4
-              with:
-                  name: uv-lock
-                  path: uv.lock
-                  if-no-files-found: ignore
-                  retention-days: 1
+                  - name: Upload uv.lock
+                    uses: actions/upload-artifact@v4
+                    with:
+                        name: uv-lock
+                        path: uv.lock
+                        if-no-files-found: ignore
+                        retention-days: 1
 
     docker-build:
         runs-on: ubuntu-latest
