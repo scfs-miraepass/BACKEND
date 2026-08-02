@@ -67,14 +67,18 @@ class UserPermission(IntFlag):
     VIEW_USER_POINT = 2**11
     """다른 사용자의 보유중인 포인트를 확인 할 수 있는 권한"""
 
-    MANAGE_USER = 2**3 | VIEW_USER_POINT | POINT_GRANT | NO_LIMIT_POINT
+    QUEST_JOIN = 2**12
+    """퀘스트에 참가해 수락하고 완료할 수 있는 권한"""
+
+    MANAGE_USER = 2**13
     """
     유저 관리 권한
     - 유저 생성, 수정, 삭제
     - 일괄 포인트 지급
+    - 유저 목록 조회
     """
 
-    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY
+    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | QUEST_JOIN
     TEACHER = POINT_GRANT | QUEST_CREATE | VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | VIEW_USER_POINT
     ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | POST_CREATE
 
