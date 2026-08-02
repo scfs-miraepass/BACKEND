@@ -115,6 +115,9 @@ class Quest(ServiceCore[Quests], _Type):
     async def list_acceptances(self) -> list[Users]:
         """
         수락한 유저 목록을 반환합니다.
+
+        Returns:
+            List[Users]
         """
         async with self.session as session:
             query = (
@@ -127,6 +130,12 @@ class Quest(ServiceCore[Quests], _Type):
     async def has_accepted(self, user: "User") -> bool:
         """
         해당 유저가 퀘스트를 수락했는지 여부를 반환합니다.
+
+        Args:
+            user: 유저
+
+        Returns:
+            Bool
         """
         async with self.session as session:
             query = (
