@@ -62,6 +62,7 @@ class User(ServiceCore[Users], _Type):
             session.add(obj)
             await session.flush()
 
+        # 포인트 기록 변경에 따른 캐시 삭제
         await self.redis.delete(f"point_history_count:{self.id}")
         await self.redis.delete_pattern(f"point_history:{self.id}:*")
 
@@ -188,7 +189,7 @@ class User(ServiceCore[Users], _Type):
                 reward=reward,
                 end_date=end_date,
                 max_repeat=max_repeat,
-                author_id=self.id
+                created_by_teacher_id=self.id,
             )
 
             session.add(obj)

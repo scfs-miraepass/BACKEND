@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
-from sqlmodel import func, select, col
+from sqlmodel import func, select
 
 from app.core import LoginDep, ServiceClient
 from app.core.error import ExpiredError, LimitExceeded
@@ -21,7 +21,7 @@ class QuestOperation(BaseModel):
     description: str = Field(..., description="퀘스트 내용")
     reward: int = Field(..., gt=0, description="퀘스트 보상(포인트)")
     end_date: datetime = Field(..., description="퀘스트 종료 날짜")
-    max_repeat: int = Field(1, ge=1, description="퀘스트 반복 가능 횟수")
+    max_repeat: int = Field(..., ge=1, description="퀘스트 반복 가능 횟수")
 
 
 class QuestUpdate(BaseModel):
@@ -113,7 +113,7 @@ async def list_quests(
             response.headers["X-CACHED"] = "true"
         else:
             response.headers["X-CACHED"] = "false"
-            query = select(Quests).order_by(col(Quests.end_date)).limit(limit).offset(offset)
+            query = select(Quests).order_by(Quests.end_date).limit(limit).offset(offset)
             result = await session.execute(query)
             quests = list(result.scalars().all())
             quests_data = [item.model_dump() for item in quests]
@@ -250,6 +250,6 @@ async def complete_quest(quest_id: int, auth_data: LoginDep):
     except LimitExceeded:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="This quest can only be completed once.",
+            detail="The maximum completion count for this quest has been reached.",
         )
     return ResponseModel(success=True, data=user.point)

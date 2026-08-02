@@ -8,7 +8,7 @@ from pydantic import field_serializer
 
 from app.core import LoggerCore
 from .point import PointHistory, PointHistoryType
-from .quest import Quests, QuestCompletion, QuestAccept
+from .quest import Quests, QuestCompletion
 from .post import Posts
 from .stamp import Stamps
 
@@ -25,7 +25,7 @@ class User(SQLModel):
         default=None,
         description="고유 ID. 교사, 서비스의 경우 자동생성. 학생의 경우 학번 사용",
         index=True,
-    )
+    )  # autoincrement
 
     type: UserType = Field(description="유저 종류 (학생, 교사, 서비스)", index=True)
     name: str = Field(description="이름")
@@ -68,7 +68,6 @@ class Users(User, table=True):
     history: List["PointHistory"] = Relationship(back_populates="user", passive_deletes=True)
     created_quest: List["Quests"] = Relationship(back_populates="author", passive_deletes=True)
     completion_quest: List["QuestCompletion"] = Relationship(back_populates="user", passive_deletes=True)
-    accepted_quests: List["QuestAccept"] = Relationship(back_populates="user", passive_deletes=True)
     stamps: List["Stamps"] = Relationship(back_populates="user", passive_deletes=True)
 
     posts: List["Posts"] = Relationship(back_populates="author")
