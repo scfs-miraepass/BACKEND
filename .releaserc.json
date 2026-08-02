@@ -10,7 +10,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "echo \"NEW_VERSION=${nextRelease.version}\" >> build.env && uv version ${nextRelease.version}"
+        "prepareCmd": "echo \"NEW_VERSION=${nextRelease.version}\" >> build.env && uv version ${nextRelease.version} && uv lock"
       }
     ],
     [
@@ -20,6 +20,6 @@
         "message": "chore(release): ${nextRelease.version} [skip ci]"
       }
     ],
-    "@semantic-release/gitlab"
+    "@semantic-release/github"
   ]
 }
