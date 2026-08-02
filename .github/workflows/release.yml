@@ -36,8 +36,13 @@ jobs:
               with:
                   node-version: "24"
 
+<<<<<<< HEAD
             - name: Install the latest version of uv
               uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+=======
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+>>>>>>> 57c0a59 (ci: uv 액션을 찾지 못하던 현상 해결)
 
             - name: Install dependencies
               run: |
