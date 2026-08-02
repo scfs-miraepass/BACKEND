@@ -2,10 +2,10 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, TypedDict, Unpack
 from sqlmodel import delete, select, col, func
 
-from app.schemas import Users, Quests, QuestCompletion, PointHistoryType
+from app.schemas import Users, Quests, QuestCompletion, PointHistoryType, QuestAccept
 
 from ..core import ServiceCore
-from ..error import LimitExceeded, ExpiredError
+from ..error import LimitExceeded, ExpiredError, NotFound
 
 
 if TYPE_CHECKING:
@@ -111,3 +111,86 @@ class Quest(ServiceCore[Quests], _Type):
             result = await session.execute(query)
             count = result.scalar_one()
         return count
+
+    async def list_acceptances(self) -> list[Users]:
+        """
+        수락한 유저 목록을 반환합니다.
+
+        Returns:
+            List[Users]
+        """
+        async with self.session as session:
+            query = (
+                select(Users).join(QuestAccept, QuestAccept.user_id == Users.id).where(QuestAccept.quest_id == self.id)
+            )
+            result = await session.execute(query)
+            users = list(result.scalars().all())
+        return users
+
+    async def has_accepted(self, user: "User") -> bool:
+        """
+        해당 유저가 퀘스트를 수락했는지 여부를 반환합니다.
+
+        Args:
+            user: 유저
+
+        Returns:
+            Bool
+        """
+        async with self.session as session:
+            query = (
+                select(func.count())
+                .select_from(QuestAccept)
+                .where(
+                    QuestAccept.quest_id == self.id,
+                    QuestAccept.user_id == user.id,
+                )
+            )
+            result = await session.execute(query)
+            count = result.scalar_one()
+        return count > 0
+
+    async def accept(self, user: "User"):
+        """
+        학생이 퀘스트를 수락하도록 기록합니다. 중복 수락은 허용하지 않습니다.
+
+        Args:
+            user: 유저
+
+        Raises:
+            ServiceError.LimitExceeded: 이미 수락하였을 경우 발생합니다.
+        """
+        async with self.session as session:
+            accepted = await self.has_accepted(user)
+            if accepted:
+                raise LimitExceeded('Already accepted.')
+
+            session.add(QuestAccept(quest_id=self.id, user_id=user.id))
+            await session.flush()
+
+        await self._cache_clear()
+        self.logs.service_quest.info(f"퀘스트 수락 - {user.id}({user.name}) 가 {self.id} 수락")
+
+    async def cancel_accept(self, user: "User"):
+        """
+        해당 유저가 퀘스트 수락을 취소처리 합니다.
+
+        Args:
+            user: 유저
+
+        Raises:
+            ServiceError.NotFound: 수락하지 않았을 경우 발생합니다.
+        """
+        async with self.session as session:
+            accepted = await self.has_accepted(user)
+            if not accepted:
+                raise NotFound('Not accepted.')
+
+            exc = delete(QuestAccept).where(
+                QuestAccept.quest_id == self.id,
+                QuestAccept.user_id == user.id,
+            )
+            await session.execute(exc)
+
+        await self._cache_clear()
+        self.logs.service_quest.info(f"퀘스트 수락 취소 - {user.id}({user.name}) 가 {self.id} 취소")
