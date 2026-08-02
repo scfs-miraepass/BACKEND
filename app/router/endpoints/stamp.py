@@ -4,7 +4,7 @@ from sqlmodel import select, func
 from pydantic import BaseModel
 
 from app.core.dependency import LoginDep, ServiceClient
-from app.schemas import Stamps, StampType, PointHistoryType, UserType
+from app.schemas import Stamps, StampType, PointHistoryType, UserPermission
 from app.schemas.response import ResponseModel, ErrorResponse
 
 router = APIRouter(
@@ -50,7 +50,7 @@ async def create_stamp(
     auth_data: LoginDep,
 ):
     current_user, _ = auth_data
-    if current_user.type != UserType.service and not current_user.is_admin:
+    if current_user.has_permission(UserPermission.STAMP_GIVE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied. Only service users or admins can issue stamps.",
