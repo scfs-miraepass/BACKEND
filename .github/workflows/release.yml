@@ -35,7 +35,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'yarn'
 
       - name: Install dependencies
         run: |
@@ -56,13 +55,13 @@ jobs:
             echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
           fi
 
-#      - name: Upload package.json
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: package-json
-#          path: package.json
-#          if-no-files-found: ignore
-#          retention-days: 1
+      - name: Upload pyproject.toml
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyproject-toml
+          path: pyproject.toml
+          if-no-files-found: ignore
+          retention-days: 1
 
   docker-build:
     runs-on: ubuntu-latest
@@ -76,13 +75,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-#      - name: Download package.json artifact
-#        if: ${{ needs.semantic-release.result == 'success' }}
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: package-json
-#          path: .
-#        continue-on-error: true
+      - name: Download pyproject.toml artifact
+        if: ${{ needs.semantic-release.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: pyproject-toml
+          path: .
+        continue-on-error: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
