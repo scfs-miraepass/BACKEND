@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import select, func
 
 from app.core import LoginDep, ServiceClient
-from app.schemas.post import Posts
+from app.schemas import Posts, UserPermission
 from app.schemas.response import ResponseModel, ErrorResponse
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -117,8 +117,7 @@ async def get_post(
 async def create_post(request: PostCreateRequest, auth_data: LoginDep):
     user, _ = auth_data
 
-    # 관리자 권한 확인
-    if not user.is_admin:
+    if not user.has_permission(UserPermission.POST_CREATE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -150,7 +149,7 @@ async def update_post(post_id: int, request: PostUpdateRequest, auth_data: Login
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found.",
         )
-    if not user.is_admin and post.author_id != user.id:
+    if not user.has_permission(UserPermission.MANAGE_POST) and post.author_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -184,7 +183,7 @@ async def delete_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found.",
         )
-    if not user.is_admin and post.author_id != user.id:
+    if not user.has_permission(UserPermission.MANAGE_POST) and post.author_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
