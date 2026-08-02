@@ -24,20 +24,12 @@ class QuestOperation(BaseModel):
     max_repeat: int = Field(1, ge=1, description="퀘스트 반복 가능 횟수")
 
 
-class QuestResponse(BaseModel):
-    id: int
-    title: str
-    description: str
-    reward: int
-    end_date: datetime
-    author_id: int
-
-
 class QuestUpdate(BaseModel):
     title: Optional[str] = Field(None, description="퀘스트 제목")
     description: Optional[str] = Field(None, description="퀘스트 내용")
     reward: Optional[int] = Field(None, gt=0, description="퀘스트 보상(포인트)")
     end_date: Optional[datetime] = Field(None, description="퀘스트 종료 날짜")
+    max_repeat: Optional[int] = Field(None, ge=1, description="퀘스트 반복 가능 횟수")
 
 
 @router.post(
