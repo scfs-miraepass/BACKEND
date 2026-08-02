@@ -56,7 +56,7 @@ class RankingResponse(BaseModel):
 )
 async def get_limit(auth_data: LoginDep, target_user_id: int):
     user, _ = auth_data
-    student_limit: int = await client.redis.get(f"point_limit:student:{target_user_id}")
+    student_limit = await client.redis.get(f"point_limit:student:{target_user_id}")
     if student_limit is None:
         student_limit = STUDENT_POINT_LIMIT
     if user.has_permission(UserPermission.NO_LIMIT_POINT):
@@ -66,7 +66,7 @@ async def get_limit(auth_data: LoginDep, target_user_id: int):
         )
 
     limit_key = f"point_limit:teacher:{user.id}"
-    limit: int = await client.redis.get(limit_key)
+    limit = await client.redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
 
@@ -98,7 +98,7 @@ async def get_limit_session(
     if user.has_permission(UserPermission.NO_LIMIT_POINT):
         return ResponseModel[int](success=True, data=TEACHER_POINT_LIMIT)
     limit_key = f"point_limit:teacher:{user.id}"
-    limit: int = await client.redis.get(limit_key)
+    limit = await client.redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
 
@@ -136,7 +136,6 @@ async def grant_points(
 ):
     user, _ = auth_data
 
-    # 권한 확인: Teacher or Admin only
     if user.has_permission(UserPermission.POINT_GRANT):
         client.logs.service_point.warning(
             f"Unauthorized grant attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
@@ -237,7 +236,6 @@ async def deduct_points(
 ):
     user, _ = auth_data
 
-    # 권한 확인: Service or Admin only
     if user.has_permission(UserPermission.POINT_DEDUCT):
         client.logs.service_point.warning(
             f"Unauthorized deduct attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
