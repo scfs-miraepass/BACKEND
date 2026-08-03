@@ -50,7 +50,7 @@ async def create_stamp(
     auth_data: LoginDep,
 ):
     current_user, _ = auth_data
-    if current_user.has_permission(UserPermission.STAMP_GIVE):
+    if current_user.has_permission(UserPermission.GIVE_STAMP):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied. Only service users or admins can issue stamps.",

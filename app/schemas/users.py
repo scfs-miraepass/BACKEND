@@ -20,12 +20,19 @@ class UserType(str, Enum):
 
 
 class UserPermission(IntFlag):
+    """
+    유저 권한 IntFlag.
+    작명시 `동사_목적`으로 작성하며, 대문자로만 작성한다.
+    예) 포인트 관리 -> MANAGE_POINT
+    """
+
+
     NONE = 0
 
-    POINT_DEDUCT = 2**0
+    DEDUCT_POINT = 2 ** 0
     """포인트를 차감할 수 있는 권한"""
 
-    POINT_GRANT = 2**1
+    GRANT_POINT = 2 ** 1
     """포인트를 지급할 수 있는 권한"""
 
     NO_LIMIT_POINT = 2**2
@@ -34,7 +41,7 @@ class UserPermission(IntFlag):
     **해당 권한을 가진 사용자는 포인트 랭킹에 표기되지 않습니다**
     """
 
-    QUEST_CREATE = 2**3
+    CREATE_QUEST = 2 ** 3
     """퀘스트 신청 권한"""
 
     MANAGE_QUEST = 2**4
@@ -43,7 +50,7 @@ class UserPermission(IntFlag):
     - 다른 유저의 퀘스트 삭제
     """
 
-    STAMP_GIVE = 2**5
+    GIVE_STAMP = 2 ** 5
     """스탬프를 다른 유저에게 지급할 권한"""
 
     VIEW_RANK = 2**6
@@ -61,13 +68,13 @@ class UserPermission(IntFlag):
     - 다른 유저의 게시글 삭제
     """
 
-    POST_CREATE = 2**10
+    CREATE_POST = 2 ** 10
     """게시글 생성 권한"""
 
     VIEW_USER_POINT = 2**11
     """다른 사용자의 보유중인 포인트를 확인 할 수 있는 권한"""
 
-    QUEST_JOIN = 2**12
+    JOIN_QUEST = 2 ** 12
     """퀘스트에 참가해 수락하고 완료할 수 있는 권한"""
 
     MANAGE_USER = 2**13
@@ -78,9 +85,12 @@ class UserPermission(IntFlag):
     - 유저 목록 조회
     """
 
-    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | QUEST_JOIN
-    TEACHER = POINT_GRANT | QUEST_CREATE | VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | VIEW_USER_POINT
-    ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | POST_CREATE
+    VIEW_POST = 2**14
+    """게시글을 볼 수 있는 권한"""
+
+    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | JOIN_QUEST
+    TEACHER = GRANT_POINT | CREATE_QUEST | VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | VIEW_USER_POINT
+    ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST
 
 
 class User(SQLModel):

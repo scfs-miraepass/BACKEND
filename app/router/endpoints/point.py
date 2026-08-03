@@ -136,7 +136,7 @@ async def grant_points(
 ):
     user, _ = auth_data
 
-    if user.has_permission(UserPermission.POINT_GRANT):
+    if user.has_permission(UserPermission.GRANT_POINT):
         client.logs.service_point.warning(
             f"Unauthorized grant attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
         )
@@ -236,7 +236,7 @@ async def deduct_points(
 ):
     user, _ = auth_data
 
-    if user.has_permission(UserPermission.POINT_DEDUCT):
+    if user.has_permission(UserPermission.DEDUCT_POINT):
         client.logs.service_point.warning(
             f"Unauthorized deduct attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
         )

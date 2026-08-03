@@ -51,7 +51,7 @@ async def create_quest(
 ):
     user, _ = auth_data
 
-    if user.has_permission(UserPermission.QUEST_CREATE):
+    if user.has_permission(UserPermission.CREATE_QUEST):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -233,7 +233,7 @@ async def delete_quest(quest_id: int, auth_data: LoginDep):
 async def complete_quest(quest_id: int, auth_data: LoginDep):
     user, _ = auth_data
 
-    if user.has_permission(UserPermission.QUEST_JOIN):
+    if user.has_permission(UserPermission.JOIN_QUEST):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="not have permission to participate in the quest",
