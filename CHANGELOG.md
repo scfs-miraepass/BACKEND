@@ -1,3 +1,10 @@
+# [1.8.0-dev.4](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.3...v1.8.0-dev.4) (2026-08-03)
+
+
+### Features
+
+* 세부적인 권한 설정 기능 ([#4](https://github.com/scfs-miraepass/BACKEND/issues/4)) ([ee72636](https://github.com/scfs-miraepass/BACKEND/commit/ee72636b85eb2a050e9fe5fb0b52e7191ab472d0)), closes [#3](https://github.com/scfs-miraepass/BACKEND/issues/3)
+
 # [1.8.0](https://git.rldn.xyz/scfs.miraepass/backend/compare/v1.7.0...v1.8.0) (2026-07-15)
 
 
