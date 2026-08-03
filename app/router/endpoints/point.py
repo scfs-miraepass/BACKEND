@@ -136,18 +136,18 @@ async def grant_points(
 ):
     user, _ = auth_data
 
-    if user.has_permission(UserPermission.GRANT_POINT):
+    if not user.has_permission(UserPermission.GRANT_POINT):
         client.logs.service_point.warning(
             f"Unauthorized grant attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied. Only teachers or admins can grant points.",
+            detail="Permission denied.",
         )
 
     if not user.has_permission(UserPermission.NO_LIMIT_POINT):
         limit_key = f"point_limit:teacher:{user.id}"
-        limit: int = await client.redis.get(limit_key)
+        limit = await client.redis.get(limit_key)
         if limit is None:
             limit = TEACHER_POINT_LIMIT
         use_limit = limit - operation.amount
@@ -236,7 +236,7 @@ async def deduct_points(
 ):
     user, _ = auth_data
 
-    if user.has_permission(UserPermission.DEDUCT_POINT):
+    if not user.has_permission(UserPermission.DEDUCT_POINT):
         client.logs.service_point.warning(
             f"Unauthorized deduct attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
         )
@@ -289,7 +289,7 @@ async def point_history(
 ):
     user, _ = auth_data
 
-    if user.has_permission(UserPermission.VIEW_POINT_HISTORY):
+    if not user.has_permission(UserPermission.VIEW_POINT_HISTORY):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -402,7 +402,9 @@ async def _get_ranking(
             ]
 
             ranking_data = [item.model_dump() for item in rankings]
-            await client.redis.set(ranking_cache_key, ranking_data, ttl=60 * 5)  # 5분 캐시
+            await client.redis.set(
+                ranking_cache_key, ranking_data, ttl=60 * 5
+            )  # 5분 캐시
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
@@ -413,22 +415,50 @@ async def _get_ranking(
 @router.get(
     "/ranking/student",
     response_model=ResponseModel[list[RankingResponse]],
+    responses={
+        200: {"description": "정상 처리"},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        }
+    },
     status_code=status.HTTP_200_OK,
     summary="학생 포인트 랭킹 조회",
     description="학생들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
 )
-async def get_student_ranking(response: Response, limit: int = 20, offset: int = 0):
+async def get_student_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+    user, _ = auth
+    if not user.has_permission(UserPermission.VIEW_RANK):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
     return await _get_ranking(UserType.student, response, limit, offset)
 
 
 @router.get(
     "/ranking/teacher",
     response_model=ResponseModel[list[RankingResponse]],
+    responses={
+        200: {"description": "정상 처리"},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
+    },
     status_code=status.HTTP_200_OK,
     summary="교사 포인트 랭킹 조회",
     description="교사들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
 )
-async def get_teacher_ranking(response: Response, limit: int = 20, offset: int = 0):
+async def get_teacher_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+    user, _ = auth
+    if not user.has_permission(UserPermission.VIEW_RANK):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
     return await _get_ranking(UserType.teacher, response, limit, offset)
 
 
@@ -452,7 +482,7 @@ async def get_point_balance(
     auth_data: LoginDep,
 ):
     user, _ = auth_data
-    if user.has_permission(UserPermission.VIEW_USER_POINT):
+    if not user.has_permission(UserPermission.VIEW_USER_POINT):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",

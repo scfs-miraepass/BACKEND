@@ -26,13 +26,15 @@ class UserPermission(IntFlag):
     예) 포인트 관리 -> MANAGE_POINT
     """
 
-
     NONE = 0
 
-    DEDUCT_POINT = 2 ** 0
+    SEARCH_USER = 2**17
+    """사용자를 검색할 수 있는 권한"""
+
+    DEDUCT_POINT = 2 ** 0 | SEARCH_USER
     """포인트를 차감할 수 있는 권한"""
 
-    GRANT_POINT = 2 ** 1
+    GRANT_POINT = 2 ** 1 | SEARCH_USER
     """포인트를 지급할 수 있는 권한"""
 
     NO_LIMIT_POINT = 2**2
@@ -50,7 +52,7 @@ class UserPermission(IntFlag):
     - 다른 유저의 퀘스트 삭제
     """
 
-    GIVE_STAMP = 2 ** 5
+    GIVE_STAMP = 2 ** 5 | SEARCH_USER
     """스탬프를 다른 유저에게 지급할 권한"""
 
     VIEW_RANK = 2**6
@@ -71,13 +73,13 @@ class UserPermission(IntFlag):
     CREATE_POST = 2 ** 10
     """게시글 생성 권한"""
 
-    VIEW_USER_POINT = 2**11
+    VIEW_USER_POINT = 2**11 | SEARCH_USER
     """다른 사용자의 보유중인 포인트를 확인 할 수 있는 권한"""
 
     JOIN_QUEST = 2 ** 12
     """퀘스트에 참가해 수락하고 완료할 수 있는 권한"""
 
-    MANAGE_USER = 2**13
+    MANAGE_USER = 2**13 | SEARCH_USER
     """
     유저 관리 권한
     - 유저 생성, 수정, 삭제
@@ -91,7 +93,10 @@ class UserPermission(IntFlag):
     VIEW_STAMP = 2**15
     """스템프를 볼 수 있는 권한"""
 
-    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | JOIN_QUEST | VIEW_POST | VIEW_STAMP
+    VIEW_QUEST = 2**16
+    """퀘스트를 볼 수 있는 권한"""
+
+    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | JOIN_QUEST | VIEW_POST | VIEW_STAMP | VIEW_QUEST
     TEACHER = GRANT_POINT | CREATE_QUEST | VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | VIEW_USER_POINT | VIEW_POST | VIEW_STAMP
     ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST
 

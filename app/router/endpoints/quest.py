@@ -51,7 +51,7 @@ async def create_quest(
 ):
     user, _ = auth_data
 
-    if user.has_permission(UserPermission.CREATE_QUEST):
+    if not user.has_permission(UserPermission.CREATE_QUEST):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -79,7 +79,11 @@ async def create_quest(
     response_model=ResponseModel[List[Quests]],
     responses={
         200: {"description": "퀘스트 목록 조회 성공"},
-        401: {"model": ErrorResponse, "description": "세션이 만료되었거나 유효하지 않음"},
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음",
+        },
+        403: {"model": ErrorResponse, "description": "권한이 없음"}
     },
     status_code=status.HTTP_200_OK,
     summary="퀘스트 목록 조회",
@@ -92,6 +96,12 @@ async def list_quests(
     offset: int = 0,
 ):
     _user, _ = auth_data
+
+    if not _user.has_permission(UserPermission.VIEW_QUEST):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
 
     count_cache_key = "quests_count"
     cached_count = await client.redis.get(count_cache_key)
@@ -135,12 +145,20 @@ async def list_quests(
             "description": "세션이 만료되었거나 유효하지 않음",
         },
         404: {"model": ErrorResponse, "description": "퀘스트를 찾을 수 없음"},
+        403: {"model": ErrorResponse, "description": "권한이 없음"}
     },
     status_code=status.HTTP_200_OK,
     summary="퀘스트 조회",
     description="퀘스트 상세 정보를 조회합니다.",
 )
-async def get_quest(quest_id: int):
+async def get_quest(quest_id: int, auth_data: LoginDep):
+    user, _ = auth_data
+    if not user.has_permission(UserPermission.VIEW_QUEST):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")

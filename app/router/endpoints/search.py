@@ -6,7 +6,7 @@ from hangulpy import split_hangul_string
 from sqlmodel import select, col
 
 from app.core import LoginDep, ServiceClient
-from app.schemas import User, Users, UserSearch, UserType
+from app.schemas import User, Users, UserSearch, UserType, UserPermission
 from app.schemas.response import ResponseModel, ErrorResponse
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -40,7 +40,7 @@ def normalize_and_decompose(query: str) -> str:
     summary="유저 검색",
     description="유저를 이름 또는 ID(학번)으로 검색합니다.",
 )
-async def search(auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
+async def search(auth_data: LoginDep, q: str, t: list[UserType] | None = Query(None)):
     """
     사용자 검색 API
 
@@ -51,8 +51,7 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
     """
     user, _ = auth_data
 
-    # 권한 확인: Teacher, Service or Admin only
-    if user.type != UserType.teacher and user.type != UserType.service and not user.is_admin:
+    if not user.has_permission(UserPermission.SEARCH_USER):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
