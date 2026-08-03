@@ -160,7 +160,7 @@ async def grant_points(
         await client.redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 7)
 
     limit_key = f"point_limit:student:{operation.target_user_id}"
-    limit: int = await client.redis.get(limit_key)
+    limit = await client.redis.get(limit_key)
     if limit is None:
         limit = STUDENT_POINT_LIMIT
     use_limit = limit - operation.amount
