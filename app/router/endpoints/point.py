@@ -3,9 +3,10 @@ from math import ceil
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlmodel import func, col, select
+from typing import Any
 
 from app.core import LoginDep, ServiceClient
-from app.schemas import PointHistory, Users, UserType, PointHistoryType
+from app.schemas import PointHistory, Users, UserType, PointHistoryType, UserPermission
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])
@@ -55,17 +56,17 @@ class RankingResponse(BaseModel):
 )
 async def get_limit(auth_data: LoginDep, target_user_id: int):
     user, _ = auth_data
-    student_limit: int = await client.redis.get(f"point_limit:student:{target_user_id}")
+    student_limit = await client.redis.get(f"point_limit:student:{target_user_id}")
     if student_limit is None:
         student_limit = STUDENT_POINT_LIMIT
-    if user.is_admin:
+    if user.has_permission(UserPermission.NO_LIMIT_POINT):
         return ResponseModel[GetLimitResponse](
             success=True,
             data=GetLimitResponse(limit=TEACHER_POINT_LIMIT, target_limit=student_limit),
         )
 
     limit_key = f"point_limit:teacher:{user.id}"
-    limit: int = await client.redis.get(limit_key)
+    limit = await client.redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
 
@@ -94,10 +95,10 @@ async def get_limit_session(
     auth_data: LoginDep,
 ):
     user, _ = auth_data
-    if user.is_admin:
+    if user.has_permission(UserPermission.NO_LIMIT_POINT):
         return ResponseModel[int](success=True, data=TEACHER_POINT_LIMIT)
     limit_key = f"point_limit:teacher:{user.id}"
-    limit: int = await client.redis.get(limit_key)
+    limit = await client.redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
 
@@ -135,19 +136,18 @@ async def grant_points(
 ):
     user, _ = auth_data
 
-    # 권한 확인: Teacher or Admin only
-    if user.type != UserType.teacher and not user.is_admin:
+    if not user.has_permission(UserPermission.GRANT_POINT):
         client.logs.service_point.warning(
             f"Unauthorized grant attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied. Only teachers or admins can grant points.",
+            detail="Permission denied.",
         )
 
-    if not user.is_admin:
+    if not user.has_permission(UserPermission.NO_LIMIT_POINT):
         limit_key = f"point_limit:teacher:{user.id}"
-        limit: int = await client.redis.get(limit_key)
+        limit = await client.redis.get(limit_key)
         if limit is None:
             limit = TEACHER_POINT_LIMIT
         use_limit = limit - operation.amount
@@ -160,7 +160,7 @@ async def grant_points(
         await client.redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 7)
 
     limit_key = f"point_limit:student:{operation.target_user_id}"
-    limit: int = await client.redis.get(limit_key)
+    limit = await client.redis.get(limit_key)
     if limit is None:
         limit = STUDENT_POINT_LIMIT
     use_limit = limit - operation.amount
@@ -183,7 +183,7 @@ async def grant_points(
 
         back_limit_key = f"point_limit:teacher:{user.id}"
         back_limit: int = TEACHER_POINT_LIMIT
-        if user.is_admin:
+        if user.has_permission(UserPermission.NO_LIMIT_POINT):
             _ = await client.redis.get(back_limit_key)
             if _ is not None:
                 back_limit = _
@@ -199,7 +199,7 @@ async def grant_points(
                     memo=operation.memo,
                 )
 
-                if user.is_admin:
+                if user.has_permission(UserPermission.NO_LIMIT_POINT):
                     await client.redis.set(back_limit_key, back_limit - back_amount, ttl=60 * 60 * 24 * 7)
     await client.redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 1)
 
@@ -236,8 +236,7 @@ async def deduct_points(
 ):
     user, _ = auth_data
 
-    # 권한 확인: Service or Admin only
-    if user.type != UserType.service and not user.is_admin:
+    if not user.has_permission(UserPermission.DEDUCT_POINT):
         client.logs.service_point.warning(
             f"Unauthorized deduct attempt. UserID: {user.id}, Role: {user.type}, Admin: {user.is_admin}"
         )
@@ -273,6 +272,10 @@ async def deduct_points(
             "model": ErrorResponse,
             "description": "세션이 만료되었거나 유효하지 않음",
         },
+        403: {
+            "model": ErrorResponse,
+            "description": "권한 없음",
+        },
     },
     status_code=status.HTTP_200_OK,
     summary="포인트 기록",
@@ -285,6 +288,12 @@ async def point_history(
     offset: int = 0,
 ):
     user, _ = auth_data
+
+    if not user.has_permission(UserPermission.VIEW_POINT_HISTORY):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
 
     # 1. 총 개수 조회 (캐싱 적용)
     count_cache_key = f"point_history_count:{user.id}"
@@ -347,9 +356,9 @@ async def _get_ranking(
             query = select(func.count()).select_from(Users)
 
             # 조건 추가
-            conditions = [Users.type == user_type]
+            conditions: Any = [Users.type == user_type]
             if user_type == UserType.teacher:
-                conditions.append(Users.is_admin == False)  # noqa: E712
+                conditions.append(col(Users.permissions).op("&")(UserPermission.NO_LIMIT_POINT.value) == 0)
             query = query.where(*conditions)
 
             result = await session.execute(query)
@@ -363,9 +372,9 @@ async def _get_ranking(
             rankings = [RankingResponse(**item) for item in cached_ranking]
         else:
             # 서브쿼리 없이 Users 모델 전체와 rank를 바로 선택 (SQLModel / Pydantic 경고 방지 및 성능 개선)
-            conditions = [Users.type == user_type]
+            conditions: Any = [Users.type == user_type]
             if user_type == UserType.teacher:
-                conditions.append(Users.is_admin == False)  # noqa: E712
+                conditions.append(col(Users.permissions).op("&")(UserPermission.NO_LIMIT_POINT.value) == 0)
 
             query = (
                 select(
@@ -393,7 +402,9 @@ async def _get_ranking(
             ]
 
             ranking_data = [item.model_dump() for item in rankings]
-            await client.redis.set(ranking_cache_key, ranking_data, ttl=60 * 5)  # 5분 캐시
+            await client.redis.set(
+                ranking_cache_key, ranking_data, ttl=60 * 5
+            )  # 5분 캐시
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
@@ -404,22 +415,50 @@ async def _get_ranking(
 @router.get(
     "/ranking/student",
     response_model=ResponseModel[list[RankingResponse]],
+    responses={
+        200: {"description": "정상 처리"},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        }
+    },
     status_code=status.HTTP_200_OK,
     summary="학생 포인트 랭킹 조회",
     description="학생들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
 )
-async def get_student_ranking(response: Response, limit: int = 20, offset: int = 0):
+async def get_student_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+    user, _ = auth
+    if not user.has_permission(UserPermission.VIEW_RANK):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
     return await _get_ranking(UserType.student, response, limit, offset)
 
 
 @router.get(
     "/ranking/teacher",
     response_model=ResponseModel[list[RankingResponse]],
+    responses={
+        200: {"description": "정상 처리"},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
+    },
     status_code=status.HTTP_200_OK,
     summary="교사 포인트 랭킹 조회",
     description="교사들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
 )
-async def get_teacher_ranking(response: Response, limit: int = 20, offset: int = 0):
+async def get_teacher_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+    user, _ = auth
+    if not user.has_permission(UserPermission.VIEW_RANK):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
     return await _get_ranking(UserType.teacher, response, limit, offset)
 
 
@@ -443,7 +482,7 @@ async def get_point_balance(
     auth_data: LoginDep,
 ):
     user, _ = auth_data
-    if user.type != UserType.teacher and user.type != UserType.service and not user.is_admin:
+    if not user.has_permission(UserPermission.VIEW_USER_POINT):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",

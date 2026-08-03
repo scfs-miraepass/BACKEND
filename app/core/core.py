@@ -33,7 +33,7 @@ class ServiceCore(BaseCore, Generic[T]):
         return super().__new__(cls)
 
     def __init__(self, payload: T | None):
-        self._payload = payload
+        self._payload: T = payload
         super().__init__()
 
     def __str__(self):

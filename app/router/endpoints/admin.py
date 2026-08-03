@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from math import ceil
 
 from app.core import LoginDep, ServiceClient
-from app.schemas import User, Users, UserType, PointHistory, PointHistoryType
+from app.schemas import User, Users, UserType, PointHistory, PointHistoryType, UserPermission
 from app.schemas.response import ErrorResponse, ResponseModel
 
 
@@ -18,17 +18,7 @@ class AdminPointRequest(BaseModel):
     is_all_students: bool = Field(False, description="전체 학생 대상 여부. true일 경우 user_ids는 무시됩니다.")
 
 
-async def verify_admin(login_user: LoginDep) -> Users:
-    user, _ = login_user
-    if not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
-        )
-    return user
-
-
-router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(verify_admin)])
+router = APIRouter(prefix="/admin", tags=["admin"])
 client = ServiceClient()
 
 
@@ -48,20 +38,25 @@ client = ServiceClient()
 )
 async def get_students(
     response: Response,
+    auth_data: LoginDep,
     page: int = Query(1, ge=1, description="페이지 번호"),
-    size: int = Query(20, ge=1, le=100, description="페이지 당 유저 데이터 갯수 (최대 100)"),
+    size: int = Query(
+        20, ge=1, le=100, description="페이지 당 유저 데이터 갯수 (최대 100)"
+    ),
 ):
+    user, _ = auth_data
+    if not user.has_permission(UserPermission.MANAGE_USER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+
     async with client.session as session:
         count_query = select(func.count()).select_from(Users).where(Users.type == UserType.student)
         total_count = (await session.execute(count_query)).scalar_one()
-
-        # 최대 페이지 계산 (데이터가 없으면 1페이지)
         max_page = ceil(total_count / size) if total_count > 0 else 1
-
-        # 클라이언트가 읽을 수 있도록 헤더에 최대 페이지 전달
         response.headers["X-MAX-PAGE"] = str(max_page)
-
-        # offset 계산 및 데이터 조회
         offset = (page - 1) * size
         query = select(Users).where(Users.type == UserType.student).offset(offset).limit(size)
 
@@ -84,7 +79,14 @@ async def get_students(
     summary="포인트 일괄 처리",
     description="일괄적으로 포인트를 지급하거나 차감합니다.",
 )
-async def update_students_point(request: AdminPointRequest):
+async def update_students_point(request: AdminPointRequest, auth_data: LoginDep):
+    user, _ = auth_data
+    if not user.has_permission(UserPermission.MANAGE_USER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
     # 전체 학생 대상인지 여부에 따라 타겟 쿼리 설정
     async with client.session as session:
         if request.is_all_students:
