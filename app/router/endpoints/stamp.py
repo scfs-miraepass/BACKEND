@@ -50,10 +50,10 @@ async def create_stamp(
     auth_data: LoginDep,
 ):
     current_user, _ = auth_data
-    if current_user.has_permission(UserPermission.GIVE_STAMP):
+    if not current_user.has_permission(UserPermission.GIVE_STAMP):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied. Only service users or admins can issue stamps.",
+            detail="Permission denied.",
         )
 
     async with client.session as session:
@@ -106,6 +106,10 @@ async def create_stamp(
             "model": ErrorResponse,
             "description": "세션이 만료되었거나 유효하지 않음",
         },
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        }
     },
     status_code=status.HTTP_200_OK,
     summary="스탬프 목록",
@@ -113,6 +117,11 @@ async def create_stamp(
 )
 async def get_user_stamps(auth_data: LoginDep):
     user, _ = auth_data
+    if not user.has_permission(UserPermission.VIEW_STAMP):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
 
     async with client.session as session:
         result = await session.execute(select(Stamps).where(Stamps.user_id == user.id))
