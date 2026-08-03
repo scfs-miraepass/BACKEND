@@ -22,7 +22,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
-    if: ${{ github.event.inputs.manual_version == '' }}
+    if: ${{ !inputs.manual_version }}
     outputs:
       new_version: ${{ steps.extract.outputs.NEW_VERSION }}
     steps:
@@ -49,8 +49,8 @@ jobs:
         run: |
           touch build.env
           semantic-release
-      - name: Export version variable
 
+      - name: Export version variable
         id: extract
         run: |
           if [ -f build.env ]; then
