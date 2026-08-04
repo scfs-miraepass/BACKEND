@@ -1,4 +1,4 @@
-"""stamp_add
+"""v1.8.0 #2 (Stamps tables add)
 
 Revision ID: baaa7b1aacf8
 Revises: d6cf30df9927

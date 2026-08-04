@@ -1,4 +1,4 @@
-"""empty message
+"""v1.6.0 #1 (pointhistory.memo add)
 
 Revision ID: 6949eef9a311
 Revises: ecc0a589fbcd

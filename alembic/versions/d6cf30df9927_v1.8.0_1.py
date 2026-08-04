@@ -1,4 +1,4 @@
-"""empty message
+"""v1.8.0 #1 (Quest to Quests name change)
 
 Revision ID: d6cf30df9927
 Revises: b4da6e37f3a6
