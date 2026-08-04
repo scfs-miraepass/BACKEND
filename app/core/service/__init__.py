@@ -3,4 +3,4 @@ from .post import Post
 from .quest import Quest
 from .user import User
 
-__all__ = ["User", "Post", "Quest", "History"]
+__all__ = ["History", "Post", "Quest", "User"]

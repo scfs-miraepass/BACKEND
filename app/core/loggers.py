@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from sys import stdout
+from typing import ClassVar
 
 from .config import settings
 
@@ -50,8 +51,8 @@ class LoggerCore:
     LOG_DIR = "logs"
 
     # 로거 캐싱을 위한 딕셔너리
-    _loggers: dict[str, logging.Logger] = {}
-    _file_handlers: dict[str, logging.Handler] = {}
+    _loggers: ClassVar[dict[str, logging.Logger]] = {}
+    _file_handlers: ClassVar[dict[str, logging.Handler]] = {}
 
     # 로거
     global_: logging.Logger = ...
