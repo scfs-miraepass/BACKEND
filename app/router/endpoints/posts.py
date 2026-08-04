@@ -1,13 +1,12 @@
 from math import ceil
-from typing import List
 
-from fastapi import APIRouter, status, HTTPException, Response, Query
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
-from sqlmodel import select, func
+from sqlmodel import func, select
 
 from app.core import LoginDep, ServiceClient
 from app.schemas import Posts, UserPermission
-from app.schemas.response import ResponseModel, ErrorResponse
+from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 client = ServiceClient()
@@ -25,7 +24,7 @@ class PostUpdateRequest(BaseModel):
 
 @router.get(
     "",
-    response_model=ResponseModel[List[Posts]],
+    response_model=ResponseModel[list[Posts]],
     responses={
         200: {"description": "게시글 목록 조회 성공"},
         401: {"model": ErrorResponse, "description": "인증되지 않은 사용자"},
@@ -84,7 +83,7 @@ async def get_posts(
             posts_data = [item.model_dump() for item in posts]
             await client.redis.set(list_cache_key, posts_data, ttl=60 * 60 * 24)
 
-    return ResponseModel[List[Posts]](success=True, data=posts)
+    return ResponseModel[list[Posts]](success=True, data=posts)
 
 
 @router.get(

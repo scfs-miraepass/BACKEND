@@ -1,9 +1,9 @@
 import logging
 import os
-from sys import stdout
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
-from typing import Optional
+from sys import stdout
+from typing import ClassVar
 
 from .config import settings
 
@@ -39,9 +39,7 @@ class CustomFormatter(logging.Formatter):
         elif record.levelno == logging.CRITICAL:
             level_color = self.bold_red
 
-        log_fmt = (
-            f"%(asctime)s | {level_color}%(levelname)-8s{self.reset} | {self.cyan}%(name)-30s{self.reset} | %(message)s"
-        )
+        log_fmt = f"%(asctime)s | {level_color}%(levelname)-8s{self.reset} | {self.cyan}%(name)-30s{self.reset} | %(message)s"
 
         formatter = logging.Formatter(log_fmt, datefmt=self.date_fmt)
         return formatter.format(record)
@@ -53,8 +51,8 @@ class LoggerCore:
     LOG_DIR = "logs"
 
     # 로거 캐싱을 위한 딕셔너리
-    _loggers: dict[str, logging.Logger] = {}
-    _file_handlers: dict[str, logging.Handler] = {}
+    _loggers: ClassVar[dict[str, logging.Logger]] = {}
+    _file_handlers: ClassVar[dict[str, logging.Handler]] = {}
 
     # 로거
     global_: logging.Logger = ...
@@ -91,12 +89,22 @@ class LoggerCore:
 
         cls.global_ = self.get_logger("global", debug=settings.debug)
         cls.redis = self.get_logger("redis", debug=settings.debug)
-        cls.database = self.get_logger("database", filename="database", debug=settings.debug)
+        cls.database = self.get_logger(
+            "database", filename="database", debug=settings.debug
+        )
 
-        cls.service = self.get_logger("service", filename="service", debug=settings.debug)
-        cls.service_point = self.get_logger("service.point", filename="service", debug=settings.debug)
-        cls.service_post = self.get_logger("service.post", filename="service", debug=settings.debug)
-        cls.service_quest = self.get_logger("service.quest", filename="service", debug=settings.debug)
+        cls.service = self.get_logger(
+            "service", filename="service", debug=settings.debug
+        )
+        cls.service_point = self.get_logger(
+            "service.point", filename="service", debug=settings.debug
+        )
+        cls.service_post = self.get_logger(
+            "service.post", filename="service", debug=settings.debug
+        )
+        cls.service_quest = self.get_logger(
+            "service.quest", filename="service", debug=settings.debug
+        )
 
         cls.initialized = True
 
@@ -106,7 +114,9 @@ class LoggerCore:
         if not os.path.exists(path):
             try:
                 with open(path, "w", encoding="utf-8") as f:
-                    f.write(f"====== Log Initialized at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ======\n")
+                    f.write(
+                        f"====== Log Initialized at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ======\n"
+                    )
             except PermissionError:
                 # 다른 프로세스가 이미 파일을 생성/사용 중인 경우 무시
                 pass
@@ -146,7 +156,7 @@ class LoggerCore:
         cls,
         name: str = "root",
         *,
-        filename: Optional[str] = None,
+        filename: str | None = None,
         debug: bool = False,
         add_stream: bool = True,
         debug_level: int = logging.DEBUG,

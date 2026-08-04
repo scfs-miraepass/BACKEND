@@ -1,16 +1,23 @@
-from fastapi import APIRouter, HTTPException, status, Query, Response, Depends
-from sqlmodel import select, func, update, col
-from typing import List, Optional
-from pydantic import BaseModel, Field
 from math import ceil
 
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
+from sqlmodel import col, func, select, update
+
 from app.core import LoginDep, ServiceClient
-from app.schemas import User, Users, UserType, PointHistory, PointHistoryType, UserPermission
+from app.schemas import (
+    PointHistory,
+    PointHistoryType,
+    User,
+    UserPermission,
+    Users,
+    UserType,
+)
 from app.schemas.response import ErrorResponse, ResponseModel
 
 
 class AdminPointRequest(BaseModel):
-    user_ids: Optional[List[int]] = Field(
+    user_ids: list[int] | None = Field(
         None, description="포인트를 지급/차감할 학생 ID 목록. 전체 학생 대상일 경우 생략하거나 null/빈 리스트 전달"
     )
     amount: int = Field(..., description="변동될 포인트 (양수는 지급, 음수는 차감)")
@@ -24,7 +31,7 @@ client = ServiceClient()
 
 @router.get(
     "/student",
-    response_model=ResponseModel[List[User]],
+    response_model=ResponseModel[list[User]],
     responses={
         200: {"description": "정상적으로 처리 됨"},
         403: {
@@ -63,7 +70,7 @@ async def get_students(
         result = await session.execute(query)
         users = result.scalars().all()
 
-    return ResponseModel[List[User]](success=True, data=users)
+    return ResponseModel[list[User]](success=True, data=users)
 
 
 @router.post(

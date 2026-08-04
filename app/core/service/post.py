@@ -1,10 +1,10 @@
 from typing import TYPE_CHECKING
-from sqlmodel import delete, col, select
 
-from app.schemas import Posts, PostContent
+from sqlmodel import col, delete, select
+
+from app.schemas import PostContent, Posts
 
 from ..core import ServiceCore
-
 
 if TYPE_CHECKING:
     _Type = Posts

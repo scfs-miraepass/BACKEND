@@ -1,15 +1,23 @@
-from typing import TYPE_CHECKING
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from app.schemas import Users, UserType, PointHistory, PointHistoryType, Posts, PostContent, Quests, UserPermission
+from app.schemas import (
+    PointHistory,
+    PointHistoryType,
+    PostContent,
+    Posts,
+    Quests,
+    UserPermission,
+    Users,
+    UserType,
+)
 
+from ..core import ServiceCore
+from ..error import Forbidden
+from ..security import get_password_hash
 from .history import History
 from .post import Post
 from .quest import Quest
-from ..core import ServiceCore
-from ..security import get_password_hash
-from ..error import Forbidden
-
 
 if TYPE_CHECKING:
     _Type = Users
@@ -98,7 +106,7 @@ class User(ServiceCore[Users], _Type):
 
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{str(user.type)}:*")
+            await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
 
         self.logs.service_point.info(f"포인트 지급 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
@@ -132,7 +140,7 @@ class User(ServiceCore[Users], _Type):
 
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{str(user.type)}:*")
+            await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
 
         self.logs.service_point.info(f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user

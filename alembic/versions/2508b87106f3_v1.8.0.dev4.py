@@ -5,19 +5,20 @@ Revises: f91d6fc43436
 Create Date: 2026-08-04 11:23:12.873678
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from enum import IntFlag, StrEnum
+from logging import getLogger
+
+import sqlalchemy as sa
+from sqlalchemy.dialects import mysql
 
 from alembic import op
-import sqlalchemy as sa
-from logging import getLogger
-from enum import Enum, IntFlag
-from sqlalchemy.dialects import mysql
 
 # revision identifiers, used by Alembic.
 revision: str = '2508b87106f3'
-down_revision: Union[str, Sequence[str], None] = 'f91d6fc43436'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = 'f91d6fc43436'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 log = getLogger("alembic.runtime.migration")
 
@@ -47,7 +48,7 @@ class UserPermission(IntFlag):
     TEACHER = GRANT_POINT | CREATE_QUEST | VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | VIEW_USER_POINT | VIEW_POST | VIEW_STAMP
     ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST
 
-class UserType(str, Enum):
+class UserType(StrEnum):
     student = "student"
     teacher = "teacher"
     service = "service"

@@ -1,13 +1,13 @@
 from functools import lru_cache
-from typing import List, cast, Any
+from typing import Any, cast
 
-from fastapi import APIRouter, status, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from hangulpy import split_hangul_string
-from sqlmodel import select, col
+from sqlmodel import col, select
 
 from app.core import LoginDep, ServiceClient
-from app.schemas import User, Users, UserSearch, UserType, UserPermission
-from app.schemas.response import ResponseModel, ErrorResponse
+from app.schemas import User, UserPermission, Users, UserSearch, UserType
+from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/search", tags=["search"])
 client = ServiceClient()
@@ -24,7 +24,7 @@ def normalize_and_decompose(query: str) -> str:
 
 @router.get(
     "",
-    response_model=ResponseModel[List[User]],
+    response_model=ResponseModel[list[User]],
     responses={
         200: {"description": "정상 처리"},
         401: {

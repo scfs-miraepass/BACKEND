@@ -3,7 +3,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
-from app.core import LoginDep, settings, ServiceClient
+from app.core import LoginDep, ServiceClient, settings
 from app.core.security import verify_password
 from app.schemas import UserType
 from app.schemas.response import ErrorResponse, ResponseModel

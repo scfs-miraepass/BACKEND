@@ -1,12 +1,12 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict, Unpack
-from sqlmodel import delete, select, col, func
 
-from app.schemas import Users, Quests, QuestCompletion, PointHistoryType
+from sqlmodel import col, delete, func, select
+
+from app.schemas import PointHistoryType, QuestCompletion, Quests, Users
 
 from ..core import ServiceCore
-from ..error import LimitExceeded, ExpiredError
-
+from ..error import ExpiredError, LimitExceeded
 
 if TYPE_CHECKING:
     from .user import User
@@ -55,7 +55,7 @@ class Quest(ServiceCore[Quests], _Type):
 
         self.logs.service_quest.info(f"퀘스트 수정 - ID {self.id}")
 
-    async def complete(self, user: "User"):
+    async def complete(self, user: User):
         """
         퀘스트 완료 처리하고, 유저에게 보상을 지급합니다.
 
@@ -66,7 +66,7 @@ class Quest(ServiceCore[Quests], _Type):
             ServiceError.ExpiredError: 퀘스트가 만료되었을 경우 발생합니다.
             ServiceError.LimitExceeded: 퀘스트 중복 참가 횟수를 모두 소진했을 경우 발생합니다.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if self.end_date < now:
             raise ExpiredError("Quest duration ended.")
 
@@ -89,7 +89,7 @@ class Quest(ServiceCore[Quests], _Type):
 
         self.logs.service_quest.info(f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료")
 
-    async def complete_count(self, user: "User") -> int:
+    async def complete_count(self, user: User) -> int:
         """
         유저가 퀘스트를 몇 번 완료 했는지를 가져옵니다.
 
