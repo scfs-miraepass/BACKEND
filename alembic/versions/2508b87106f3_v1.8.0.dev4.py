@@ -6,9 +6,9 @@ Create Date: 2026-08-04 11:23:12.873678
 
 """
 
-from enum import Enum, IntFlag
+from collections.abc import Sequence
+from enum import IntFlag, StrEnum
 from logging import getLogger
-from typing import Sequence, Union
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import mysql
@@ -17,9 +17,9 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "2508b87106f3"
-down_revision: Union[str, Sequence[str], None] = "f91d6fc43436"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "f91d6fc43436"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 log = getLogger("alembic.runtime.migration")
 
@@ -68,7 +68,7 @@ class UserPermission(IntFlag):
     ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST
 
 
-class UserType(str, Enum):
+class UserType(StrEnum):
     student = "student"
     teacher = "teacher"
     service = "service"

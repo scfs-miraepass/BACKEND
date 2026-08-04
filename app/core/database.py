@@ -29,7 +29,7 @@ class DatabaseCore:
 
     @classmethod
     @asynccontextmanager
-    async def session(cls) -> AsyncGenerator[AsyncSession, None]:
+    async def session(cls) -> AsyncGenerator[AsyncSession]:
         if cls.AsyncSessionLocal is None:
             raise RuntimeError("Call DatabaseCore.initialize() first.")
 

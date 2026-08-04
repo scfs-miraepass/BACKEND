@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from pydantic import field_serializer
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from .users import Users
 
 
-class StampType(str, Enum):
+class StampType(StrEnum):
     """
     스탬프 종류 Enum
     - 부스 이름은 추후 수정될 수 있습니다.
@@ -38,12 +38,12 @@ class Stamps(SQLModel, table=True):
         description="스탬프 종류", sa_column=Column(String(20))
     )
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         description="스탬프 발급 일시",
     )
 
-    user: "Users" = Relationship(back_populates="stamps")
+    user: Users = Relationship(back_populates="stamps")
     user_id: int = Field(
         foreign_key="users.id",
         ondelete="CASCADE",

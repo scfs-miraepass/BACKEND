@@ -3,7 +3,6 @@ import os
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from sys import stdout
-from typing import Optional
 
 from .config import settings
 
@@ -156,7 +155,7 @@ class LoggerCore:
         cls,
         name: str = "root",
         *,
-        filename: Optional[str] = None,
+        filename: str | None = None,
         debug: bool = False,
         add_stream: bool = True,
         debug_level: int = logging.DEBUG,

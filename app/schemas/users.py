@@ -1,5 +1,5 @@
-from enum import Enum, IntFlag
-from typing import Any, List, Optional, cast
+from enum import IntFlag, StrEnum
+from typing import Any, cast
 
 from hangulpy import get_chosung_string, split_hangul_string
 from pydantic import field_serializer
@@ -14,7 +14,7 @@ from .quest import QuestCompletion, Quests
 from .stamp import Stamps
 
 
-class UserType(str, Enum):
+class UserType(StrEnum):
     student = "student"
     teacher = "teacher"
     service = "service"
@@ -120,7 +120,7 @@ class UserPermission(IntFlag):
 
 
 class User(SQLModel):
-    id: Optional[int] = Field(
+    id: int | None = Field(
         primary_key=True,
         default=None,
         description="고유 ID. 교사, 서비스의 경우 자동생성. 학생의 경우 학번 사용",
@@ -129,14 +129,14 @@ class User(SQLModel):
 
     type: UserType = Field(description="유저 종류 (학생, 교사, 서비스)", index=True)
     name: str = Field(description="이름")
-    grade: Optional[int] = Field(description="학년")
-    number: Optional[int] = Field(description="반")
+    grade: int | None = Field(description="학년")
+    number: int | None = Field(description="반")
     point: int = Field(0, description="보유 포인트")
     total_point: int = Field(0, description="누적 포인트")
 
     permissions: int = Field(UserPermission.NONE.value, description="관리자 여부")
 
-    history_type: Optional[PointHistoryType] = Field(
+    history_type: PointHistoryType | None = Field(
         None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입"
     )
 
@@ -163,34 +163,34 @@ class User(SQLModel):
 
 
 class Users(User, table=True):
-    password: Optional[str] = Field(description="비밀번호")
+    password: str | None = Field(description="비밀번호")
 
-    search: List["UserSearch"] = Relationship(
+    search: list[UserSearch] = Relationship(
         back_populates="user", passive_deletes=True
     )
-    history: List["PointHistory"] = Relationship(
+    history: list[PointHistory] = Relationship(
         back_populates="user", passive_deletes=True
     )
-    created_quest: List["Quests"] = Relationship(
+    created_quest: list[Quests] = Relationship(
         back_populates="author", passive_deletes=True
     )
-    completion_quest: List["QuestCompletion"] = Relationship(
+    completion_quest: list[QuestCompletion] = Relationship(
         back_populates="user", passive_deletes=True
     )
-    stamps: List["Stamps"] = Relationship(back_populates="user", passive_deletes=True)
+    stamps: list[Stamps] = Relationship(back_populates="user", passive_deletes=True)
 
-    posts: List["Posts"] = Relationship(back_populates="author")
+    posts: list[Posts] = Relationship(back_populates="author")
 
 
 class UserSearch(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)  # autoincrement
+    id: int | None = Field(default=None, primary_key=True)  # autoincrement
 
     user: Users = Relationship(back_populates="search")
     user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
     value: str = Field(index=True)
 
 
-def _generate_search_entries(target: Users) -> List[UserSearch]:
+def _generate_search_entries(target: Users) -> list[UserSearch]:
     decomposed = "".join(split_hangul_string(target.name.replace(" ", "")))
     chosung = get_chosung_string(target.name)
     return [

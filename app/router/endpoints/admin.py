@@ -1,5 +1,4 @@
 from math import ceil
-from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
@@ -18,7 +17,7 @@ from app.schemas.response import ErrorResponse, ResponseModel
 
 
 class AdminPointRequest(BaseModel):
-    user_ids: Optional[List[int]] = Field(
+    user_ids: list[int] | None = Field(
         None,
         description="포인트를 지급/차감할 학생 ID 목록. 전체 학생 대상일 경우 생략하거나 null/빈 리스트 전달",
     )
@@ -35,7 +34,7 @@ client = ServiceClient()
 
 @router.get(
     "/student",
-    response_model=ResponseModel[List[User]],
+    response_model=ResponseModel[list[User]],
     responses={
         200: {"description": "정상적으로 처리 됨"},
         403: {
@@ -82,7 +81,7 @@ async def get_students(
         result = await session.execute(query)
         users = result.scalars().all()
 
-    return ResponseModel[List[User]](success=True, data=users)
+    return ResponseModel[list[User]](success=True, data=users)
 
 
 @router.post(

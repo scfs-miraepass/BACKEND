@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, List, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from pydantic import field_serializer
 from sqlalchemy import Column, DateTime, Index, func
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 class Quests(SQLModel, table=True):
-    id: Optional[int] = Field(
+    id: int | None = Field(
         primary_key=True,
         default=None,
         description="퀘스트 고유 ID",
@@ -25,12 +25,12 @@ class Quests(SQLModel, table=True):
     max_repeat: int = Field(1, description="학생 당 최대 반복 완료 횟수")
 
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         description="퀘스트를 작성한 시간",
     )
 
-    author: "Users" = Relationship(back_populates="created_quest")
+    author: Users = Relationship(back_populates="created_quest")
     author_id: int = Field(
         foreign_key="users.id",
         ondelete="CASCADE",
@@ -38,7 +38,7 @@ class Quests(SQLModel, table=True):
         description="퀘스트 생성 유저의 고유 ID",
     )
 
-    completions: List["QuestCompletion"] = Relationship(
+    completions: list[QuestCompletion] = Relationship(
         back_populates="quest", passive_deletes=True
     )
 
@@ -54,14 +54,14 @@ class QuestCompletion(SQLModel, table=True):
         Index("ix_questcompletion_user_id_quest_id", "user_id", "quest_id"),
     )
 
-    id: Optional[int] = Field(
+    id: int | None = Field(
         primary_key=True,
         default=None,
         description="퀘스트 완료기록 고유 ID",
         index=True,
     )  # autoincrement
     completed_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         description="퀘스트 완료한 일자",
     )
@@ -74,7 +74,7 @@ class QuestCompletion(SQLModel, table=True):
         index=True,
     )
 
-    user: "Users" = Relationship(back_populates="completion_quest")
+    user: Users = Relationship(back_populates="completion_quest")
     user_id: int = Field(
         foreign_key="users.id",
         ondelete="CASCADE",

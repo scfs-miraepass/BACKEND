@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Any, List, cast
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
 from hangulpy import split_hangul_string
@@ -24,7 +24,7 @@ def normalize_and_decompose(query: str) -> str:
 
 @router.get(
     "",
-    response_model=ResponseModel[List[User]],
+    response_model=ResponseModel[list[User]],
     responses={
         200: {"description": "정상 처리"},
         401: {

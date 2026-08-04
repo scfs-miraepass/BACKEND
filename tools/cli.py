@@ -7,7 +7,6 @@ logging.disable(logging.CRITICAL)
 
 import asyncio
 import json
-from typing import Optional
 
 import typer
 from sqlalchemy import desc, select
@@ -68,9 +67,9 @@ def add_user(
     user_type: UserType = typer.Option(
         ..., help="사용자 유형 (student, teacher, or service)"
     ),
-    grade: Optional[int] = typer.Option(None, help="학년 (학생용)"),
-    number: Optional[int] = typer.Option(None, help="반 (학생용)"),
-    student_no: Optional[int] = typer.Option(None, help="학번 (학생용)"),
+    grade: int | None = typer.Option(None, help="학년 (학생용)"),
+    number: int | None = typer.Option(None, help="반 (학생용)"),
+    student_no: int | None = typer.Option(None, help="학번 (학생용)"),
 ):
     """
     새로운 사용자를 추가합니다.
@@ -172,7 +171,7 @@ def manage_point(
 
 @app.command()
 def list_users(
-    user_type: Optional[UserType] = typer.Option(
+    user_type: UserType | None = typer.Option(
         None, help="사용자 유형(student, teacher, service)으로 필터링"
     ),
     limit: int = typer.Option(50, help="반환할 최대 사용자 수"),
@@ -314,7 +313,7 @@ def reset_password(
 
 @app.command()
 def point_history(
-    user_id: Optional[int] = typer.Option(None, help="사용자 ID로 내역 필터링"),
+    user_id: int | None = typer.Option(None, help="사용자 ID로 내역 필터링"),
     limit: int = typer.Option(20, help="표시할 레코드 수"),
 ):
     """
