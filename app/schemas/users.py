@@ -9,9 +9,8 @@ from sqlmodel import Field, Relationship, SQLModel, delete
 from app.core import LoggerCore
 
 from .point import PointHistory, PointHistoryType
-from .quest import Quests, QuestCompletion, QuestAccept
 from .post import Posts
-from .quest import QuestCompletion, Quests
+from .quest import QuestAccept, QuestCompletion, Quests
 from .stamp import Stamps
 
 
@@ -156,10 +155,9 @@ class User(SQLModel):
     def __setattr__(self, name, value):
         if name == "point":
             current_point = getattr(self, "point", 0)
-            if value is not None and current_point is not None:
-                if value > current_point:
-                    diff = value - current_point
-                    self.total_point = getattr(self, "total_point", 0) + diff
+            if value is not None and current_point is not None and value > current_point:
+                diff = value - current_point
+                self.total_point = getattr(self, "total_point", 0) + diff
         super().__setattr__(name, value)
 
 

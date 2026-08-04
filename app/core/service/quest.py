@@ -3,11 +3,10 @@ from typing import TYPE_CHECKING, TypedDict, Unpack
 
 from sqlmodel import col, delete, func, select
 
-from app.schemas import Users, Quests, QuestCompletion, PointHistoryType, QuestAccept
+from app.schemas import PointHistoryType, QuestAccept, QuestCompletion, Quests, Users
 
 from ..core import ServiceCore
-from ..error import LimitExceeded, ExpiredError, NotFound
-
+from ..error import ExpiredError, LimitExceeded, NotFound
 
 if TYPE_CHECKING:
     from .user import User
@@ -130,7 +129,7 @@ class Quest(ServiceCore[Quests], _Type):
             users = list(result.scalars().all())
         return users
 
-    async def has_accepted(self, user: "User") -> bool:
+    async def has_accepted(self, user: User) -> bool:
         """
         해당 유저가 퀘스트를 수락했는지 여부를 반환합니다.
 
@@ -153,7 +152,7 @@ class Quest(ServiceCore[Quests], _Type):
             count = result.scalar_one()
         return count > 0
 
-    async def accept(self, user: "User"):
+    async def accept(self, user: User):
         """
         학생이 퀘스트를 수락하도록 기록합니다. 중복 수락은 허용하지 않습니다.
 
@@ -174,7 +173,7 @@ class Quest(ServiceCore[Quests], _Type):
         await self._cache_clear()
         self.logs.service_quest.info(f"퀘스트 수락 - {user.id}({user.name}) 가 {self.id} 수락")
 
-    async def cancel_accept(self, user: "User"):
+    async def cancel_accept(self, user: User):
         """
         해당 유저가 퀘스트 수락을 취소처리 합니다.
 

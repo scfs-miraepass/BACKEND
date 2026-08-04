@@ -3,7 +3,7 @@ from math import ceil
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
-from sqlmodel import func, select, col
+from sqlmodel import col, func, select
 
 from app.core import LoginDep, ServiceClient
 from app.core.error import ExpiredError, LimitExceeded
