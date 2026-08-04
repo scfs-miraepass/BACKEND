@@ -1,24 +1,23 @@
-from typing import TYPE_CHECKING
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from app.schemas import (
-    Users,
-    UserType,
     PointHistory,
     PointHistoryType,
-    Posts,
     PostContent,
+    Posts,
     Quests,
     UserPermission,
+    Users,
+    UserType,
 )
 
+from ..core import ServiceCore
+from ..error import Forbidden
+from ..security import get_password_hash
 from .history import History
 from .post import Post
 from .quest import Quest
-from ..core import ServiceCore
-from ..security import get_password_hash
-from ..error import Forbidden
-
 
 if TYPE_CHECKING:
     _Type = Users

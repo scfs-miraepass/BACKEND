@@ -1,9 +1,8 @@
-from pydantic import field_serializer
-
 from datetime import datetime, timezone
-from typing import List, Optional, TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, List, Optional
 
-from sqlalchemy import Column, DateTime, func, Index
+from pydantic import field_serializer
+from sqlalchemy import Column, DateTime, Index, func
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:

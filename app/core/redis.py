@@ -1,11 +1,11 @@
 import json
 from datetime import datetime
+from inspect import isawaitable
 from typing import Any
+
 from redis.asyncio import Redis
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
-
-from inspect import isawaitable
 
 from .config import settings
 from .loggers import LoggerCore

@@ -1,17 +1,18 @@
-from fastapi import APIRouter, HTTPException, status, Query, Response
-from sqlmodel import select, func, update, col
-from typing import List, Optional
-from pydantic import BaseModel, Field
 from math import ceil
+from typing import List, Optional
+
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
+from sqlmodel import col, func, select, update
 
 from app.core import LoginDep, ServiceClient
 from app.schemas import (
-    User,
-    Users,
-    UserType,
     PointHistory,
     PointHistoryType,
+    User,
     UserPermission,
+    Users,
+    UserType,
 )
 from app.schemas.response import ErrorResponse, ResponseModel
 

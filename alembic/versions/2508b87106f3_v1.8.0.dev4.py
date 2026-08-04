@@ -6,13 +6,14 @@ Create Date: 2026-08-04 11:23:12.873678
 
 """
 
+from enum import Enum, IntFlag
+from logging import getLogger
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-from logging import getLogger
-from enum import Enum, IntFlag
 from sqlalchemy.dialects import mysql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "2508b87106f3"

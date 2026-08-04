@@ -1,6 +1,7 @@
-from pydantic import Field, MySQLDsn, BaseModel, RedisDsn, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict, NoDecode
 from typing import Annotated
+
+from pydantic import BaseModel, Field, MySQLDsn, RedisDsn, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Database(BaseModel):

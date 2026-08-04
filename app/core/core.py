@@ -1,8 +1,8 @@
-from typing import TypeVar, Generic
+from typing import Generic, TypeVar
 
+from .database import DatabaseCore
 from .loggers import LoggerCore
 from .redis import RedisCore
-from .database import DatabaseCore
 
 T = TypeVar("T")
 

@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
-from typing import Optional, TYPE_CHECKING, Any
-from sqlalchemy import Column, DateTime, String, func
-from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum
+from typing import TYPE_CHECKING, Any, Optional
+
 from pydantic import field_serializer
+from sqlalchemy import Column, DateTime, String, func
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .users import Users

@@ -4,9 +4,11 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
+
 import pandas as pd
 from sqlalchemy import select
 from sqlmodel import col
+
 from app.core.config import settings
 
 settings.debug = False

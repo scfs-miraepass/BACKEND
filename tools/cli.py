@@ -1,25 +1,25 @@
 # ruff: noqa: E402
 
-import sys
-import os
 import logging
+import os
+import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 logging.disable(logging.CRITICAL)
 
 import asyncio
 import json
-import typer
 from typing import Optional
-from sqlalchemy import select, desc
+
+import typer
+from sqlalchemy import desc, select
 from sqlmodel import col
 
 from app.core import ServiceClient
-from app.core.service import History
 from app.core.config import settings
-from app.schemas.users import Users, UserType
+from app.core.service import History
 from app.schemas.point import PointHistory, PointHistoryType
-
+from app.schemas.users import Users, UserType
 
 # CLI를 실행할 때는 기본적으로 DB 쿼리 로그(echo)를 끕니다.
 settings.debug = False

@@ -1,8 +1,8 @@
 import logging
 import os
-from sys import stdout
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
+from sys import stdout
 from typing import Optional
 
 from .config import settings

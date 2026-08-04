@@ -1,10 +1,10 @@
 from sqlmodel import select
 
-from app.schemas import Users, Posts, Quests
+from app.schemas import Posts, Quests, Users
 
-from .core import BaseCore
-from .service import User, Post, Quest
 from .config import settings
+from .core import BaseCore
+from .service import Post, Quest, User
 
 
 class ServiceClient(BaseCore):

@@ -1,12 +1,12 @@
 from math import ceil
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
-from sqlmodel import func, col, select
-from typing import Any
+from sqlmodel import col, func, select
 
 from app.core import LoginDep, ServiceClient
-from app.schemas import PointHistory, Users, UserType, PointHistoryType, UserPermission
+from app.schemas import PointHistory, PointHistoryType, UserPermission, Users, UserType
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/point", tags=["users", "point"])

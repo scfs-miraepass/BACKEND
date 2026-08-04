@@ -1,17 +1,16 @@
-from tomllib import load
-from pathlib import Path
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+from tomllib import load
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from .router import router
 from .core import ServiceClient, settings
+from .router import router
 from .schemas.response import ErrorResponse
 
 scheduler = AsyncIOScheduler()

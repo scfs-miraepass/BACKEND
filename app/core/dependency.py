@@ -2,9 +2,9 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
+from .client import ServiceClient
 from .config import settings
 from .service import User
-from .client import ServiceClient
 
 
 async def verify_session(request: Request) -> tuple[User, str]:

@@ -1,13 +1,13 @@
 from math import ceil
 from typing import List
 
-from fastapi import APIRouter, status, HTTPException, Response, Query
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
-from sqlmodel import select, func
+from sqlmodel import func, select
 
 from app.core import LoginDep, ServiceClient
 from app.schemas import Posts, UserPermission
-from app.schemas.response import ResponseModel, ErrorResponse
+from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 client = ServiceClient()
