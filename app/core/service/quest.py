@@ -87,7 +87,9 @@ class Quest(ServiceCore[Quests], _Type):
             )
             session.add(QuestCompletion(quest_id=self.id, user_id=user.id))
 
-        self.logs.service_quest.info(f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료")
+        self.logs.service_quest.info(
+            f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료"
+        )
 
     async def complete_count(self, user: "User") -> int:
         """

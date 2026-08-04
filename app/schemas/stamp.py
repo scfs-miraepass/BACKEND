@@ -34,7 +34,9 @@ class StampType(str, Enum):
 
 class Stamps(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True, description="고유 ID")
-    stamp_type: StampType = Field(description="스탬프 종류", sa_column=Column(String(20)))
+    stamp_type: StampType = Field(
+        description="스탬프 종류", sa_column=Column(String(20))
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
@@ -43,7 +45,10 @@ class Stamps(SQLModel, table=True):
 
     user: "Users" = Relationship(back_populates="stamps")
     user_id: int = Field(
-        foreign_key="users.id", ondelete="CASCADE", index=True, description="스탬프를 받은 유저의 고유 ID"
+        foreign_key="users.id",
+        ondelete="CASCADE",
+        index=True,
+        description="스탬프를 받은 유저의 고유 ID",
     )
 
     @field_serializer("created_at")

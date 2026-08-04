@@ -59,16 +59,24 @@ async def create_stamp(
     async with client.session as session:
         user = await client.get_user(stamp_data.user_id, cache=True)
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
 
         # 2. 스탬프 중복 수령 확인
         existing_stamp = (
             await session.execute(
-                select(Stamps).where(Stamps.user_id == user.id, Stamps.stamp_type == stamp_data.stamp_type)
+                select(Stamps).where(
+                    Stamps.user_id == user.id,
+                    Stamps.stamp_type == stamp_data.stamp_type,
+                )
             )
         ).scalar_one_or_none()
         if existing_stamp is not None:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Stamp already exists for this user")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Stamp already exists for this user",
+            )
 
         # 3. 스탬프 생성 및 저장
         new_stamp = Stamps(user_id=user.id, stamp_type=stamp_data.stamp_type)
@@ -84,7 +92,9 @@ async def create_stamp(
         # 5. 보너스 포인트 지급 조건 확인
         # 현재 세션에 추가된 스탬프를 포함하여 개수를 세어야 하므로, DB 쿼리 후 +1
         user_stamps_count = (
-            await session.execute(select(func.count(Stamps.id)).where(Stamps.user_id == user.id))
+            await session.execute(
+                select(func.count(Stamps.id)).where(Stamps.user_id == user.id)
+            )
         ).one()[0]
         if user_stamps_count == BONUS_STAMP_COUNT:
             await user.point_grant(
@@ -94,7 +104,9 @@ async def create_stamp(
                 type=PointHistoryType.stamp_bonus,
             )
 
-    client.logs.service.info(f"{user.id}({user.name})가 '{stamp_data.stamp_type.value}' 스탬프를 받았습니다.")
+    client.logs.service.info(
+        f"{user.id}({user.name})가 '{stamp_data.stamp_type.value}' 스탬프를 받았습니다."
+    )
 
 
 @router.get(
@@ -109,7 +121,7 @@ async def create_stamp(
         403: {
             "model": ErrorResponse,
             "description": "권한이 없음",
-        }
+        },
     },
     status_code=status.HTTP_200_OK,
     summary="스탬프 목록",

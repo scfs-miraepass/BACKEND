@@ -49,7 +49,12 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=True,
+        ),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -60,7 +65,15 @@ def upgrade() -> None:
         "history_type",
         existing_type=mysql.ENUM("teacher", "cafe", "food", "etc", "grant"),
         type_=sa.Enum(
-            "teacher", "cafe", "food", "etc", "grant", "quest", "stamp", "stamp_bonus", name="pointhistorytype"
+            "teacher",
+            "cafe",
+            "food",
+            "etc",
+            "grant",
+            "quest",
+            "stamp",
+            "stamp_bonus",
+            name="pointhistorytype",
         ),
         existing_nullable=True,
     )
@@ -74,7 +87,15 @@ def downgrade() -> None:
         "users",
         "history_type",
         existing_type=sa.Enum(
-            "teacher", "cafe", "food", "etc", "grant", "quest", "stamp", "stamp_bonus", name="pointhistorytype"
+            "teacher",
+            "cafe",
+            "food",
+            "etc",
+            "grant",
+            "quest",
+            "stamp",
+            "stamp_bonus",
+            name="pointhistorytype",
         ),
         type_=mysql.ENUM("teacher", "cafe", "food", "etc", "grant"),
         existing_nullable=True,

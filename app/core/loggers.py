@@ -39,9 +39,7 @@ class CustomFormatter(logging.Formatter):
         elif record.levelno == logging.CRITICAL:
             level_color = self.bold_red
 
-        log_fmt = (
-            f"%(asctime)s | {level_color}%(levelname)-8s{self.reset} | {self.cyan}%(name)-30s{self.reset} | %(message)s"
-        )
+        log_fmt = f"%(asctime)s | {level_color}%(levelname)-8s{self.reset} | {self.cyan}%(name)-30s{self.reset} | %(message)s"
 
         formatter = logging.Formatter(log_fmt, datefmt=self.date_fmt)
         return formatter.format(record)
@@ -91,12 +89,22 @@ class LoggerCore:
 
         cls.global_ = self.get_logger("global", debug=settings.debug)
         cls.redis = self.get_logger("redis", debug=settings.debug)
-        cls.database = self.get_logger("database", filename="database", debug=settings.debug)
+        cls.database = self.get_logger(
+            "database", filename="database", debug=settings.debug
+        )
 
-        cls.service = self.get_logger("service", filename="service", debug=settings.debug)
-        cls.service_point = self.get_logger("service.point", filename="service", debug=settings.debug)
-        cls.service_post = self.get_logger("service.post", filename="service", debug=settings.debug)
-        cls.service_quest = self.get_logger("service.quest", filename="service", debug=settings.debug)
+        cls.service = self.get_logger(
+            "service", filename="service", debug=settings.debug
+        )
+        cls.service_point = self.get_logger(
+            "service.point", filename="service", debug=settings.debug
+        )
+        cls.service_post = self.get_logger(
+            "service.post", filename="service", debug=settings.debug
+        )
+        cls.service_quest = self.get_logger(
+            "service.quest", filename="service", debug=settings.debug
+        )
 
         cls.initialized = True
 
@@ -106,7 +114,9 @@ class LoggerCore:
         if not os.path.exists(path):
             try:
                 with open(path, "w", encoding="utf-8") as f:
-                    f.write(f"====== Log Initialized at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ======\n")
+                    f.write(
+                        f"====== Log Initialized at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ======\n"
+                    )
             except PermissionError:
                 # 다른 프로세스가 이미 파일을 생성/사용 중인 경우 무시
                 pass

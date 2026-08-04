@@ -49,7 +49,13 @@ async def import_students(session):
         existing_user = result.scalars().first()
 
         if not existing_user:
-            new_student = Users(id=student_id, type=UserType.student, name=name, grade=grade, number=number)
+            new_student = Users(
+                id=student_id,
+                type=UserType.student,
+                name=name,
+                grade=grade,
+                number=number,
+            )
             session.add(new_student)
             added_count += 1
 
@@ -81,14 +87,18 @@ async def import_teachers(session):
 
         # 이름으로 중복 확인
         result = await session.execute(
-            select(Users).where(col(Users.name) == name, col(Users.type) == UserType.teacher)
+            select(Users).where(
+                col(Users.name) == name, col(Users.type) == UserType.teacher
+            )
         )
         existing_user = result.scalars().first()
 
         if not existing_user:
             # 빈 ID 찾기 (4000번대)
             while True:
-                id_check = await session.execute(select(Users).where(col(Users.id) == current_teacher_id))
+                id_check = await session.execute(
+                    select(Users).where(col(Users.id) == current_teacher_id)
+                )
                 if not id_check.scalars().first():
                     break
                 current_teacher_id += 1

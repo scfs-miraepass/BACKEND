@@ -16,7 +16,13 @@ class ServiceClient(BaseCore):
         return cls.instance
 
     async def get_user(
-        self, /, _id: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
+        self,
+        /,
+        _id: int,
+        *,
+        cache: bool = False,
+        save_cache: bool = True,
+        lock: bool = False,
     ) -> User | None:
         """
         ID를 이용해 사용자를 가져옵니다.
@@ -52,7 +58,13 @@ class ServiceClient(BaseCore):
         return User(payload=payload)
 
     async def get_post(
-        self, /, _id: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
+        self,
+        /,
+        _id: int,
+        *,
+        cache: bool = False,
+        save_cache: bool = True,
+        lock: bool = False,
     ) -> Post | None:
         """
         ID를 이용해 게시글을 가져옵니다.
@@ -88,7 +100,13 @@ class ServiceClient(BaseCore):
         return Post(payload=payload)
 
     async def get_quest(
-        self, /, _id: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
+        self,
+        /,
+        _id: int,
+        *,
+        cache: bool = False,
+        save_cache: bool = True,
+        lock: bool = False,
     ) -> Quest | None:
         """
         ID를 이용해 퀘스트를 가져옵니다.

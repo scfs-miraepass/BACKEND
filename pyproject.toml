@@ -29,3 +29,10 @@ dev = [
 
 [tool.fastapi]
 entrypoint = "app.main:app"
+
+[tool.ruff.lint]
+
+# 무시할 규칙들
+ignore = [
+    "E402"
+]

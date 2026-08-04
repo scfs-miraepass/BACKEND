@@ -61,14 +61,20 @@ async def login(
 ):
     user = await client.get_user(form.id, cache=True)
 
-    if not user or not user.password or not verify_password(form.password, user.password):
+    if (
+        not user
+        or not user.password
+        or not verify_password(form.password, user.password)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
 
     session_id = str(uuid4())
-    await client.redis.set(f"session:{session_id}", user.id, ttl=settings.service.session.expire_seconds)
+    await client.redis.set(
+        f"session:{session_id}", user.id, ttl=settings.service.session.expire_seconds
+    )
     _set_session_cookie(response, session_id)
 
     return ResponseModel[User](success=True, data=user)
@@ -123,7 +129,9 @@ async def get_current_user(
     if 0 <= current_ttl < (settings.service.session.expire_seconds * 0.5):
         # 3. Redis 파이프라인을 사용하여 네트워크 왕복(RTT) 최소화
         async with client.redis.pipeline() as pipe:
-            pipe.expire(f"session:{session_id}", settings.service.session.expire_seconds)
+            pipe.expire(
+                f"session:{session_id}", settings.service.session.expire_seconds
+            )
             pipe.expire(f"user:{user.id}", settings.service.session.expire_seconds)
             await pipe.execute()
 
