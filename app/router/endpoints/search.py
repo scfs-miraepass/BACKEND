@@ -133,7 +133,9 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] | None = Query(N
 )
 async def teacher_get_by_name(user_name: str):
     async with client.session as session:
-        stmt = select(Users).where(Users.name == user_name, Users.type == UserType.teacher)
+        stmt = select(Users).where(
+            Users.name == user_name, Users.type == UserType.teacher
+        )
         result = await session.execute(stmt)
         teacher = result.scalar_one_or_none()
 

@@ -5,6 +5,7 @@ Revises: f91d6fc43436
 Create Date: 2026-08-04 11:23:12.873678
 
 """
+
 from collections.abc import Sequence
 from enum import IntFlag, StrEnum
 from logging import getLogger
@@ -15,38 +16,57 @@ from sqlalchemy.dialects import mysql
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '2508b87106f3'
-down_revision: str | Sequence[str] | None = 'f91d6fc43436'
+revision: str = "2508b87106f3"
+down_revision: str | Sequence[str] | None = "f91d6fc43436"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 log = getLogger("alembic.runtime.migration")
 
+
 class UserPermission(IntFlag):
     NONE = 0
 
-    SEARCH_USER = 2 ** 17
-    DEDUCT_POINT = 2 ** 0 | SEARCH_USER
-    GRANT_POINT = 2 ** 1 | SEARCH_USER
-    NO_LIMIT_POINT = 2 ** 2
-    CREATE_QUEST = 2 ** 3
-    MANAGE_QUEST = 2 ** 4
-    GIVE_STAMP = 2 ** 5 | SEARCH_USER
-    VIEW_RANK = 2 ** 6
-    VIEW_POINT = 2 ** 7
-    VIEW_POINT_HISTORY = 2 ** 8
-    MANAGE_POST = 2 ** 9
-    CREATE_POST = 2 ** 10
-    VIEW_USER_POINT = 2 ** 11 | SEARCH_USER
-    JOIN_QUEST = 2 ** 12
-    MANAGE_USER = 2 ** 13 | SEARCH_USER
-    VIEW_POST = 2 ** 14
-    VIEW_STAMP = 2 ** 15
-    VIEW_QUEST = 2 ** 16
+    SEARCH_USER = 2**17
+    DEDUCT_POINT = 2**0 | SEARCH_USER
+    GRANT_POINT = 2**1 | SEARCH_USER
+    NO_LIMIT_POINT = 2**2
+    CREATE_QUEST = 2**3
+    MANAGE_QUEST = 2**4
+    GIVE_STAMP = 2**5 | SEARCH_USER
+    VIEW_RANK = 2**6
+    VIEW_POINT = 2**7
+    VIEW_POINT_HISTORY = 2**8
+    MANAGE_POST = 2**9
+    CREATE_POST = 2**10
+    VIEW_USER_POINT = 2**11 | SEARCH_USER
+    JOIN_QUEST = 2**12
+    MANAGE_USER = 2**13 | SEARCH_USER
+    VIEW_POST = 2**14
+    VIEW_STAMP = 2**15
+    VIEW_QUEST = 2**16
 
-    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | JOIN_QUEST | VIEW_POST | VIEW_STAMP | VIEW_QUEST
-    TEACHER = GRANT_POINT | CREATE_QUEST | VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | VIEW_USER_POINT | VIEW_POST | VIEW_STAMP
+    STUDENT = (
+        VIEW_RANK
+        | VIEW_POINT
+        | VIEW_POINT_HISTORY
+        | JOIN_QUEST
+        | VIEW_POST
+        | VIEW_STAMP
+        | VIEW_QUEST
+    )
+    TEACHER = (
+        GRANT_POINT
+        | CREATE_QUEST
+        | VIEW_RANK
+        | VIEW_POINT
+        | VIEW_POINT_HISTORY
+        | VIEW_USER_POINT
+        | VIEW_POST
+        | VIEW_STAMP
+    )
     ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST
+
 
 class UserType(StrEnum):
     student = "student"
@@ -89,7 +109,7 @@ def upgrade() -> None:
         )
     log.info("Users permission migration completed")
 
-    op.drop_column('users', 'is_admin')
+    op.drop_column("users", "is_admin")
     # ### end Alembic commands ###
 
 
@@ -124,5 +144,5 @@ def downgrade() -> None:
         )
     log.info("Users permission migration completed")
 
-    op.drop_column('users', 'permissions')
+    op.drop_column("users", "permissions")
     # ### end Alembic commands ###

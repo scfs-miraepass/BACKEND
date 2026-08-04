@@ -26,14 +26,20 @@ def upgrade() -> None:
     op.create_table(
         "users",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("type", sa.Enum("student", "teacher", "service", name="usertype"), nullable=False),
+        sa.Column(
+            "type",
+            sa.Enum("student", "teacher", "service", name="usertype"),
+            nullable=False,
+        ),
         sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column("grade", sa.Integer(), nullable=True),
         sa.Column("number", sa.Integer(), nullable=True),
         sa.Column("point", sa.Integer(), nullable=False),
         sa.Column("is_admin", sa.Boolean(), nullable=False),
         sa.Column(
-            "history_type", sa.Enum("teacher", "cafe", "food", "etc", "grant", name="pointhistorytype"), nullable=True
+            "history_type",
+            sa.Enum("teacher", "cafe", "food", "etc", "grant", name="pointhistorytype"),
+            nullable=True,
         ),
         sa.Column("password", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
@@ -45,8 +51,17 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("changed_amount", sa.Integer(), nullable=False),
         sa.Column("reason", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("type", sa.Enum("teacher", "cafe", "food", "etc", "grant", name="pointhistorytype"), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column(
+            "type",
+            sa.Enum("teacher", "cafe", "food", "etc", "grant", name="pointhistorytype"),
+            nullable=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=True,
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )

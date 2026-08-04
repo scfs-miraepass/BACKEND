@@ -18,7 +18,9 @@ STUDENT_POINT_LIMIT = 1000
 class PointOperation(BaseModel):
     target_user_id: int
     amount: int = Field(..., gt=0, description="처리할 포인트")
-    change_type: PointHistoryType | None = Field(None, description="포인트를 처리하는 이유의 종류")
+    change_type: PointHistoryType | None = Field(
+        None, description="포인트를 처리하는 이유의 종류"
+    )
     memo: str | None = Field(None, description="포인트를 처리하는 이유")
 
 
@@ -28,7 +30,9 @@ class GetLimitResponse(BaseModel):
 
 
 class RankingResponse(BaseModel):
-    id: int = Field(description="고유 ID. 교사, 서비스의 경우 자동생성. 학생의 경우 학번 사용")
+    id: int = Field(
+        description="고유 ID. 교사, 서비스의 경우 자동생성. 학생의 경우 학번 사용"
+    )
     name: str = Field(description="이름")
     grade: int | None = Field(description="학년")
     number: int | None = Field(description="반")
@@ -62,7 +66,9 @@ async def get_limit(auth_data: LoginDep, target_user_id: int):
     if user.has_permission(UserPermission.NO_LIMIT_POINT):
         return ResponseModel[GetLimitResponse](
             success=True,
-            data=GetLimitResponse(limit=TEACHER_POINT_LIMIT, target_limit=student_limit),
+            data=GetLimitResponse(
+                limit=TEACHER_POINT_LIMIT, target_limit=student_limit
+            ),
         )
 
     limit_key = f"point_limit:teacher:{user.id}"
@@ -70,7 +76,9 @@ async def get_limit(auth_data: LoginDep, target_user_id: int):
     if limit is None:
         limit = TEACHER_POINT_LIMIT
 
-    return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=limit, target_limit=student_limit))
+    return ResponseModel[GetLimitResponse](
+        success=True, data=GetLimitResponse(limit=limit, target_limit=student_limit)
+    )
 
 
 @router.get(
@@ -173,12 +181,17 @@ async def grant_points(
     async with client.session:
         target_user = await client.get_user(operation.target_user_id, lock=True)
         if target_user is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found."
+            )
 
         reason = f"{user.name} 선생님" if user.type == UserType.teacher else user.name
 
         await target_user.point_grant(
-            amount=operation.amount, reason=reason, memo=operation.memo, type=operation.change_type
+            amount=operation.amount,
+            reason=reason,
+            memo=operation.memo,
+            type=operation.change_type,
         )
 
         back_limit_key = f"point_limit:teacher:{user.id}"
@@ -200,7 +213,9 @@ async def grant_points(
                 )
 
                 if user.has_permission(UserPermission.NO_LIMIT_POINT):
-                    await client.redis.set(back_limit_key, back_limit - back_amount, ttl=60 * 60 * 24 * 7)
+                    await client.redis.set(
+                        back_limit_key, back_limit - back_amount, ttl=60 * 60 * 24 * 7
+                    )
     await client.redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 1)
 
 
@@ -248,11 +263,16 @@ async def deduct_points(
     async with client.session:
         target_user = await client.get_user(operation.target_user_id, lock=True)
         if target_user is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found."
+            )
 
         try:
             await target_user.point_deduct(
-                amount=operation.amount, reason=user.name, memo=operation.memo, type=operation.change_type
+                amount=operation.amount,
+                reason=user.name,
+                memo=operation.memo,
+                type=operation.change_type,
             )
         except ValueError:
             raise HTTPException(
@@ -304,7 +324,11 @@ async def point_history(
             count = int(cached_count)
         else:
             # Cache Miss: DB 조회
-            query = select(func.count()).select_from(PointHistory).where(PointHistory.user_id == user.id)
+            query = (
+                select(func.count())
+                .select_from(PointHistory)
+                .where(PointHistory.user_id == user.id)
+            )
             result = await session.execute(query)
             count = result.scalar() or 0
             # 캐시 저장 (TTL: 1일)
@@ -358,7 +382,10 @@ async def _get_ranking(
             # 조건 추가
             conditions: Any = [Users.type == user_type]
             if user_type == UserType.teacher:
-                conditions.append(col(Users.permissions).op("&")(UserPermission.NO_LIMIT_POINT.value) == 0)
+                conditions.append(
+                    col(Users.permissions).op("&")(UserPermission.NO_LIMIT_POINT.value)
+                    == 0
+                )
             query = query.where(*conditions)
 
             result = await session.execute(query)
@@ -374,12 +401,17 @@ async def _get_ranking(
             # 서브쿼리 없이 Users 모델 전체와 rank를 바로 선택 (SQLModel / Pydantic 경고 방지 및 성능 개선)
             conditions: Any = [Users.type == user_type]
             if user_type == UserType.teacher:
-                conditions.append(col(Users.permissions).op("&")(UserPermission.NO_LIMIT_POINT.value) == 0)
+                conditions.append(
+                    col(Users.permissions).op("&")(UserPermission.NO_LIMIT_POINT.value)
+                    == 0
+                )
 
             query = (
                 select(
                     Users,
-                    func.dense_rank().over(order_by=col(Users.total_point).desc()).label("rank"),
+                    func.dense_rank()
+                    .over(order_by=col(Users.total_point).desc())
+                    .label("rank"),
                 )
                 # 페이지네이션 시 동일 포인트의 정렬이 변경되지 않도록 tie-breaker (id) 추가
                 .where(*conditions)
@@ -420,13 +452,15 @@ async def _get_ranking(
         403: {
             "model": ErrorResponse,
             "description": "권한이 없음",
-        }
+        },
     },
     status_code=status.HTTP_200_OK,
     summary="학생 포인트 랭킹 조회",
     description="학생들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
 )
-async def get_student_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+async def get_student_ranking(
+    auth: LoginDep, response: Response, limit: int = 20, offset: int = 0
+):
     user, _ = auth
     if not user.has_permission(UserPermission.VIEW_RANK):
         raise HTTPException(
@@ -451,7 +485,9 @@ async def get_student_ranking(auth: LoginDep, response: Response, limit: int = 2
     summary="교사 포인트 랭킹 조회",
     description="교사들의 누적 포인트를 기준으로 랭킹을 조회합니다.",
 )
-async def get_teacher_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+async def get_teacher_ranking(
+    auth: LoginDep, response: Response, limit: int = 20, offset: int = 0
+):
     user, _ = auth
     if not user.has_permission(UserPermission.VIEW_RANK):
         raise HTTPException(
@@ -490,6 +526,8 @@ async def get_point_balance(
 
     user = await client.get_user(target_user_id, cache=True)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     return ResponseModel[int](success=True, data=user.point)
