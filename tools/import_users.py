@@ -27,7 +27,7 @@ async def import_students(session):
     df = pd.read_excel(file_path)
 
     added_count = 0
-    for index, row in df.iterrows():
+    for _index, row in df.iterrows():
         # 컬럼명이 한글 '학년', '반', '번호', '이름'으로 구성되어 있음
         grade = row.get("학년")
         number = row.get("반")
@@ -77,7 +77,7 @@ async def import_teachers(session):
     current_teacher_id = 4000
     added_count = 0
 
-    for index, row in df.iterrows():
+    for _index, row in df.iterrows():
         # 컬럼명이 한글 '이름'으로 구성되어 있음
         name = row.get("이름")
 

@@ -31,8 +31,18 @@ dev = [
 entrypoint = "app.main:app"
 
 [tool.ruff.lint]
-
-# 무시할 규칙들
 ignore = [
-    "E402"
+    "E402",
+    "B904"
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "typer.Option"
 ]
