@@ -1,16 +1,16 @@
-from datetime import UTC, datetime
-from enum import StrEnum
+from sqlmodel import Field, SQLModel, Relationship
+from enum import Enum
 from typing import TYPE_CHECKING, Any
-
+from sqlalchemy import Column, DateTime, func, String
+from datetime import datetime, timezone
 from pydantic import field_serializer
-from sqlalchemy import Column, DateTime, String, func
-from sqlmodel import Field, Relationship, SQLModel
+
 
 if TYPE_CHECKING:
     from .users import Users
 
 
-class StampType(StrEnum):
+class StampType(str, Enum):
     """
     스탬프 종류 Enum
     - 부스 이름은 추후 수정될 수 있습니다.
@@ -34,21 +34,16 @@ class StampType(StrEnum):
 
 class Stamps(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True, description="고유 ID")
-    stamp_type: StampType = Field(
-        description="스탬프 종류", sa_column=Column(String(20))
-    )
+    stamp_type: StampType = Field(description="스탬프 종류", sa_column=Column(String(20)))
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
+        default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         description="스탬프 발급 일시",
     )
 
-    user: Users = Relationship(back_populates="stamps")
+    user: "Users" = Relationship(back_populates="stamps")
     user_id: int = Field(
-        foreign_key="users.id",
-        ondelete="CASCADE",
-        index=True,
-        description="스탬프를 받은 유저의 고유 ID",
+        foreign_key="users.id", ondelete="CASCADE", index=True, description="스탬프를 받은 유저의 고유 ID"
     )
 
     @field_serializer("created_at")

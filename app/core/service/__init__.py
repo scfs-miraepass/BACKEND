@@ -1,6 +1,6 @@
-from .history import History
+from .user import User
 from .post import Post
 from .quest import Quest
-from .user import User
+from .history import History
 
-__all__ = ["History", "Post", "Quest", "User"]
+__all__ = ["User", "Post", "Quest", "History"]

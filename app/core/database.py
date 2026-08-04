@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.pool import NullPool
-
 from .config import settings
 from .loggers import LoggerCore
 
@@ -29,7 +28,7 @@ class DatabaseCore:
 
     @classmethod
     @asynccontextmanager
-    async def session(cls) -> AsyncGenerator[AsyncSession]:
+    async def session(cls) -> AsyncGenerator[AsyncSession, None]:
         if cls.AsyncSessionLocal is None:
             raise RuntimeError("Call DatabaseCore.initialize() first.")
 

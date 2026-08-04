@@ -1,8 +1,8 @@
-from typing import TypeVar
+from typing import TypeVar, Generic
 
-from .database import DatabaseCore
 from .loggers import LoggerCore
 from .redis import RedisCore
+from .database import DatabaseCore
 
 T = TypeVar("T")
 
@@ -26,7 +26,7 @@ class BaseCore:
         await self.database.dispose()
 
 
-class ServiceCore[T](BaseCore):
+class ServiceCore(BaseCore, Generic[T]):
     def __new__(cls, payload: T | None):
         if payload is None:
             return None

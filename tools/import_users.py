@@ -1,13 +1,12 @@
+# ruff: noqa: E402
 import os
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
-
 import pandas as pd
 from sqlalchemy import select
 from sqlmodel import col
-
 from app.core.config import settings
 
 settings.debug = False
@@ -27,7 +26,7 @@ async def import_students(session):
     df = pd.read_excel(file_path)
 
     added_count = 0
-    for _index, row in df.iterrows():
+    for index, row in df.iterrows():
         # 컬럼명이 한글 '학년', '반', '번호', '이름'으로 구성되어 있음
         grade = row.get("학년")
         number = row.get("반")
@@ -50,13 +49,7 @@ async def import_students(session):
         existing_user = result.scalars().first()
 
         if not existing_user:
-            new_student = Users(
-                id=student_id,
-                type=UserType.student,
-                name=name,
-                grade=grade,
-                number=number,
-            )
+            new_student = Users(id=student_id, type=UserType.student, name=name, grade=grade, number=number)
             session.add(new_student)
             added_count += 1
 
@@ -77,7 +70,7 @@ async def import_teachers(session):
     current_teacher_id = 4000
     added_count = 0
 
-    for _index, row in df.iterrows():
+    for index, row in df.iterrows():
         # 컬럼명이 한글 '이름'으로 구성되어 있음
         name = row.get("이름")
 
@@ -88,18 +81,14 @@ async def import_teachers(session):
 
         # 이름으로 중복 확인
         result = await session.execute(
-            select(Users).where(
-                col(Users.name) == name, col(Users.type) == UserType.teacher
-            )
+            select(Users).where(col(Users.name) == name, col(Users.type) == UserType.teacher)
         )
         existing_user = result.scalars().first()
 
         if not existing_user:
             # 빈 ID 찾기 (4000번대)
             while True:
-                id_check = await session.execute(
-                    select(Users).where(col(Users.id) == current_teacher_id)
-                )
+                id_check = await session.execute(select(Users).where(col(Users.id) == current_teacher_id))
                 if not id_check.scalars().first():
                     break
                 current_teacher_id += 1
