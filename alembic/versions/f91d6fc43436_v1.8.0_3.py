@@ -1,8 +1,8 @@
-"""stamp Type String
+"""v1.8.0 #3 (stamps.stamp_type type change)
 
 Revision ID: f91d6fc43436
 Revises: baaa7b1aacf8
-Create Date: 2026-07-13 23:07:46.385352
+Create Date: 2026-07-13 23:07:46.385352WW
 
 """
 

@@ -1,4 +1,4 @@
-"""quests, posts tables add
+"""v1.6.0 #2 (Quest, Posts tables add)
 
 Revision ID: b4da6e37f3a6
 Revises: 6949eef9a311

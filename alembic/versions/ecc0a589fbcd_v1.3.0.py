@@ -1,4 +1,4 @@
-"""users.total_point ADD
+"""v1.3.0 (users.total_point add)
 
 Revision ID: ecc0a589fbcd
 Revises: 38c026e839e6
