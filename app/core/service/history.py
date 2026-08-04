@@ -1,5 +1,6 @@
-from sqlmodel import delete, col
 from typing import TYPE_CHECKING
+
+from sqlmodel import col, delete
 
 from app.schemas import PointHistory, Users, UserType
 

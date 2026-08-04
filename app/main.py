@@ -1,17 +1,16 @@
-from tomllib import load
-from pathlib import Path
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+from tomllib import load
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from .router import router
 from .core import ServiceClient, settings
+from .router import router
 from .schemas.response import ErrorResponse
 
 scheduler = AsyncIOScheduler()
@@ -23,7 +22,9 @@ with open(pyproject_path, "rb") as f:
     pyproject_data = load(f)
     app_version = pyproject_data.get("project", {}).get("version")
     if not app_version:
-        raise KeyError("Failed to find 'version' in [project] section of pyproject.toml")
+        raise KeyError(
+            "Failed to find 'version' in [project] section of pyproject.toml"
+        )
 
 
 @scheduler.scheduled_job(CronTrigger(day_of_week="mon", hour=0, minute=0))
@@ -67,7 +68,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-MAX-PAGE", "X-Server-Version", "X-CACHED"],  # 클라이언트가 읽을 수 있도록 허용
+    expose_headers=[
+        "X-MAX-PAGE",
+        "X-Server-Version",
+        "X-CACHED",
+    ],  # 클라이언트가 읽을 수 있도록 허용
 )
 
 
@@ -87,7 +92,9 @@ if not settings.debug:
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
-        client.logs.global_.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+        client.logs.global_.error(
+            "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
+        )
 
     sys.excepthook = handle_exception
 
@@ -96,30 +103,15 @@ if not settings.debug:
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
-        content=ErrorResponse(success=False, message=exc.detail or "No Message").model_dump(),
+        content=ErrorResponse(
+            success=False, message=exc.detail or "No Message"
+        ).model_dump(),
     )
 
 
 @app.get("/")
 async def read_root():
     return {"message": "Hello, World!"}
-
-
-# from .core import SessionDep
-# from .schemas import Users, UserType
-# @app.get("/test")
-# async def test(session: SessionDep):
-#
-#     # 1101~3699 : 학생
-#     # 4000~4999 : 교사
-#     # 5000~ : 서비스
-#
-#     # 테스트 학생
-#     # session.add(Users(id=3601, type=UserType.student, name="홍길동", grade=3, number=6))
-#
-#     # 테스트 서비스
-#     session.add(Users(type=UserType.service, name="카페테리아", id=5000))
-#     await session.commit()
 
 
 app.include_router(router)

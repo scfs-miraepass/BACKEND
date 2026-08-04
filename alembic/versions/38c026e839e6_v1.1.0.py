@@ -6,18 +6,18 @@ Create Date: 2026-05-18 23:35:22.169617
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 import sqlmodel
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "38c026e839e6"
-down_revision: Union[str, Sequence[str], None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -26,14 +26,20 @@ def upgrade() -> None:
     op.create_table(
         "users",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("type", sa.Enum("student", "teacher", "service", name="usertype"), nullable=False),
+        sa.Column(
+            "type",
+            sa.Enum("student", "teacher", "service", name="usertype"),
+            nullable=False,
+        ),
         sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column("grade", sa.Integer(), nullable=True),
         sa.Column("number", sa.Integer(), nullable=True),
         sa.Column("point", sa.Integer(), nullable=False),
         sa.Column("is_admin", sa.Boolean(), nullable=False),
         sa.Column(
-            "history_type", sa.Enum("teacher", "cafe", "food", "etc", "grant", name="pointhistorytype"), nullable=True
+            "history_type",
+            sa.Enum("teacher", "cafe", "food", "etc", "grant", name="pointhistorytype"),
+            nullable=True,
         ),
         sa.Column("password", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
@@ -45,8 +51,17 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("changed_amount", sa.Integer(), nullable=False),
         sa.Column("reason", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("type", sa.Enum("teacher", "cafe", "food", "etc", "grant", name="pointhistorytype"), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column(
+            "type",
+            sa.Enum("teacher", "cafe", "food", "etc", "grant", name="pointhistorytype"),
+            nullable=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=True,
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )

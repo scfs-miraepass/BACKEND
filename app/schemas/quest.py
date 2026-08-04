@@ -1,9 +1,8 @@
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
 from pydantic import field_serializer
-
-from datetime import datetime, timezone
-from typing import List, Optional, TYPE_CHECKING, Any
-
-from sqlalchemy import Column, DateTime, func, Index
+from sqlalchemy import Column, DateTime, Index, func
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -11,7 +10,7 @@ if TYPE_CHECKING:
 
 
 class Quests(SQLModel, table=True):
-    id: Optional[int] = Field(
+    id: int | None = Field(
         primary_key=True,
         default=None,
         description="퀘스트 고유 ID",
@@ -25,12 +24,12 @@ class Quests(SQLModel, table=True):
     end_date: datetime = Field(..., description="퀘스트 종료 날짜", index=True)
 
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         description="퀘스트를 작성한 시간",
     )
 
-    author: "Users" = Relationship(back_populates="created_quest")
+    author: Users = Relationship(back_populates="created_quest")
     author_id: int = Field(
         foreign_key="users.id",
         ondelete="CASCADE",
@@ -57,14 +56,14 @@ class QuestCompletion(SQLModel, table=True):
         Index("ix_questcompletion_user_id_quest_id", "user_id", "quest_id"),
     )
 
-    id: Optional[int] = Field(
+    id: int | None = Field(
         primary_key=True,
         default=None,
         description="퀘스트 완료기록 고유 ID",
         index=True,
     )
     completed_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         description="퀘스트 완료한 일자",
     )
@@ -77,7 +76,7 @@ class QuestCompletion(SQLModel, table=True):
         index=True,
     )
 
-    user: "Users" = Relationship(back_populates="completion_quest")
+    user: Users = Relationship(back_populates="completion_quest")
     user_id: int = Field(
         foreign_key="users.id",
         ondelete="CASCADE",

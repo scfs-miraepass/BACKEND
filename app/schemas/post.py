@@ -1,15 +1,16 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, func
-from sqlmodel import Field, SQLModel, Relationship, ForeignKey, Integer, JSON
-from typing import Optional, Any, TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
 from pydantic import field_serializer
+from sqlalchemy import Column, DateTime, func
+from sqlmodel import JSON, Field, ForeignKey, Integer, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .users import Users
 
 
 class Post(SQLModel):
-    id: Optional[int] = Field(
+    id: int | None = Field(
         primary_key=True,
         default=None,
         description="게시글 고유 ID",
@@ -21,12 +22,12 @@ class Post(SQLModel):
 
     # 시간 관련 데이터
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         description="게시글이 작성된 시간",
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
@@ -43,13 +44,13 @@ class Post(SQLModel):
 
 
 class Posts(Post, table=True):
-    content: Optional["PostContent"] = Relationship(
+    content: PostContent | None = Relationship(
         back_populates="post",
         sa_relationship_kwargs={"uselist": False},
         passive_deletes=True,
     )
 
-    author: "Users" = Relationship(back_populates="posts")
+    author: Users = Relationship(back_populates="posts")
     author_id: int = Field(
         foreign_key="users.id",
         ondelete="CASCADE",
@@ -60,11 +61,15 @@ class Posts(Post, table=True):
 
 class PostContent(SQLModel, table=True):
     # 관계
-    post: "Posts" = Relationship(back_populates="content")
+    post: Posts = Relationship(back_populates="content")
     post_id: int = Field(
-        sa_column=Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True),
+        sa_column=Column(
+            Integer, ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
+        ),
         description="연결된 게시글 고유 ID",
     )
 
     # JSON 내용
-    data: dict = Field(..., description="게시글의 내용 JSON 데이터", sa_column=Column(JSON))
+    data: dict = Field(
+        ..., description="게시글의 내용 JSON 데이터", sa_column=Column(JSON)
+    )

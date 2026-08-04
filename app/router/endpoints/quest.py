@@ -1,6 +1,5 @@
 from datetime import datetime
 from math import ceil
-from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
@@ -25,11 +24,11 @@ class QuestOperation(BaseModel):
 
 
 class QuestUpdate(BaseModel):
-    title: Optional[str] = Field(None, description="퀘스트 제목")
-    description: Optional[str] = Field(None, description="퀘스트 내용")
-    reward: Optional[int] = Field(None, gt=0, description="퀘스트 보상(포인트)")
-    end_date: Optional[datetime] = Field(None, description="퀘스트 종료 날짜")
-    max_repeat: Optional[int] = Field(None, ge=1, description="퀘스트 반복 가능 횟수")
+    title: str | None = Field(None, description="퀘스트 제목")
+    description: str | None = Field(None, description="퀘스트 내용")
+    reward: int | None = Field(None, gt=0, description="퀘스트 보상(포인트)")
+    end_date: datetime | None = Field(None, description="퀘스트 종료 날짜")
+    max_repeat: int | None = Field(None, ge=1, description="퀘스트 반복 가능 횟수")
 
 
 @router.post(
@@ -79,7 +78,7 @@ async def create_quest(
 
 @router.get(
     "",
-    response_model=ResponseModel[List[Quests]],
+    response_model=ResponseModel[list[Quests]],
     responses={
         200: {"description": "퀘스트 목록 조회 성공"},
         401: {
