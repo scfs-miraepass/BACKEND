@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -9,7 +9,7 @@ class ResponsePayload(BaseModel):
     success: bool
 
 
-class ResponseModel(ResponsePayload, Generic[Data]):
+class ResponseModel[Data](ResponsePayload):
     data: Data = Field(description="응답 데이터")
 
 

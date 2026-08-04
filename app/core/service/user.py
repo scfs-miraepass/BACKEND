@@ -1,15 +1,23 @@
-from typing import TYPE_CHECKING
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from app.schemas import Users, UserType, PointHistory, PointHistoryType, Posts, PostContent, Quests, UserPermission
+from app.schemas import (
+    PointHistory,
+    PointHistoryType,
+    PostContent,
+    Posts,
+    Quests,
+    UserPermission,
+    Users,
+    UserType,
+)
 
+from ..core import ServiceCore
+from ..error import Forbidden
+from ..security import get_password_hash
 from .history import History
 from .post import Post
 from .quest import Quest
-from ..core import ServiceCore
-from ..security import get_password_hash
-from ..error import Forbidden
-
 
 if TYPE_CHECKING:
     _Type = Users
@@ -76,7 +84,12 @@ class User(ServiceCore[Users], _Type):
         return History(payload=obj)
 
     async def point_grant(
-        self, amount: int, *, reason: str, memo: str | None = None, type: PointHistoryType | None = None
+        self,
+        amount: int,
+        *,
+        reason: str,
+        memo: str | None = None,
+        type: PointHistoryType | None = None,
     ):
         """
         포인트를 지급합니다.
@@ -94,17 +107,26 @@ class User(ServiceCore[Users], _Type):
             user = await session.merge(self._payload)
             user.point += amount
 
-            history = await self.create_history(changed=amount, reason=reason, memo=memo, type=type)
+            history = await self.create_history(
+                changed=amount, reason=reason, memo=memo, type=type
+            )
 
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{str(user.type)}:*")
+            await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
 
-        self.logs.service_point.info(f"포인트 지급 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
+        self.logs.service_point.info(
+            f"포인트 지급 - {self.name}({self.id}) +{amount} (기록 ID {history.id})"
+        )
         self._payload = user
 
     async def point_deduct(
-        self, amount: int, *, reason: str, memo: str | None = None, type: PointHistoryType | None = None
+        self,
+        amount: int,
+        *,
+        reason: str,
+        memo: str | None = None,
+        type: PointHistoryType | None = None,
     ):
         """
         포인트를 차감합니다.
@@ -128,13 +150,17 @@ class User(ServiceCore[Users], _Type):
             user = await session.merge(self._payload)
             user.point -= amount
 
-            history = await self.create_history(changed=(amount * -1), reason=reason, memo=memo, type=type)
+            history = await self.create_history(
+                changed=(amount * -1), reason=reason, memo=memo, type=type
+            )
 
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{str(user.type)}:*")
+            await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
 
-        self.logs.service_point.info(f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
+        self.logs.service_point.info(
+            f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})"
+        )
         self._payload = user
 
     async def create_post(self, *, title: str, content: dict) -> Post:
@@ -164,7 +190,13 @@ class User(ServiceCore[Users], _Type):
         return Post(payload=obj)
 
     async def create_quest(
-        self, *, title: str, description: str, reward: int, end_date: datetime, max_repeat: int = 1
+        self,
+        *,
+        title: str,
+        description: str,
+        reward: int,
+        end_date: datetime,
+        max_repeat: int = 1,
     ) -> Quest:
         """
         **[교사 전용]**
@@ -242,7 +274,9 @@ class User(ServiceCore[Users], _Type):
         await self.redis.delete(f"user:{self.id}")
         self._payload = user
 
-        self.logs.service.info(f"{self.id}({self.name})의 권한을 추가했습니다. (+{perm.name})")
+        self.logs.service.info(
+            f"{self.id}({self.name})의 권한을 추가했습니다. (+{perm.name})"
+        )
 
     async def remove_permission(self, perm: UserPermission | int):
         """
@@ -266,4 +300,6 @@ class User(ServiceCore[Users], _Type):
         await self.redis.delete(f"user:{self.id}")
         self._payload = user
 
-        self.logs.service.info(f"{self.id}({self.name})의 권한을 제거했습니다. (-{perm.name})")
+        self.logs.service.info(
+            f"{self.id}({self.name})의 권한을 제거했습니다. (-{perm.name})"
+        )
