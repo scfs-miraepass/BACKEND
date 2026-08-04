@@ -44,7 +44,7 @@ class Post(SQLModel):
 
 
 class Posts(Post, table=True):
-    content: PostContent | None = Relationship(
+    content: "PostContent" = Relationship(
         back_populates="post",
         sa_relationship_kwargs={"uselist": False},
         passive_deletes=True,
