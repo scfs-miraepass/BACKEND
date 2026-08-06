@@ -2,7 +2,7 @@ from math import ceil
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
-from sqlmodel import col, func, select, update
+from sqlmodel import col, func, select, update, delete
 
 from app.core import LoginDep, ServiceClient
 from app.schemas import (
@@ -23,6 +23,14 @@ class AdminPointRequest(BaseModel):
     )
     amount: int = Field(..., description="변동될 포인트 (양수는 지급, 음수는 차감)")
     reason: str = Field(..., description="포인트 변동 사유")
+
+
+class AdminUserCreateRequest(BaseModel):
+    name: str = Field(..., description="사용자 이름")
+    user_type: UserType = Field(..., description="사용자 유형 (student, teacher, service)")
+    grade: int | None = Field(None, description="학년 (학생인 경우 필수)")
+    number: int | None = Field(None, description="반 (학생인 경우 필수)")
+    student_no: int | None = Field(None, description="번호 (학생인 경우 필수)")
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -47,9 +55,7 @@ async def get_users(
     response: Response,
     auth_data: LoginDep,
     page: int = Query(1, ge=1, description="페이지 번호"),
-    size: int = Query(
-        20, ge=1, le=100, description="페이지 당 유저 데이터 갯수 (최대 100)"
-    ),
+    size: int = Query(20, ge=1, le=100, description="페이지 당 유저 데이터 갯수 (최대 100)"),
     user_type: UserType | None = Query(None, description="유저 타입 필터 (student, teacher, service)"),
     permission: UserPermission | None = Query(None, description="유저 권한 필터 (해당 권한을 포함하는 유저 검색)"),
 ):
@@ -65,7 +71,7 @@ async def get_users(
         if user_type is not None:
             conditions.append(Users.type == user_type)
         if permission is not None:
-            conditions.append(Users.permissions.op("&")(permission.value) == permission.value)
+            conditions.append(col(Users.permissions).op("&")(permission.value) == permission.value)
 
         count_query = select(func.count()).select_from(Users)
         query = select(Users)
@@ -77,7 +83,7 @@ async def get_users(
         total_count = (await session.execute(count_query)).scalar_one()
         max_page = ceil(total_count / size) if total_count > 0 else 1
         response.headers["X-MAX-PAGE"] = str(max_page)
-        
+
         offset = (page - 1) * size
         query = query.offset(offset).limit(size)
 
@@ -126,16 +132,12 @@ async def update_users_point(request: AdminPointRequest, auth_data: LoginDep):
             )
 
         target_ids = [u.id for u in target_users]
-        
+
         values = {"point": Users.point + request.amount}
         if request.amount > 0:
             values["total_point"] = Users.total_point + request.amount
 
-        update_stmt = (
-            update(Users)
-            .where(col(Users.id).in_(target_ids))
-            .values(**values)
-        )
+        update_stmt = update(Users).where(col(Users.id).in_(target_ids)).values(**values)
         await session.execute(update_stmt)
 
         history_entries = [
@@ -148,12 +150,169 @@ async def update_users_point(request: AdminPointRequest, auth_data: LoginDep):
             for uid in target_ids
         ]
         session.add_all(history_entries)
-        
+
         for uid in target_ids:
             await client.redis.delete(f"user:{uid}")
             await client.redis.delete(f"point_history_count:{uid}")
             await client.redis.delete_pattern(f"point_history:{uid}:*")
-        
+
         await client.redis.delete_pattern("ranking:student:*")
         await client.redis.delete_pattern("ranking:teacher:*")
-                
+
+
+@router.post(
+    "/user",
+    response_model=ResponseModel[User],
+    responses={
+        201: {"description": "사용자 생성 완료"},
+        400: {
+            "model": ErrorResponse,
+            "description": "Invalid request parameters",
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "Permission denied",
+        },
+        409: {
+            "model": ErrorResponse,
+            "description": "User already exists (e.g., duplicated student ID)",
+        },
+    },
+    status_code=status.HTTP_201_CREATED,
+    summary="사용자 생성",
+    description="새로운 사용자를 생성합니다. (단일 사용자 생성)",
+)
+async def create_user(request: AdminUserCreateRequest, auth_data: LoginDep):
+    user, _ = auth_data
+    if not user.has_permission(UserPermission.MANAGE_USER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    async with client.session as session:
+        if request.user_type == UserType.student:
+            if not all([request.grade, request.number, request.student_no]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Grade, class number, and student number are required for a student user.",
+                )
+
+            user_id = int(f"{request.grade}{request.number}{request.student_no:02d}")
+            existing_user = await session.get(Users, user_id)
+            if existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"User with ID {user_id} already exists.",
+                )
+
+            new_user = Users(
+                id=user_id,
+                type=UserType.student,
+                name=request.name,
+                grade=request.grade,
+                number=request.number,
+            )
+        elif request.user_type == UserType.teacher:
+            current_id = 4000
+            while True:
+                id_check = await session.get(Users, current_id)
+                if not id_check:
+                    break
+                current_id += 1
+            new_user = Users(id=current_id, type=UserType.teacher, name=request.name)
+        elif request.user_type == UserType.service:
+            current_id = 5000
+            while True:
+                id_check = await session.get(Users, current_id)
+                if not id_check:
+                    break
+                current_id += 1
+            new_user = Users(id=current_id, type=UserType.service, name=request.name)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported user type.",
+            )
+
+        session.add(new_user)
+
+    return ResponseModel[User](success=True, data=new_user)
+
+
+@router.patch(
+    "/users/{user_id}/password",
+    responses={
+        204: {"description": "정상 처리 (비밀번호 초기화됨)"},
+        403: {
+            "model": ErrorResponse,
+            "description": "Permission denied",
+        },
+        404: {
+            "model": ErrorResponse,
+            "description": "User not found",
+        },
+    },
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="사용자 비밀번호 초기화",
+    description="특정 사용자의 비밀번호를 초기화(None으로 설정)합니다. 이후 사용자가 처음 로그인할 때 새로 설정하게 됩니다.",
+)
+async def reset_user_password(user_id: int, auth_data: LoginDep):
+    user, _ = auth_data
+    if not user.has_permission(UserPermission.MANAGE_USER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    async with client.session:
+        target_user = await client.get_user(user_id)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with ID {user_id} not found.",
+            )
+
+        await target_user.update_password(None)
+
+
+@router.delete(
+    "/users/{user_id}",
+    responses={
+        204: {"description": "정상 처리"},
+        403: {
+            "model": ErrorResponse,
+            "description": "Permission denied",
+        },
+        404: {
+            "model": ErrorResponse,
+            "description": "User not found",
+        },
+    },
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="사용자 삭제",
+    description="특정 사용자를 삭제합니다.",
+)
+async def delete_user(user_id: int, auth_data: LoginDep):
+    user, _ = auth_data
+    if not user.has_permission(UserPermission.MANAGE_USER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    async with client.session as session:
+        target_user = await client.get_user(user_id)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with ID {user_id} not found.",
+            )
+
+        exc = delete(Users).where(col(Users.id) == target_user.id)
+        await session.execute(exc)
+
+    await client.redis.delete(f"user:{target_user.id}")
+    await client.redis.delete(f"point_history_count:{target_user.id}")
+    await client.redis.delete_pattern(f"point_history:{target_user.id}:*")
+    await client.redis.delete_pattern(f"ranking:{target_user.type!s}:*")
