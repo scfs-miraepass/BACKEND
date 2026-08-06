@@ -10,6 +10,8 @@ from .core import SchemaCore
 if TYPE_CHECKING:
     from .users import Users
 
+# TODO: 사용자 수정과 등등 처리 로그 추가 좀 (26.08.07 1:37)
+
 
 class Post(SQLModel):
     id: int | None = Field(
