@@ -30,58 +30,6 @@ client = ServiceClient()
 
 
 @router.get(
-    "/student",
-    response_model=ResponseModel[list[User]],
-    responses={
-        200: {"description": "정상적으로 처리 됨"},
-        403: {
-            "model": ErrorResponse,
-            "description": "권한 거부",
-        },
-    },
-    status_code=status.HTTP_200_OK,
-    summary="학생 목록",
-    description="전체 학생 목록을 조회합니다.",
-)
-async def get_students(
-    response: Response,
-    auth_data: LoginDep,
-    page: int = Query(1, ge=1, description="페이지 번호"),
-    size: int = Query(
-        20, ge=1, le=100, description="페이지 당 유저 데이터 갯수 (최대 100)"
-    ),
-):
-    user, _ = auth_data
-    if not user.has_permission(UserPermission.MANAGE_USER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
-        )
-
-    async with client.session as session:
-        count_query = (
-            select(func.count())
-            .select_from(Users)
-            .where(Users.type == UserType.student)
-        )
-        total_count = (await session.execute(count_query)).scalar_one()
-        max_page = ceil(total_count / size) if total_count > 0 else 1
-        response.headers["X-MAX-PAGE"] = str(max_page)
-        offset = (page - 1) * size
-        query = (
-            select(Users)
-            .where(Users.type == UserType.student)
-            .offset(offset)
-            .limit(size)
-        )
-
-        result = await session.execute(query)
-        users = result.scalars().all()
-
-    return ResponseModel[list[User]](success=True, data=users)
-
-
-@router.get(
     "/users",
     response_model=ResponseModel[list[User]],
     responses={
