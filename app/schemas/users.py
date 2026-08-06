@@ -2,9 +2,10 @@ from enum import IntFlag, StrEnum
 from typing import Any, cast
 
 from hangulpy import get_chosung_string, split_hangul_string
-from pydantic import field_serializer
+from pydantic import GetJsonSchemaHandler, field_serializer
+from pydantic_core import core_schema
 from sqlalchemy import Connection, event, insert
-from sqlmodel import Field, Relationship, SQLModel, delete
+from sqlmodel import Field, Integer, Relationship, SQLModel, delete
 
 from app.core import LoggerCore
 
@@ -118,6 +119,30 @@ class UserPermission(IntFlag):
     )
     ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST
 
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, core_schema_: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> dict[str, Any]:
+        json_schema = handler(core_schema_)
+        json_schema = handler.resolve_ref_schema(json_schema)
+
+        if "enum" in json_schema:
+            varnames = []
+            for val in json_schema["enum"]:
+                try:
+                    member = cls(val)
+                    if member.name:
+                        varnames.append(member.name)
+                    else:
+                        varnames.append(f"FLAG_{val}")
+                except ValueError:
+                    varnames.append(f"FLAG_{val}")
+            
+            json_schema["x-enum-varnames"] = varnames
+            json_schema["x-enumNames"] = varnames
+
+        return json_schema
+
 
 class User(SQLModel):
     id: int | None = Field(
@@ -134,7 +159,9 @@ class User(SQLModel):
     point: int = Field(0, description="보유 포인트")
     total_point: int = Field(0, description="누적 포인트")
 
-    permissions: int = Field(UserPermission.NONE.value, description="관리자 여부")
+    permissions: UserPermission = Field(
+        UserPermission.NONE.value, description="관리자 여부", sa_type=Integer
+    )
 
     history_type: PointHistoryType | None = Field(
         None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입"
