@@ -33,6 +33,13 @@ class AdminUserCreateRequest(BaseModel):
     student_no: int | None = Field(None, description="번호 (학생인 경우 필수)")
 
 
+class AdminUserUpdateRequest(BaseModel):
+    name: str | None = Field(None, description="사용자 이름")
+    grade: int | None = Field(None, description="학년 (학생인 경우)")
+    number: int | None = Field(None, description="반 (학생인 경우)")
+    permissions: UserPermission | None = Field(None, description="사용자 권한")
+
+
 router = APIRouter(prefix="/admin", tags=["admin"])
 client = ServiceClient()
 
@@ -151,6 +158,10 @@ async def update_users_point(request: AdminPointRequest, auth_data: LoginDep):
         ]
         session.add_all(history_entries)
 
+        client.logs.service.info(
+            f"관리자(ID: {user.id})가 사용자들({target_ids})의 포인트를 {request.amount}만큼 일괄 변경했습니다. (사유: {request.reason})"
+        )
+
         for uid in target_ids:
             await client.redis.delete(f"user:{uid}")
             await client.redis.delete(f"point_history_count:{uid}")
@@ -237,6 +248,10 @@ async def create_user(request: AdminUserCreateRequest, auth_data: LoginDep):
 
         session.add(new_user)
 
+        client.logs.service.info(
+            f"관리자(ID: {user.id})가 새 사용자(ID: {new_user.id}, 유형: {new_user.type})를 생성했습니다."
+        )
+
     return ResponseModel[User](success=True, data=new_user)
 
 
@@ -275,6 +290,69 @@ async def reset_user_password(user_id: int, auth_data: LoginDep):
 
         await target_user.update_password(None)
 
+        client.logs.service.info(f"관리자(ID: {user.id})가 사용자(ID: {user_id})의 비밀번호를 초기화했습니다.")
+
+
+@router.patch(
+    "/users/{user_id}",
+    response_model=ResponseModel[User],
+    responses={
+        200: {"description": "사용자 정보 수정 완료"},
+        400: {
+            "model": ErrorResponse,
+            "description": "Invalid request parameters",
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "Permission denied",
+        },
+        404: {
+            "model": ErrorResponse,
+            "description": "User not found",
+        },
+    },
+    status_code=status.HTTP_200_OK,
+    summary="사용자 정보 수정",
+    description="특정 사용자의 정보를 수정합니다. (이름, 학년, 반, 권한 등)",
+)
+async def update_user(user_id: int, request: AdminUserUpdateRequest, auth_data: LoginDep):
+    user, _ = auth_data
+    if not user.has_permission(UserPermission.MANAGE_USER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    if user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot modify yourself.",
+        )
+
+    async with client.session as session:
+        target_user = await session.get(Users, user_id)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with ID {user_id} not found.",
+            )
+
+        update_data = request.model_dump(exclude_unset=True)
+        if update_data:
+            for key, value in update_data.items():
+                setattr(target_user, key, value)
+            session.add(target_user)
+
+    if update_data:
+        client.logs.service.info(
+            f"관리자(ID: {user.id})가 사용자(ID: {target_user.id})의 정보를 수정했습니다: {update_data}"
+        )
+
+        await client.redis.delete(f"user:{target_user.id}")
+        await client.redis.delete_pattern(f"ranking:{target_user.type!s}:*")
+
+    return ResponseModel[User](success=True, data=target_user)
+
 
 @router.delete(
     "/users/{user_id}",
@@ -311,6 +389,8 @@ async def delete_user(user_id: int, auth_data: LoginDep):
 
         exc = delete(Users).where(col(Users.id) == target_user.id)
         await session.execute(exc)
+
+        client.logs.service.info(f"관리자(ID: {user.id})가 사용자(ID: {user_id})를 삭제했습니다.")
 
     await client.redis.delete(f"user:{target_user.id}")
     await client.redis.delete(f"point_history_count:{target_user.id}")

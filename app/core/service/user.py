@@ -37,6 +37,10 @@ class User(ServiceCore[Users], _Type):
         Args:
             _new: 새로운 비밀번호, None의 경우 초기 비밀번호 셋팅 상태로 설정합니다.
         """
+        if isinstance(_new, str):
+            self.logs.service.info(f"{self.name}({self.id})님의 비밀번호가 변경되었습니다.")
+        else:
+            self.logs.service.info(f"{self.name}({self.id})님의 비밀번호를 초기화했습니다.")
         async with self.session as session:
             user = await session.merge(self._payload)
             user.password = get_password_hash(_new) if isinstance(_new, str) else None
