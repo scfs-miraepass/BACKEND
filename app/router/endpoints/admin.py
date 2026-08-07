@@ -37,7 +37,7 @@ class AdminUserUpdateRequest(BaseModel):
     name: str | None = Field(None, description="사용자 이름")
     grade: int | None = Field(None, description="학년 (학생인 경우)")
     number: int | None = Field(None, description="반 (학생인 경우)")
-    permissions: UserPermission | None = Field(None, description="사용자 권한")
+    permissions: int | None = Field(None, description="사용자 권한")
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -64,7 +64,7 @@ async def get_users(
     page: int = Query(1, ge=1, description="페이지 번호"),
     size: int = Query(20, ge=1, le=100, description="페이지 당 유저 데이터 갯수 (최대 100)"),
     user_type: UserType | None = Query(None, description="유저 타입 필터 (student, teacher, service)"),
-    permission: UserPermission | None = Query(None, description="유저 권한 필터 (해당 권한을 포함하는 유저 검색)"),
+    permission: int | None = Query(None, description="유저 권한 필터 (해당 권한을 포함하는 유저 검색)"),
 ):
     user, _ = auth_data
     if not user.has_permission(UserPermission.MANAGE_USER):
@@ -78,7 +78,7 @@ async def get_users(
         if user_type is not None:
             conditions.append(Users.type == user_type)
         if permission is not None:
-            conditions.append(col(Users.permissions).op("&")(permission.value) == permission.value)
+            conditions.append(col(Users.permissions).op("&")(permission) == permission)
 
         count_query = select(func.count()).select_from(Users)
         query = select(Users)
