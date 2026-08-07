@@ -5,7 +5,7 @@ from hangulpy import get_chosung_string, split_hangul_string
 from pydantic import GetJsonSchemaHandler, field_serializer
 from pydantic_core import core_schema
 from sqlalchemy import Connection, event, insert
-from sqlmodel import Field, Integer, Relationship, SQLModel, delete
+from sqlmodel import Field, Relationship, SQLModel, delete
 
 from app.core import LoggerCore
 
@@ -156,7 +156,7 @@ class User(SQLModel):
     point: int = Field(0, description="보유 포인트")
     total_point: int = Field(0, description="누적 포인트")
 
-    permissions: UserPermission = Field(UserPermission.NONE.value, description="관리자 여부", sa_type=Integer)
+    permissions: int = Field(UserPermission.NONE.value, description="관리자 여부")
 
     history_type: PointHistoryType | None = Field(None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입")
 

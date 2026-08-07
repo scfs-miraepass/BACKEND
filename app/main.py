@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .core import ServiceClient, settings
 from .router import router
+from .schemas import UserPermission
 from .schemas.response import ErrorResponse
 from .schemas.core import SchemaCore
 
@@ -122,7 +123,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 
 @app.get("/")
-async def read_root():
+async def read_root(_: UserPermission | None = None):
     return {"message": "Hello, World!"}
 
 
