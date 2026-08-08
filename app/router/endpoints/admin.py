@@ -35,8 +35,6 @@ class AdminUserCreateRequest(BaseModel):
 
 class AdminUserUpdateRequest(BaseModel):
     name: str | None = Field(None, description="사용자 이름")
-    grade: int | None = Field(None, description="학년 (학생인 경우)")
-    number: int | None = Field(None, description="반 (학생인 경우)")
     permissions: int | None = Field(None, description="사용자 권한")
 
 
@@ -313,7 +311,7 @@ async def reset_user_password(user_id: int, auth_data: LoginDep):
     },
     status_code=status.HTTP_200_OK,
     summary="사용자 정보 수정",
-    description="특정 사용자의 정보를 수정합니다. (이름, 학년, 반, 권한 등)",
+    description="특정 사용자의 정보를 수정합니다. (이름, 권한 등)",
 )
 async def update_user(user_id: int, request: AdminUserUpdateRequest, auth_data: LoginDep):
     user, _ = auth_data
