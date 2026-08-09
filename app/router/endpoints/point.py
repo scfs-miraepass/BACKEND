@@ -71,7 +71,7 @@ async def get_limit(auth_data: LoginDep, target_user_id: int):
             ),
         )
 
-    limit_key = f"point_limit:teacher:{user.id}"
+    limit_key = f"point_limit:grant:{user.id}"
     limit = await client.redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
@@ -105,7 +105,7 @@ async def get_limit_session(
     user, _ = auth_data
     if user.has_permission(UserPermission.NO_LIMIT_POINT):
         return ResponseModel[int](success=True, data=TEACHER_POINT_LIMIT)
-    limit_key = f"point_limit:teacher:{user.id}"
+    limit_key = f"point_limit:grant:{user.id}"
     limit = await client.redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
@@ -154,7 +154,7 @@ async def grant_points(
         )
 
     if not user.has_permission(UserPermission.NO_LIMIT_POINT):
-        limit_key = f"point_limit:teacher:{user.id}"
+        limit_key = f"point_limit:grant:{user.id}"
         limit = await client.redis.get(limit_key)
         if limit is None:
             limit = TEACHER_POINT_LIMIT
@@ -194,7 +194,7 @@ async def grant_points(
             type=operation.change_type,
         )
 
-        back_limit_key = f"point_limit:teacher:{user.id}"
+        back_limit_key = f"point_limit:grant:{user.id}"
         back_limit: int = TEACHER_POINT_LIMIT
         if user.has_permission(UserPermission.NO_LIMIT_POINT):
             _ = await client.redis.get(back_limit_key)

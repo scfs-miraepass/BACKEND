@@ -31,9 +31,9 @@ with open(pyproject_path, "rb") as f:
 
 
 @scheduler.scheduled_job(CronTrigger(day_of_week="mon", hour=0, minute=0))
-async def reset_teacher_limit():
-    await client.redis.delete_pattern("point_limit:teacher:*")
-    client.logs.service.info("교사 포인트 지급 제한을 초기화 했습니다.")
+async def reset_grant_limit():
+    await client.redis.delete_pattern("point_limit:grant:*")
+    client.logs.service.info("포인트 지급 제한을 초기화 했습니다.")
 
 
 @scheduler.scheduled_job(CronTrigger(hour=0, minute=0))
