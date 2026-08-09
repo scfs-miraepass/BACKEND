@@ -348,6 +348,7 @@ async def update_user(user_id: int, request: AdminUserUpdateRequest, auth_data: 
 
         await client.redis.delete(f"user:{target_user.id}")
         await client.redis.delete_pattern(f"ranking:{target_user.type!s}:*")
+        await target_user.clear_search_cache()
 
     return ResponseModel[User](success=True, data=target_user)
 
@@ -394,3 +395,4 @@ async def delete_user(user_id: int, auth_data: LoginDep):
     await client.redis.delete(f"point_history_count:{target_user.id}")
     await client.redis.delete_pattern(f"point_history:{target_user.id}:*")
     await client.redis.delete_pattern(f"ranking:{target_user.type!s}:*")
+    await target_user.clear_search_cache()

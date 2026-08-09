@@ -30,6 +30,18 @@ class User(ServiceCore[Users], _Type):
     def permission(self) -> UserPermission:
         return UserPermission(self.permissions)
 
+    async def clear_search_cache(self):
+        """사용자의 검색어(ID, 이름 초성, 연관어) 캐시를 제거합니다."""
+        # 1. ID(학번)로 검색된 캐시 삭제 (형식: search_users:{id},{types})
+        await self.redis.delete_pattern(f"search_users:{self.id},*")
+
+        # 2. 이름의 앞부분(접두사)으로 검색된 캐시 삭제
+        if self.name:
+            decomposed = self.normalize_and_decompose(self.name)
+            for i in range(1, len(decomposed) + 1):
+                await self.redis.delete_pattern(f"search_users:{decomposed[:i]},*")
+
+
     async def update_password(self, _new: str | None):
         """
         사용자의 비밀번호를 업데이트 합니다
@@ -116,6 +128,7 @@ class User(ServiceCore[Users], _Type):
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
             await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
+        await self.clear_search_cache()
 
         self.logs.service_point.info(f"포인트 지급 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
@@ -155,6 +168,7 @@ class User(ServiceCore[Users], _Type):
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
             await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
+        await self.clear_search_cache()
 
         self.logs.service_point.info(f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
