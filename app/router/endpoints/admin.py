@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import col, func, select, update, delete
 
 from app.core import LoginDep, ServiceClient
+from app.core.service import User as ServiceUser
 from app.schemas import (
     PointHistory,
     PointHistoryType,
@@ -328,7 +329,7 @@ async def update_user(user_id: int, request: AdminUserUpdateRequest, auth_data: 
         )
 
     async with client.session as session:
-        target_user = await session.get(Users, user_id)
+        target_user = await client.get_user(user_id)
         if not target_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -348,7 +349,7 @@ async def update_user(user_id: int, request: AdminUserUpdateRequest, auth_data: 
 
         await client.redis.delete(f"user:{target_user.id}")
         await client.redis.delete_pattern(f"ranking:{target_user.type!s}:*")
-        await target_user.clear_search_cache()
+        await ServiceUser(target_user).clear_search_cache()
 
     return ResponseModel[User](success=True, data=target_user)
 
