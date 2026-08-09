@@ -1,3 +1,10 @@
+# [1.8.0-dev.5](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.4...v1.8.0-dev.5) (2026-08-09)
+
+
+### Features
+
+* 유저 관리 Endpoint ([#9](https://github.com/scfs-miraepass/BACKEND/issues/9)) ([d45d105](https://github.com/scfs-miraepass/BACKEND/commit/d45d1051d6a74bf33dcc407907d754756371910f))
+
 # [1.8.0-dev.4](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.3...v1.8.0-dev.4) (2026-08-03)
 
 
