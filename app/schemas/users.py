@@ -5,7 +5,7 @@ from hangulpy import get_chosung_string, split_hangul_string
 from pydantic import GetJsonSchemaHandler, field_serializer
 from pydantic_core import core_schema
 from sqlalchemy import Connection, event, insert
-from sqlmodel import Field, Integer, Relationship, SQLModel, delete
+from sqlmodel import Field, Relationship, SQLModel, delete
 
 from app.core import LoggerCore
 
@@ -33,10 +33,12 @@ class UserPermission(IntFlag):
     SEARCH_USER = 2**17
     """사용자를 검색할 수 있는 권한"""
 
-    DEDUCT_POINT = 2**0 | SEARCH_USER
+    _DEDUCT_POINT = 2**0
+    DEDUCT_POINT = _DEDUCT_POINT | SEARCH_USER
     """포인트를 차감할 수 있는 권한"""
 
-    GRANT_POINT = 2**1 | SEARCH_USER
+    _GRANT_POINT = 2**1
+    GRANT_POINT = _GRANT_POINT | SEARCH_USER
     """포인트를 지급할 수 있는 권한"""
 
     NO_LIMIT_POINT = 2**2
@@ -54,7 +56,8 @@ class UserPermission(IntFlag):
     - 다른 유저의 퀘스트 삭제
     """
 
-    GIVE_STAMP = 2**5 | SEARCH_USER
+    _GIVE_STAMP = 2**5
+    GIVE_STAMP = _GIVE_STAMP | SEARCH_USER
     """스탬프를 다른 유저에게 지급할 권한"""
 
     VIEW_RANK = 2**6
@@ -75,13 +78,15 @@ class UserPermission(IntFlag):
     CREATE_POST = 2**10
     """게시글 생성 권한"""
 
-    VIEW_USER_POINT = 2**11 | SEARCH_USER
+    _VIEW_USER_POINT = 2**11
+    VIEW_USER_POINT = _VIEW_USER_POINT | SEARCH_USER
     """다른 사용자의 보유중인 포인트를 확인 할 수 있는 권한"""
 
     JOIN_QUEST = 2**12
     """퀘스트에 참가해 수락하고 완료할 수 있는 권한"""
 
-    MANAGE_USER = 2**13 | SEARCH_USER
+    _MANAGE_USER = 2**13
+    MANAGE_USER = _MANAGE_USER | SEARCH_USER
     """
     유저 관리 권한
     - 유저 생성, 수정, 삭제
@@ -98,15 +103,7 @@ class UserPermission(IntFlag):
     VIEW_QUEST = 2**16
     """퀘스트를 볼 수 있는 권한"""
 
-    STUDENT = (
-        VIEW_RANK
-        | VIEW_POINT
-        | VIEW_POINT_HISTORY
-        | JOIN_QUEST
-        | VIEW_POST
-        | VIEW_STAMP
-        | VIEW_QUEST
-    )
+    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | JOIN_QUEST | VIEW_POST | VIEW_STAMP | VIEW_QUEST
     TEACHER = (
         GRANT_POINT
         | CREATE_QUEST
@@ -137,7 +134,7 @@ class UserPermission(IntFlag):
                         varnames.append(f"FLAG_{val}")
                 except ValueError:
                     varnames.append(f"FLAG_{val}")
-            
+
             json_schema["x-enum-varnames"] = varnames
             json_schema["x-enumNames"] = varnames
 
@@ -159,13 +156,9 @@ class User(SQLModel):
     point: int = Field(0, description="보유 포인트")
     total_point: int = Field(0, description="누적 포인트")
 
-    permissions: UserPermission = Field(
-        UserPermission.NONE.value, description="관리자 여부", sa_type=Integer
-    )
+    permissions: int = Field(UserPermission.NONE.value, description="관리자 여부")
 
-    history_type: PointHistoryType | None = Field(
-        None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입"
-    )
+    history_type: PointHistoryType | None = Field(None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입")
 
     @field_serializer("type")
     def serialize_type(self, type_value: Any, _info):
@@ -182,11 +175,7 @@ class User(SQLModel):
     def __setattr__(self, name, value):
         if name == "point":
             current_point = getattr(self, "point", 0)
-            if (
-                value is not None
-                and current_point is not None
-                and value > current_point
-            ):
+            if value is not None and current_point is not None and value > current_point:
                 diff = value - current_point
                 self.total_point = getattr(self, "total_point", 0) + diff
         super().__setattr__(name, value)
@@ -196,15 +185,9 @@ class Users(User, table=True):
     password: str | None = Field(description="비밀번호")
 
     search: list[UserSearch] = Relationship(back_populates="user", passive_deletes=True)
-    history: list[PointHistory] = Relationship(
-        back_populates="user", passive_deletes=True
-    )
-    created_quest: list[Quests] = Relationship(
-        back_populates="author", passive_deletes=True
-    )
-    completion_quest: list[QuestCompletion] = Relationship(
-        back_populates="user", passive_deletes=True
-    )
+    history: list[PointHistory] = Relationship(back_populates="user", passive_deletes=True)
+    created_quest: list[Quests] = Relationship(back_populates="author", passive_deletes=True)
+    completion_quest: list[QuestCompletion] = Relationship(back_populates="user", passive_deletes=True)
     stamps: list[Stamps] = Relationship(back_populates="user", passive_deletes=True)
 
     posts: list[Posts] = Relationship(back_populates="author")
@@ -232,9 +215,7 @@ def user_search_insert(mapper, connection: Connection, target: Users):
     if not target.name or not target.id:
         return
 
-    LoggerCore.service_quest.info(
-        f"Generating search entries for new user: {target.name} (ID: {target.id})"
-    )
+    LoggerCore.service_quest.info(f"Generating search entries for new user: {target.name} (ID: {target.id})")
     search_entries = _generate_search_entries(target)
     # 성능을 위해 대량 삽입을 사용하거나 세션에 추가
     connection.execute(
@@ -252,12 +233,8 @@ def user_search_update(mapper, connection: Connection, target: Users):
         if not history.has_changes():
             return
 
-    LoggerCore.service.info(
-        f"Updating search entries for user ID: {target.id} due to name change"
-    )
-    connection.execute(
-        delete(UserSearch).where(cast(Any, UserSearch.user_id == target.id))
-    )
+    LoggerCore.service.info(f"Updating search entries for user ID: {target.id} due to name change")
+    connection.execute(delete(UserSearch).where(cast(Any, UserSearch.user_id == target.id)))
     if target.name:
         search_entries = _generate_search_entries(target)
         connection.execute(

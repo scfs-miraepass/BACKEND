@@ -1,10 +1,12 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from pydantic import field_serializer
 from sqlalchemy import Column, DateTime, String, func
 from sqlmodel import Field, Relationship, SQLModel
+
+from .core import SchemaCore
 
 if TYPE_CHECKING:
     from .users import Users
@@ -34,11 +36,9 @@ class StampType(StrEnum):
 
 class Stamps(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True, description="고유 ID")
-    stamp_type: StampType = Field(
-        description="스탬프 종류", sa_column=Column(String(20))
-    )
+    stamp_type: StampType = Field(description="스탬프 종류", sa_column=Column(String(20)))
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
+        default_factory=lambda: datetime.now(SchemaCore.timezone),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         description="스탬프 발급 일시",
     )
@@ -54,5 +54,5 @@ class Stamps(SQLModel, table=True):
     @field_serializer("created_at")
     def serialize_created_at(self, dt: Any, _info):
         if isinstance(dt, datetime):
-            return dt.isoformat()
+            return SchemaCore.sync_timezone(dt).isoformat()
         return dt

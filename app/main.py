@@ -8,10 +8,15 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .core import ServiceClient, settings
 from .router import router
+from .schemas import UserPermission
 from .schemas.response import ErrorResponse
+from .schemas.core import SchemaCore
+
 
 scheduler = AsyncIOScheduler()
 client = ServiceClient()
@@ -22,9 +27,7 @@ with open(pyproject_path, "rb") as f:
     pyproject_data = load(f)
     app_version = pyproject_data.get("project", {}).get("version")
     if not app_version:
-        raise KeyError(
-            "Failed to find 'version' in [project] section of pyproject.toml"
-        )
+        raise KeyError("Failed to find 'version' in [project] section of pyproject.toml")
 
 
 @scheduler.scheduled_job(CronTrigger(day_of_week="mon", hour=0, minute=0))
@@ -49,6 +52,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         client.logs.global_.warning("디버그 모드가 활성화 되어있습니다!")
 
     await client.initialize()
+
+    client.logs.global_.info("데이터베이스 서버와 시간대를 동기화")
+    async with client.session as session:
+        # PostgreSQL 사용하는경우 `SHOW TIME ZONE` 으로 SQL문 변경해야함
+        tz_string = (await session.execute(text("SELECT @@time_zone"))).scalar()
+        if tz_string.lower() == "system":
+            tz_string = (await session.execute(text("SELECT @@system_time_zone"))).scalar()
+
+        try:
+            SchemaCore.timezone = ZoneInfo(tz_string)
+            client.logs.global_.debug(f"DB의 시간대: {SchemaCore.timezone}")
+        except ZoneInfoNotFoundError:
+            client.logs.global_.warning("DB의 서버 시간대를 해석할 수 없습니다.")
+
     scheduler.start()
     client.logs.global_.info("Scheduler 시작")
 
@@ -92,9 +109,7 @@ if not settings.debug:
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
-        client.logs.global_.error(
-            "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
-        )
+        client.logs.global_.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
     sys.excepthook = handle_exception
 
@@ -103,14 +118,12 @@ if not settings.debug:
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
-        content=ErrorResponse(
-            success=False, message=exc.detail or "No Message"
-        ).model_dump(),
+        content=ErrorResponse(success=False, message=exc.detail or "No Message").model_dump(),
     )
 
 
 @app.get("/")
-async def read_root():
+async def read_root(_: UserPermission | None = None):
     return {"message": "Hello, World!"}
 
 
