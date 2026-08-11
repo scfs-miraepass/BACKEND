@@ -1,10 +1,10 @@
 from sqlmodel import select
 
-from app.schemas import Posts, Quests, Users
+from app.schemas import Posts, Quests, Users, PointHistory
 
 from .config import settings
 from .core import BaseCore
-from .service import Post, Quest, User
+from .service import Post, Quest, User, History
 
 
 class ServiceClient(BaseCore):
@@ -140,3 +140,45 @@ class ServiceClient(BaseCore):
                 ttl=60 * 5,
             )
         return Quest(payload=payload)
+
+    async def get_history(
+        self,
+        /,
+        _id: int,
+        *,
+        cache: bool = False,
+        save_cache: bool = True,
+        lock: bool = False
+    ) -> History | None:
+        """
+        ID를 이용해 포인트 기록을 가져옵니다.
+
+        Args:
+            _id: 퀘스트 ID
+            cache: 캐시 사용 여부 (lock이 True 일경우 무시됨)
+            save_cache: 가져온 후 캐시를 저장 여부
+            lock: 조회후 Row-level Lock를 설정 여부
+
+        Returns:
+            History | None
+        """
+        if cache and not lock:
+            cached_user = await self.redis.get(f"point_history:{_id}")
+            if cached_user:
+                return History(payload=PointHistory.model_validate(cached_user))
+
+        async with self.session as session:
+            if lock:
+                query = select(PointHistory).where(PointHistory.id == _id).with_for_update()
+                result = await session.execute(query)
+                payload: PointHistory | None = result.scalar_one_or_none()
+            else:
+                payload = await session.get(PointHistory, _id)
+
+        if save_cache and payload is not None:
+            await self.redis.set(
+                f"point_history:{payload.id}",
+                payload.model_dump(),
+                ttl=60 * 5,
+            )
+        return History(payload=payload)
