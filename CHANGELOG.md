@@ -1,3 +1,10 @@
+# [1.8.0-dev.7](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.6...v1.8.0-dev.7) (2026-08-11)
+
+
+### Performance Improvements
+
+* 유저 처리시 검색 캐시 전체적으로 삭제하는 것으로 변경 ([2842acc](https://github.com/scfs-miraepass/BACKEND/commit/2842acc55b3d9533b0135ff8d594f0cf5fd5a9f0))
+
 # [1.8.0-dev.6](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.5...v1.8.0-dev.6) (2026-08-09)
 
 
