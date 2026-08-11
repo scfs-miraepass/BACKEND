@@ -1,3 +1,10 @@
+# [1.8.0-dev.8](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.7...v1.8.0-dev.8) (2026-08-11)
+
+
+### Features
+
+* 특정 포인트를 가져오는 Endpoint 추가 ([bd52263](https://github.com/scfs-miraepass/BACKEND/commit/bd522636a3b8a3fe4fd63d43a41f3a17c771cf92))
+
 # [1.8.0-dev.7](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.6...v1.8.0-dev.7) (2026-08-11)
 
 
