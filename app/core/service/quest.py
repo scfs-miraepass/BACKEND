@@ -29,6 +29,8 @@ class Quest(ServiceCore[Quests], _Type):
         await self.redis.delete(f"quest:{self.id}")
         await self.redis.delete("quests_count")
         await self.redis.delete_pattern("quests:*")
+        await self.redis.delete(f"quest_acceptances:{self.id}")
+        await self.redis.delete_pattern(f"quest_accepted:{self.id}:*")
 
     async def delete(self):
         """
@@ -91,6 +93,8 @@ class Quest(ServiceCore[Quests], _Type):
             )
             session.add(QuestCompletion(quest_id=self.id, user_id=user.id))
 
+        await self.redis.delete(f"quest_completed_count:{self.id}:{user.id}")
+
         self.logs.service_quest.info(f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료")
 
     async def complete_count(self, user: User) -> int:
@@ -103,6 +107,11 @@ class Quest(ServiceCore[Quests], _Type):
         Returns:
             Int
         """
+        cache_key = f"quest_completed_count:{self.id}:{user.id}"
+        cached = await self.redis.get(cache_key)
+        if cached is not None:
+            return int(cached)
+
         async with self.session as session:
             query = (
                 select(func.count())
@@ -114,6 +123,8 @@ class Quest(ServiceCore[Quests], _Type):
             )
             result = await session.execute(query)
             count = result.scalar_one()
+
+        await self.redis.set(cache_key, count, ttl=60 * 5)
         return count
 
     async def list_acceptances(self) -> list[Users]:
@@ -123,6 +134,11 @@ class Quest(ServiceCore[Quests], _Type):
         Returns:
             List[Users]
         """
+        cache_key = f"quest_acceptances:{self.id}"
+        cached = await self.redis.get(cache_key)
+        if cached is not None:
+            return [Users(**item) for item in cached]
+
         async with self.session as session:
             query = (
                 select(Users)
@@ -131,6 +147,8 @@ class Quest(ServiceCore[Quests], _Type):
             )
             result = await session.execute(query)
             users = list(result.scalars().all())
+
+        await self.redis.set(cache_key, [item.model_dump() for item in users], ttl=60 * 5)
         return users
 
     async def has_accepted(self, user: User) -> bool:
@@ -143,6 +161,11 @@ class Quest(ServiceCore[Quests], _Type):
         Returns:
             Bool
         """
+        cache_key = f"quest_accepted:{self.id}:{user.id}"
+        cached = await self.redis.get(cache_key)
+        if cached is not None:
+            return cached in ("1", 1, True, "true")
+
         async with self.session as session:
             query = (
                 select(func.count())
@@ -154,7 +177,10 @@ class Quest(ServiceCore[Quests], _Type):
             )
             result = await session.execute(query)
             count = result.scalar_one()
-        return count > 0
+
+        has_acc = count > 0
+        await self.redis.set(cache_key, "1" if has_acc else "0", ttl=60 * 5)
+        return has_acc
 
     async def accept(self, user: User):
         """
