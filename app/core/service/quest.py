@@ -71,6 +71,10 @@ class Quest(ServiceCore[Quests], _Type):
             raise ExpiredError("Quest duration ended.")
 
         async with self.session as session:
+            accepted = await self.has_accepted(user)
+            if not accepted:
+                raise NotFound("Not accepted.")
+
             count = await self.complete_count(user)
             if count >= self.max_repeat:
                 raise LimitExceeded("Maximum participation limit reached.")
@@ -87,9 +91,7 @@ class Quest(ServiceCore[Quests], _Type):
             )
             session.add(QuestCompletion(quest_id=self.id, user_id=user.id))
 
-        self.logs.service_quest.info(
-            f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료"
-        )
+        self.logs.service_quest.info(f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료")
 
     async def complete_count(self, user: User) -> int:
         """
@@ -123,7 +125,9 @@ class Quest(ServiceCore[Quests], _Type):
         """
         async with self.session as session:
             query = (
-                select(Users).join(QuestAccept, QuestAccept.user_id == Users.id).where(QuestAccept.quest_id == self.id)
+                select(Users)
+                .join(QuestAccept, col(QuestAccept.user_id) == Users.id)
+                .where(col(QuestAccept.quest_id) == self.id)
             )
             result = await session.execute(query)
             users = list(result.scalars().all())
@@ -165,7 +169,7 @@ class Quest(ServiceCore[Quests], _Type):
         async with self.session as session:
             accepted = await self.has_accepted(user)
             if accepted:
-                raise LimitExceeded('Already accepted.')
+                raise LimitExceeded("Already accepted.")
 
             session.add(QuestAccept(quest_id=self.id, user_id=user.id))
             await session.flush()
@@ -186,11 +190,11 @@ class Quest(ServiceCore[Quests], _Type):
         async with self.session as session:
             accepted = await self.has_accepted(user)
             if not accepted:
-                raise NotFound('Not accepted.')
+                raise NotFound("Not accepted.")
 
             exc = delete(QuestAccept).where(
-                QuestAccept.quest_id == self.id,
-                QuestAccept.user_id == user.id,
+                col(QuestAccept.quest_id) == self.id,
+                col(QuestAccept.user_id) == user.id,
             )
             await session.execute(exc)
 

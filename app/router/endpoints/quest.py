@@ -31,6 +31,10 @@ class QuestUpdate(BaseModel):
     max_repeat: int | None = Field(None, ge=1, description="퀘스트 반복 가능 횟수")
 
 
+class QuestCompleteRequest(BaseModel):
+    target_user_id: int = Field(..., description="완료 처리할 학생의 ID")
+
+
 @router.post(
     "/create",
     response_model=ResponseModel[Quests],
@@ -125,12 +129,7 @@ async def list_quests(
             response.headers["X-CACHED"] = "true"
         else:
             response.headers["X-CACHED"] = "false"
-            query = (
-                select(Quests)
-                .order_by(col(Quests.end_date))
-                .limit(limit)
-                .offset(offset)
-            )
+            query = select(Quests).order_by(col(Quests.end_date)).limit(limit).offset(offset)
             result = await session.execute(query)
             quests = list(result.scalars().all())
             quests_data = [item.model_dump() for item in quests]
@@ -171,9 +170,7 @@ async def get_quest(quest_id: int, auth_data: LoginDep):
 
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
     return ResponseModel(success=True, data=quest)
 
@@ -199,13 +196,9 @@ async def update_quest(quest_id: int, operation: QuestUpdate, auth_data: LoginDe
     user, _ = auth_data
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
-    if quest.author_id != user.id and not user.has_permission(
-        UserPermission.MANAGE_QUEST
-    ):
+    if quest.author_id != user.id and not user.has_permission(UserPermission.MANAGE_QUEST):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the quest creator can update this quest.",
@@ -240,13 +233,9 @@ async def delete_quest(quest_id: int, auth_data: LoginDep):
     user, _ = auth_data
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
-    if quest.author_id != user.id and not user.has_permission(
-        UserPermission.MANAGE_QUEST
-    ):
+    if quest.author_id != user.id and not user.has_permission(UserPermission.MANAGE_QUEST):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the quest creator can delete this quest.",
@@ -271,35 +260,37 @@ async def delete_quest(quest_id: int, auth_data: LoginDep):
     },
     status_code=status.HTTP_200_OK,
     summary="퀘스트 완료",
-    description="학생이 퀘스트를 완료합니다. 완료 시 보상이 지급됩니다.",
+    description="퀘스트를 완료 처리합니다.",
 )
-async def complete_quest(quest_id: int, auth_data: LoginDep):
+async def complete_quest(quest_id: int, operation: QuestCompleteRequest, auth_data: LoginDep):
     user, _ = auth_data
-
-    if not user.has_permission(UserPermission.JOIN_QUEST):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="not have permission to participate in the quest",
-        )
 
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
+
+    if quest.author_id != user.id and not user.has_permission(UserPermission.MANAGE_QUEST):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the quest creator can complete this quest for users.",
         )
 
+    target_user = await client.get_user(operation.target_user_id)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found.")
+
     try:
-        await quest.complete(user)
+        await quest.complete(target_user)
     except ExpiredError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Quest is expired."
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quest is expired.")
     except LimitExceeded:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="This quest can only be completed once.",
         )
-    return ResponseModel(success=True, data=user.point)
+    except NotFound:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quest is not accepted.")
+    return ResponseModel(success=True, data=target_user.point)
 
 
 @router.post(
@@ -330,9 +321,7 @@ async def accept_quest(quest_id: int, auth_data: LoginDep):
 
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
     try:
         await quest.accept(user)
@@ -370,9 +359,7 @@ async def cancel_accept_quest(quest_id: int, auth_data: LoginDep):
 
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
     try:
         await quest.cancel_accept(user)
