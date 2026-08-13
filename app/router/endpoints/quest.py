@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import col, func, select
 
 from app.core import LoginDep, ServiceClient
-from app.core.error import ExpiredError, LimitExceeded
+from app.core.error import ExpiredError, LimitExceeded, NotFound
 from app.schemas import Quests, UserPermission
 from app.schemas.response import ErrorResponse, ResponseModel
 
@@ -276,7 +276,7 @@ async def delete_quest(quest_id: int, auth_data: LoginDep):
 async def complete_quest(quest_id: int, auth_data: LoginDep):
     user, _ = auth_data
 
-    if user.has_permission(UserPermission.JOIN_QUEST):
+    if not user.has_permission(UserPermission.JOIN_QUEST):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="not have permission to participate in the quest",
@@ -300,3 +300,84 @@ async def complete_quest(quest_id: int, auth_data: LoginDep):
             detail="This quest can only be completed once.",
         )
     return ResponseModel(success=True, data=user.point)
+
+
+@router.post(
+    "/{quest_id}/accept",
+    response_model=ResponseModel[bool],
+    responses={
+        200: {"description": "퀘스트 수락 성공"},
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음",
+        },
+        403: {"model": ErrorResponse, "description": "권한이 없음"},
+        404: {"model": ErrorResponse, "description": "퀘스트를 찾을 수 없음"},
+        429: {"model": ErrorResponse, "description": "이미 수락한 퀘스트"},
+    },
+    status_code=status.HTTP_200_OK,
+    summary="퀘스트 수락",
+    description="학생이 퀘스트를 수락합니다.",
+)
+async def accept_quest(quest_id: int, auth_data: LoginDep):
+    user, _ = auth_data
+
+    if not user.has_permission(UserPermission.JOIN_QUEST):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="not have permission to participate in the quest",
+        )
+
+    quest = await client.get_quest(quest_id, cache=True)
+    if not quest:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
+        )
+
+    try:
+        await quest.accept(user)
+    except LimitExceeded:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Already accepted.",
+        )
+    return ResponseModel(success=True, data=True)
+
+
+@router.delete(
+    "/{quest_id}/accept",
+    responses={
+        204: {"description": "퀘스트 수락 취소 성공"},
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음",
+        },
+        403: {"model": ErrorResponse, "description": "권한이 없음"},
+        404: {"model": ErrorResponse, "description": "퀘스트를 찾을 수 없거나 수락하지 않음"},
+    },
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="퀘스트 수락 취소",
+    description="학생이 퀘스트 수락을 취소합니다.",
+)
+async def cancel_accept_quest(quest_id: int, auth_data: LoginDep):
+    user, _ = auth_data
+
+    if not user.has_permission(UserPermission.JOIN_QUEST):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="not have permission to participate in the quest",
+        )
+
+    quest = await client.get_quest(quest_id, cache=True)
+    if not quest:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
+        )
+
+    try:
+        await quest.cancel_accept(user)
+    except NotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not accepted.",
+        )
