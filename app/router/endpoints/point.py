@@ -71,7 +71,7 @@ async def get_limit(auth_data: LoginDep, target_user_id: int):
             ),
         )
 
-    limit_key = f"point_limit:teacher:{user.id}"
+    limit_key = f"point_limit:grant:{user.id}"
     limit = await client.redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
@@ -105,7 +105,7 @@ async def get_limit_session(
     user, _ = auth_data
     if user.has_permission(UserPermission.NO_LIMIT_POINT):
         return ResponseModel[int](success=True, data=TEACHER_POINT_LIMIT)
-    limit_key = f"point_limit:teacher:{user.id}"
+    limit_key = f"point_limit:grant:{user.id}"
     limit = await client.redis.get(limit_key)
     if limit is None:
         limit = TEACHER_POINT_LIMIT
@@ -154,7 +154,7 @@ async def grant_points(
         )
 
     if not user.has_permission(UserPermission.NO_LIMIT_POINT):
-        limit_key = f"point_limit:teacher:{user.id}"
+        limit_key = f"point_limit:grant:{user.id}"
         limit = await client.redis.get(limit_key)
         if limit is None:
             limit = TEACHER_POINT_LIMIT
@@ -194,7 +194,7 @@ async def grant_points(
             type=operation.change_type,
         )
 
-        back_limit_key = f"point_limit:teacher:{user.id}"
+        back_limit_key = f"point_limit:grant:{user.id}"
         back_limit: int = TEACHER_POINT_LIMIT
         if user.has_permission(UserPermission.NO_LIMIT_POINT):
             _ = await client.redis.get(back_limit_key)
@@ -295,13 +295,13 @@ async def deduct_points(
         403: {
             "model": ErrorResponse,
             "description": "권한 없음",
-        },
+        }
     },
     status_code=status.HTTP_200_OK,
     summary="포인트 기록",
     description="현재 로그인한 자기자신의 포인트 기록을 조회합니다.",
 )
-async def point_history(  # DB때문인지 뭔지는 모르겠는데 나한테선 안됨 아마 내가 테이블 만들 때 뭐 잘못한듯 ㅇㅇ
+async def get_history_list(
     response: Response,
     auth_data: LoginDep,
     limit: int = 20,
@@ -335,7 +335,7 @@ async def point_history(  # DB때문인지 뭔지는 모르겠는데 나한테�
             await client.redis.set(count_cache_key, count, ttl=60 * 60 * 24)
 
         # 2. 히스토리 목록 조회
-        history_cache_key = f"point_history:{user.id}:{limit}:{offset}"
+        history_cache_key = f"point_history_list:{user.id}:{limit}:{offset}"
         cached_history = await client.redis.get(history_cache_key)
 
         if cached_history is not None:
@@ -360,6 +360,52 @@ async def point_history(  # DB때문인지 뭔지는 모르겠는데 나한테�
     response.headers["X-MAX-PAGE"] = max_page
 
     return ResponseModel[list[PointHistory]](success=True, data=historys)
+
+
+@router.get(
+    "/history/{target_id}",
+    response_model=ResponseModel[PointHistory],
+    responses={
+        200: {"description": "정상처리"},
+        404: {
+            "model": ErrorResponse,
+            "description": "포인트 기록을 찾을 수 없음",
+        },
+        401: {
+            "model": ErrorResponse,
+            "description": "세션이 만료되었거나 유효하지 않음",
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "포인트 기록을 볼 권한이 없습니다.",
+        },
+    },
+    status_code=status.HTTP_200_OK,
+    summary="특정 포인트 기록",
+    description="특정한 포인트 기록의 데이터를 가져옵니다. 자기자신의 기록만 가져올 수 있습니다",
+)
+async def get_history(auth_data: LoginDep, target_id: int):
+    user, _ = auth_data
+
+    if not user.has_permission(UserPermission.VIEW_POINT_HISTORY):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    async with client.session:
+        history = await client.get_history(target_id)
+        if history is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Point history not found"
+            )
+
+    if history.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied."
+        )
+
+    return ResponseModel[PointHistory](success=True, data=history)
 
 
 async def _get_ranking(

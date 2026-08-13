@@ -1,4 +1,6 @@
 from typing import TypeVar
+from functools import lru_cache
+from hangulpy import split_hangul_string
 
 from .database import DatabaseCore
 from .loggers import LoggerCore
@@ -24,6 +26,15 @@ class BaseCore:
     async def close(self):
         await self.redis.close()
         await self.database.dispose()
+
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def normalize_and_decompose(query: str) -> str:
+        """
+        검색어의 공백을 제거하고 한글 자모를 분리합니다.
+        동일한 검색어에 대한 중복 연산을 방지하기 위해 캐싱을 사용합니다.
+        """
+        return "".join(split_hangul_string(query.replace(" ", "")))
 
 
 class ServiceCore[T](BaseCore):

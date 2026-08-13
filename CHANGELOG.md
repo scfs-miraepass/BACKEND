@@ -1,3 +1,41 @@
+# [1.8.0-dev.8](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.7...v1.8.0-dev.8) (2026-08-11)
+
+
+### Features
+
+* 특정 포인트를 가져오는 Endpoint 추가 ([bd52263](https://github.com/scfs-miraepass/BACKEND/commit/bd522636a3b8a3fe4fd63d43a41f3a17c771cf92))
+
+# [1.8.0-dev.7](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.6...v1.8.0-dev.7) (2026-08-11)
+
+
+### Performance Improvements
+
+* 유저 처리시 검색 캐시 전체적으로 삭제하는 것으로 변경 ([2842acc](https://github.com/scfs-miraepass/BACKEND/commit/2842acc55b3d9533b0135ff8d594f0cf5fd5a9f0))
+
+# [1.8.0-dev.6](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.5...v1.8.0-dev.6) (2026-08-09)
+
+
+### Bug Fixes
+
+* 관리자 사용자 수정시 에러가 발생하는 현생 해결 ([166033a](https://github.com/scfs-miraepass/BACKEND/commit/166033a3efbcb27cfb61344a7f526b7ef04c027f))
+
+
+### Features
+
+* 사용자 수정시, 사용자 관련 검색 캐시 삭제 ([5de3237](https://github.com/scfs-miraepass/BACKEND/commit/5de32374d31386fe1e93b9f0b5fccda0b4136536))
+
+
+### Performance Improvements
+
+* 교사 포인트 지급 제한을 그냥 포인트 지급 제한으로 수정 ([20c890d](https://github.com/scfs-miraepass/BACKEND/commit/20c890d391d2e2c8227a767ca5b9f22aef10353b))
+
+# [1.8.0-dev.5](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.4...v1.8.0-dev.5) (2026-08-09)
+
+
+### Features
+
+* 유저 관리 Endpoint ([#9](https://github.com/scfs-miraepass/BACKEND/issues/9)) ([d45d105](https://github.com/scfs-miraepass/BACKEND/commit/d45d1051d6a74bf33dcc407907d754756371910f))
+
 # [1.8.0-dev.4](https://github.com/scfs-miraepass/BACKEND/compare/v1.8.0-dev.3...v1.8.0-dev.4) (2026-08-03)
 
 

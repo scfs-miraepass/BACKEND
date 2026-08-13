@@ -1,8 +1,8 @@
-from .client import ServiceClient
-from .config import settings
+from .config import settings  # noqa: I001
 from .core import LoggerCore
-from .dependency import LoginDep
+from .client import ServiceClient
 from .security import get_password_hash, verify_password
+from .dependency import LoginDep
 
 __all__ = [
     "LoggerCore",

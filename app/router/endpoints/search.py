@@ -1,8 +1,6 @@
-from functools import lru_cache
 from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
-from hangulpy import split_hangul_string
 from sqlmodel import col, select
 
 from app.core import LoginDep, ServiceClient
@@ -11,16 +9,6 @@ from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/search", tags=["search"])
 client = ServiceClient()
-
-
-@lru_cache(maxsize=128)
-def normalize_and_decompose(query: str) -> str:
-    """
-    검색어의 공백을 제거하고 한글 자모를 분리합니다.
-    동일한 검색어에 대한 중복 연산을 방지하기 위해 캐싱을 사용합니다.
-    """
-    return "".join(split_hangul_string(query.replace(" ", "")))
-
 
 @router.get(
     "",
@@ -67,8 +55,9 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] | None = Query(N
     if not q:
         return ResponseModel(success=True, data=[])
 
+    decomposed_query = client.normalize_and_decompose(q)
     # 캐시 키 생성
-    cache_key = f"search_users:{q},{','.join(t)}"
+    cache_key = f"search_users:{decomposed_query},{','.join(t)}"
 
     # Redis 캐시 조회
     cached_data = await client.redis.get(cache_key)
@@ -91,9 +80,6 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] | None = Query(N
 
         # 2. 문자가 포함된 경우: 이름 검색 (한글 자모 분리)
         else:
-            # 캐시된 자모 분리 함수 사용
-            decomposed_query = normalize_and_decompose(q)
-
             # UserSearch 테이블과 조인하여 검색
             # 학생 타입(UserType.student)인 유저만 필터링
             # like 검색을 통해 부분 일치(prefix) 검색 수행
