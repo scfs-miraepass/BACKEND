@@ -1,4 +1,4 @@
-"""users.total_point ADD
+"""v1.3.0 (users.total_point add)
 
 Revision ID: ecc0a589fbcd
 Revises: 38c026e839e6
@@ -6,17 +6,17 @@ Create Date: 2026-05-20 17:40:25.394554
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "ecc0a589fbcd"
-down_revision: Union[str, Sequence[str], None] = "38c026e839e6"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "38c026e839e6"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

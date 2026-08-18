@@ -1,18 +1,22 @@
-from tomllib import load
-from pathlib import Path
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+from tomllib import load
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .router import router
 from .core import ServiceClient, settings
+from .router import router
+from .schemas import UserPermission
 from .schemas.response import ErrorResponse
+from .schemas.core import SchemaCore
+
 
 scheduler = AsyncIOScheduler()
 client = ServiceClient()
@@ -27,9 +31,9 @@ with open(pyproject_path, "rb") as f:
 
 
 @scheduler.scheduled_job(CronTrigger(day_of_week="mon", hour=0, minute=0))
-async def reset_teacher_limit():
-    await client.redis.delete_pattern("point_limit:teacher:*")
-    client.logs.service.info("교사 포인트 지급 제한을 초기화 했습니다.")
+async def reset_grant_limit():
+    await client.redis.delete_pattern("point_limit:grant:*")
+    client.logs.service.info("포인트 지급 제한을 초기화 했습니다.")
 
 
 @scheduler.scheduled_job(CronTrigger(hour=0, minute=0))
@@ -48,6 +52,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         client.logs.global_.warning("디버그 모드가 활성화 되어있습니다!")
 
     await client.initialize()
+
+    client.logs.global_.info("데이터베이스 서버와 시간대를 동기화")
+    async with client.session as session:
+        # PostgreSQL 사용하는경우 `SHOW TIME ZONE` 으로 SQL문 변경해야함
+        tz_string = (await session.execute(text("SELECT @@time_zone"))).scalar()
+        if tz_string.lower() == "system":
+            tz_string = (await session.execute(text("SELECT @@system_time_zone"))).scalar()
+
+        try:
+            SchemaCore.timezone = ZoneInfo(tz_string)
+            client.logs.global_.debug(f"DB의 시간대: {SchemaCore.timezone}")
+        except ZoneInfoNotFoundError:
+            client.logs.global_.warning("DB의 서버 시간대를 해석할 수 없습니다.")
+
     scheduler.start()
     client.logs.global_.info("Scheduler 시작")
 
@@ -67,7 +85,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-MAX-PAGE", "X-Server-Version", "X-CACHED"],  # 클라이언트가 읽을 수 있도록 허용
+    expose_headers=[
+        "X-MAX-PAGE",
+        "X-Server-Version",
+        "X-CACHED",
+    ],  # 클라이언트가 읽을 수 있도록 허용
 )
 
 
@@ -101,7 +123,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 
 @app.get("/")
-async def read_root():
+async def read_root(_: UserPermission | None = None):
     return {"message": "Hello, World!"}
 
 

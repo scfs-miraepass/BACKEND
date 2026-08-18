@@ -1,22 +1,23 @@
-"""stamp Type String
+"""v1.8.0 #3 (stamps.stamp_type type change)
 
 Revision ID: f91d6fc43436
 Revises: baaa7b1aacf8
-Create Date: 2026-07-13 23:07:46.385352
+Create Date: 2026-07-13 23:07:46.385352WW
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import mysql
 
+from alembic import op
+
 # revision identifiers, used by Alembic.
 revision: str = "f91d6fc43436"
-down_revision: Union[str, Sequence[str], None] = "baaa7b1aacf8"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "baaa7b1aacf8"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

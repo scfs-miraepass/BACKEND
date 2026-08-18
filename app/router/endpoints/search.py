@@ -1,30 +1,18 @@
-from functools import lru_cache
-from typing import List, cast, Any
+from typing import Any, cast
 
-from fastapi import APIRouter, status, HTTPException, Query
-from hangulpy import split_hangul_string
-from sqlmodel import select, col
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlmodel import col, select
 
 from app.core import LoginDep, ServiceClient
-from app.schemas import User, Users, UserSearch, UserType
-from app.schemas.response import ResponseModel, ErrorResponse
+from app.schemas import User, UserPermission, Users, UserSearch, UserType
+from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/search", tags=["search"])
 client = ServiceClient()
 
-
-@lru_cache(maxsize=128)
-def normalize_and_decompose(query: str) -> str:
-    """
-    검색어의 공백을 제거하고 한글 자모를 분리합니다.
-    동일한 검색어에 대한 중복 연산을 방지하기 위해 캐싱을 사용합니다.
-    """
-    return "".join(split_hangul_string(query.replace(" ", "")))
-
-
 @router.get(
     "",
-    response_model=ResponseModel[List[User]],
+    response_model=ResponseModel[list[User]],
     responses={
         200: {"description": "정상 처리"},
         401: {
@@ -40,7 +28,7 @@ def normalize_and_decompose(query: str) -> str:
     summary="유저 검색",
     description="유저를 이름 또는 ID(학번)으로 검색합니다.",
 )
-async def search(auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
+async def search(auth_data: LoginDep, q: str, t: list[UserType] | None = Query(None)):
     """
     사용자 검색 API
 
@@ -51,8 +39,7 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
     """
     user, _ = auth_data
 
-    # 권한 확인: Teacher, Service or Admin only
-    if user.type != UserType.teacher and user.type != UserType.service and not user.is_admin:
+    if not user.has_permission(UserPermission.SEARCH_USER):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -68,8 +55,9 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
     if not q:
         return ResponseModel(success=True, data=[])
 
+    decomposed_query = client.normalize_and_decompose(q)
     # 캐시 키 생성
-    cache_key = f"search_users:{q},{','.join(t)}"
+    cache_key = f"search_users:{decomposed_query},{','.join(t)}"
 
     # Redis 캐시 조회
     cached_data = await client.redis.get(cache_key)
@@ -92,9 +80,6 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
 
         # 2. 문자가 포함된 경우: 이름 검색 (한글 자모 분리)
         else:
-            # 캐시된 자모 분리 함수 사용
-            decomposed_query = normalize_and_decompose(q)
-
             # UserSearch 테이블과 조인하여 검색
             # 학생 타입(UserType.student)인 유저만 필터링
             # like 검색을 통해 부분 일치(prefix) 검색 수행
@@ -134,7 +119,9 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] = Query(None)):
 )
 async def teacher_get_by_name(user_name: str):
     async with client.session as session:
-        stmt = select(Users).where(Users.name == user_name, Users.type == UserType.teacher)
+        stmt = select(Users).where(
+            Users.name == user_name, Users.type == UserType.teacher
+        )
         result = await session.execute(stmt)
         teacher = result.scalar_one_or_none()
 

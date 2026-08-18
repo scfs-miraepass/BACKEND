@@ -1,4 +1,4 @@
-import asyncio
+import asyncio  # noqa: I001
 from logging.config import fileConfig
 
 from sqlalchemy import pool

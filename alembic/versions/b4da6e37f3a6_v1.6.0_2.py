@@ -1,4 +1,4 @@
-"""quests, posts tables add
+"""v1.6.0 #2 (Quest, Posts tables add)
 
 Revision ID: b4da6e37f3a6
 Revises: 6949eef9a311
@@ -6,18 +6,19 @@ Create Date: 2026-06-23 10:14:46.308060
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 import sqlmodel
 from sqlalchemy.dialects import mysql
 
+from alembic import op
+
 # revision identifiers, used by Alembic.
 revision: str = "b4da6e37f3a6"
-down_revision: Union[str, Sequence[str], None] = "6949eef9a311"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "6949eef9a311"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -28,8 +29,18 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("title", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column("views", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=True,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=True,
+        ),
         sa.Column("author_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["author_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -44,7 +55,12 @@ def upgrade() -> None:
         sa.Column("reward", sa.Integer(), nullable=False),
         sa.Column("end_date", sa.DateTime(), nullable=False),
         sa.Column("max_repeat", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=True,
+        ),
         sa.Column("author_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["author_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -62,17 +78,36 @@ def upgrade() -> None:
     op.create_table(
         "questcompletion",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("completed_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column(
+            "completed_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=True,
+        ),
         sa.Column("quest_id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["quest_id"], ["quest.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_questcompletion_id"), "questcompletion", ["id"], unique=False)
-    op.create_index(op.f("ix_questcompletion_quest_id"), "questcompletion", ["quest_id"], unique=False)
-    op.create_index(op.f("ix_questcompletion_user_id"), "questcompletion", ["user_id"], unique=False)
-    op.create_index("ix_questcompletion_user_id_quest_id", "questcompletion", ["user_id", "quest_id"], unique=False)
+    op.create_index(
+        op.f("ix_questcompletion_id"), "questcompletion", ["id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_questcompletion_quest_id"),
+        "questcompletion",
+        ["quest_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_questcompletion_user_id"), "questcompletion", ["user_id"], unique=False
+    )
+    op.create_index(
+        "ix_questcompletion_user_id_quest_id",
+        "questcompletion",
+        ["user_id", "quest_id"],
+        unique=False,
+    )
     op.alter_column(
         "pointhistory",
         "type",
@@ -81,9 +116,13 @@ def upgrade() -> None:
         existing_nullable=True,
     )
     op.create_index(op.f("ix_pointhistory_id"), "pointhistory", ["id"], unique=False)
-    op.create_index(op.f("ix_pointhistory_user_id"), "pointhistory", ["user_id"], unique=False)
+    op.create_index(
+        op.f("ix_pointhistory_user_id"), "pointhistory", ["user_id"], unique=False
+    )
     op.create_index(op.f("ix_users_type"), "users", ["type"], unique=False)
-    op.create_index(op.f("ix_usersearch_user_id"), "usersearch", ["user_id"], unique=False)
+    op.create_index(
+        op.f("ix_usersearch_user_id"), "usersearch", ["user_id"], unique=False
+    )
     # ### end Alembic commands ###
 
 

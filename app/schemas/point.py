@@ -1,15 +1,18 @@
-from datetime import datetime, timezone
-from typing import Optional, TYPE_CHECKING, Any
-from sqlalchemy import Column, DateTime, String, func
-from sqlmodel import Field, SQLModel, Relationship
-from enum import Enum
+from datetime import datetime
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
+
 from pydantic import field_serializer
+from sqlalchemy import Column, DateTime, String, func
+from sqlmodel import Field, Relationship, SQLModel
+
+from .core import SchemaCore
 
 if TYPE_CHECKING:
     from .users import Users
 
 
-class PointHistoryType(str, Enum):
+class PointHistoryType(StrEnum):
     teacher = "teacher"  # 교사 지급
     cafe = "cafe"  # 음료 구매
     food = "food"  # 음식 구매
@@ -21,9 +24,9 @@ class PointHistoryType(str, Enum):
 
 
 class PointHistory(SQLModel, table=True):
-    id: Optional[int] = Field(None, primary_key=True, index=True)  # autoincrement
+    id: int | None = Field(None, primary_key=True, index=True)  # autoincrement
 
-    user: "Users" = Relationship(back_populates="history")
+    user: Users = Relationship(back_populates="history")
     user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
 
     changed_amount: int = Field(description="변경된 포인트의 정도")
@@ -32,12 +35,12 @@ class PointHistory(SQLModel, table=True):
     # 기존 reason만 있다가 처리 이유를 따로 담을 필요성이 있어서 memo를 추가했지만
     # 기존에 있는 데이터 마이그레이션을 고려해 아래와 같이 분리함
     reason: str = Field(description="누구의 무엇의 의해서 포인트가 변경되었는지 이유")
-    memo: Optional[str] = Field(None, description="포인트가 어떠한 사유로 변경되었는지 이유")
+    memo: str | None = Field(None, description="포인트가 어떠한 사유로 변경되었는지 이유")
 
-    type: Optional[PointHistoryType] = Field(None, description="기록 종류", sa_column=Column(String(20)))
+    type: PointHistoryType | None = Field(None, description="기록 종류", sa_column=Column(String(20)))
 
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(SchemaCore.timezone),
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
@@ -54,5 +57,5 @@ class PointHistory(SQLModel, table=True):
     @field_serializer("created_at")
     def serialize_created_at(self, dt: Any, _info):
         if isinstance(dt, datetime):
-            return dt.isoformat()
+            return SchemaCore.sync_timezone(dt).isoformat()
         return dt

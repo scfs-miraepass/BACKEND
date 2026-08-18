@@ -1,16 +1,18 @@
-from sqlmodel import Field, SQLModel, Relationship
-from enum import Enum
+from datetime import datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
-from sqlalchemy import Column, DateTime, func, String
-from datetime import datetime, timezone
-from pydantic import field_serializer
 
+from pydantic import field_serializer
+from sqlalchemy import Column, DateTime, String, func
+from sqlmodel import Field, Relationship, SQLModel
+
+from .core import SchemaCore
 
 if TYPE_CHECKING:
     from .users import Users
 
 
-class StampType(str, Enum):
+class StampType(StrEnum):
     """
     스탬프 종류 Enum
     - 부스 이름은 추후 수정될 수 있습니다.
@@ -36,18 +38,21 @@ class Stamps(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True, description="고유 ID")
     stamp_type: StampType = Field(description="스탬프 종류", sa_column=Column(String(20)))
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(SchemaCore.timezone),
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         description="스탬프 발급 일시",
     )
 
-    user: "Users" = Relationship(back_populates="stamps")
+    user: Users = Relationship(back_populates="stamps")
     user_id: int = Field(
-        foreign_key="users.id", ondelete="CASCADE", index=True, description="스탬프를 받은 유저의 고유 ID"
+        foreign_key="users.id",
+        ondelete="CASCADE",
+        index=True,
+        description="스탬프를 받은 유저의 고유 ID",
     )
 
     @field_serializer("created_at")
     def serialize_created_at(self, dt: Any, _info):
         if isinstance(dt, datetime):
-            return dt.isoformat()
+            return SchemaCore.sync_timezone(dt).isoformat()
         return dt

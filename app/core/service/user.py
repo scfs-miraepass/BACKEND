@@ -1,15 +1,23 @@
-from typing import TYPE_CHECKING
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from app.schemas import Users, UserType, PointHistory, PointHistoryType, Posts, PostContent, Quests
+from app.schemas import (
+    PointHistory,
+    PointHistoryType,
+    PostContent,
+    Posts,
+    Quests,
+    UserPermission,
+    Users,
+    UserType,
+)
 
+from ..core import ServiceCore
+from ..error import Forbidden
+from ..security import get_password_hash
 from .history import History
 from .post import Post
 from .quest import Quest
-from ..core import ServiceCore
-from ..security import get_password_hash
-from ..error import Forbidden
-
 
 if TYPE_CHECKING:
     _Type = Users
@@ -18,16 +26,24 @@ else:
 
 
 class User(ServiceCore[Users], _Type):
-    async def update_password(self, _new: str):
+    @property
+    def permission(self) -> UserPermission:
+        return UserPermission(self.permissions)
+
+    async def update_password(self, _new: str | None):
         """
         사용자의 비밀번호를 업데이트 합니다
 
         Args:
-            _new: 새로운 비밀번호
+            _new: 새로운 비밀번호, None의 경우 초기 비밀번호 셋팅 상태로 설정합니다.
         """
+        if isinstance(_new, str):
+            self.logs.service.info(f"{self.name}({self.id})님의 비밀번호가 변경되었습니다.")
+        else:
+            self.logs.service.info(f"{self.name}({self.id})님의 비밀번호를 초기화했습니다.")
         async with self.session as session:
             user = await session.merge(self._payload)
-            user.password = get_password_hash(_new)
+            user.password = get_password_hash(_new) if isinstance(_new, str) else None
         self._payload = user
         await self.redis.delete(f"user:{self.id}")
 
@@ -72,7 +88,12 @@ class User(ServiceCore[Users], _Type):
         return History(payload=obj)
 
     async def point_grant(
-        self, amount: int, *, reason: str, memo: str | None = None, type: PointHistoryType | None = None
+        self,
+        amount: int,
+        *,
+        reason: str,
+        memo: str | None = None,
+        type: PointHistoryType | None = None,
     ):
         """
         포인트를 지급합니다.
@@ -94,13 +115,19 @@ class User(ServiceCore[Users], _Type):
 
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{str(user.type)}:*")
+            await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
+        await self.redis.delete_pattern("search_users:*")
 
         self.logs.service_point.info(f"포인트 지급 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
 
     async def point_deduct(
-        self, amount: int, *, reason: str, memo: str | None = None, type: PointHistoryType | None = None
+        self,
+        amount: int,
+        *,
+        reason: str,
+        memo: str | None = None,
+        type: PointHistoryType | None = None,
     ):
         """
         포인트를 차감합니다.
@@ -128,7 +155,8 @@ class User(ServiceCore[Users], _Type):
 
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{str(user.type)}:*")
+            await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
+        await self.redis.delete_pattern("search_users:*")
 
         self.logs.service_point.info(f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
@@ -160,7 +188,13 @@ class User(ServiceCore[Users], _Type):
         return Post(payload=obj)
 
     async def create_quest(
-        self, *, title: str, description: str, reward: int, end_date: datetime, max_repeat: int = 1
+        self,
+        *,
+        title: str,
+        description: str,
+        reward: int,
+        end_date: datetime,
+        max_repeat: int = 1,
     ) -> Quest:
         """
         **[교사 전용]**
@@ -201,3 +235,65 @@ class User(ServiceCore[Users], _Type):
             f"퀘스트 생성 - {self.id}({self.name}) 생성. ID {obj.id}({title[:10] if len(title) > 10 else title})"
         )
         return Quest(payload=obj)
+
+    def has_permission(self, perm: UserPermission | int) -> bool:
+        """
+        권한을 소유중인지 확인합니다.
+
+        Args:
+            perm: 추가하려는 권한
+
+        Returns:
+            Bool
+        """
+        if isinstance(perm, int):
+            perm = UserPermission(perm)
+        return perm in self.permission
+
+    async def add_permission(self, perm: UserPermission | int):
+        """
+        권한을 추가합니다.
+
+        Args:
+            perm: 추가하려는 권한
+
+        Raises:
+            ValueError: 추가하려는 권한이 이미 사용자에게 있는 경우 발생합니다.
+        """
+        if isinstance(perm, int):
+            perm = UserPermission(perm)
+        if self.has_permission(perm):
+            raise ValueError("already have permission")
+
+        async with self.session as session:
+            user = await session.merge(self._payload)
+            user.permissions = (self.permission | perm).value
+
+        await self.redis.delete(f"user:{self.id}")
+        self._payload = user
+
+        self.logs.service.info(f"{self.id}({self.name})의 권한을 추가했습니다. (+{perm.name})")
+
+    async def remove_permission(self, perm: UserPermission | int):
+        """
+        권한을 제거합니다.
+
+        Args:
+            perm: 제거하려는 권한
+
+        Raises:
+            ValueError: 제거하려는 권한이 사용자에게 없는 경우 발생합니다.
+        """
+        if isinstance(perm, int):
+            perm = UserPermission(perm)
+        if not self.has_permission(perm):
+            raise ValueError("not have permission")
+
+        async with self.session as session:
+            user = await session.merge(self._payload)
+            user.permissions = (self.permission & ~perm).value
+
+        await self.redis.delete(f"user:{self.id}")
+        self._payload = user
+
+        self.logs.service.info(f"{self.id}({self.name})의 권한을 제거했습니다. (-{perm.name})")

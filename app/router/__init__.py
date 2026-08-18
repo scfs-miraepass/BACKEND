@@ -1,11 +1,6 @@
 from fastapi import APIRouter
-from .endpoints import auth
-from .endpoints import point
-from .endpoints import search
-from .endpoints import admin
-from .endpoints import quest
-from .endpoints import posts
-from .endpoints import stamp
+
+from .endpoints import admin, auth, point, posts, quest, search, stamp
 
 router = APIRouter()
 

@@ -1,9 +1,7 @@
 # MIRAE PASS BACKEND
----
 미래 패스 서비스의 백엔드 시스템
 
 ## 🔒 개발 환경설정
----
 ```bash
 # Git clone
 git clone https://git.rldn.xyz/scfs.miraepass/backend.git
@@ -26,7 +24,6 @@ uv run fastapi dev
 ```
 
 ## ✨ 명령어 및 개발 가이드
----
 ### 데이터베이스 관리
 데이터베이스 관리에는 Alembic를 사용합니다.
 ```bash
@@ -49,7 +46,6 @@ Major.Minor.Patch
 ```
 
 ## 📦 프로젝트 구조
----
 ```
 alembic                 # alembic 시스템
 app
@@ -84,7 +80,6 @@ example.env             # 환경변수 예제
 
 
 ## 🛠 기술 스택
----
 - Framework: FastAPI + Uvicorn
 - ORM: SQLAlchemy 2.0 (Async)
 - Database: MySQL 8.0, Redis
