@@ -1,3 +1,10 @@
+## [1.9.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.9.0...v1.9.1) (2026-08-18)
+
+
+### Bug Fixes
+
+* 관리자 Endpoint에서 기존 제거된 `clear_search_cache` 를 사용하여 발생하는 오류 해결 ([#10](https://github.com/scfs-miraepass/BACKEND/issues/10)) ([1e2ab81](https://github.com/scfs-miraepass/BACKEND/commit/1e2ab81cd15f129591d6eafec6b8849e51f4045d))
+
 ## [1.9.1-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.9.0...v1.9.1-dev.1) (2026-08-18)
 
 
