@@ -17,6 +17,7 @@ dependencies = [
     "passlib[argon2]>=1.7.4",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.13.1",
+    "pymysql>=1.2.0",
     "redis>=7.3.0",
     "sqlalchemy[asyncio]>=2.0.48",
     "sqlmodel>=0.0.37",

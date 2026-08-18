@@ -1,6 +1,6 @@
 from .point import PointHistory, PointHistoryType
 from .post import Post, PostContent, Posts
-from .quest import QuestCompletion, Quests
+from .quest import QuestCompletion, Quests, QuestAccept
 from .stamp import Stamps, StampType
 from .users import User, UserPermission, Users, UserSearch, UserType
 
@@ -10,6 +10,7 @@ __all__ = [
     "Post",
     "PostContent",
     "Posts",
+    "QuestAccept",
     "QuestCompletion",
     "Quests",
     "StampType",
