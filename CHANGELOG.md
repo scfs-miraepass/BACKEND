@@ -1,3 +1,10 @@
+# [1.10.0-dev.2](https://github.com/scfs-miraepass/BACKEND/compare/v1.10.0-dev.1...v1.10.0-dev.2) (2026-08-28)
+
+
+### Features
+
+* **cli:** 사용자 생성시, 기본 권한까지 추가되도록 처리 ([b565cac](https://github.com/scfs-miraepass/BACKEND/commit/b565cac7b61a2076f01e671a4514f8c021160cdc))
+
 # [1.10.0-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.9.2-dev.1...v1.10.0-dev.1) (2026-08-28)
 
 
