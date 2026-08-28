@@ -1,3 +1,10 @@
+# [1.10.0-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.9.2-dev.1...v1.10.0-dev.1) (2026-08-28)
+
+
+### Features
+
+* 데이터베이스 로그 콘솔 표기 환경변수로 따로 분리 ([c77cf0a](https://github.com/scfs-miraepass/BACKEND/commit/c77cf0a8680c43aa42a461e06fc80d8198da2eee))
+
 ## [1.9.2-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.9.1...v1.9.2-dev.1) (2026-08-18)
 
 
