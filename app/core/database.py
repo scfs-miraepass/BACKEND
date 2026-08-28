@@ -57,13 +57,13 @@ class DatabaseCore:
             if settings.debug:
                 _engine = create_async_engine(
                     str(settings.database.url),
-                    echo=settings.debug,
+                    echo=False,
                     poolclass=NullPool,
                 )
             else:
                 _engine = create_async_engine(
                     str(settings.database.url),
-                    echo=settings.debug,
+                    echo=False,
                     pool_size=settings.database.pool_size,
                     max_overflow=settings.database.max_overflow,
                     pool_timeout=settings.database.pool_timeout,

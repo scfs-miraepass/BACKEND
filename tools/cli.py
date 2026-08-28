@@ -16,7 +16,7 @@ from app.core import ServiceClient
 from app.core.config import settings
 from app.core.service import History
 from app.schemas.point import PointHistory, PointHistoryType
-from app.schemas.users import Users, UserType
+from app.schemas.users import Users, UserType, UserPermission
 
 # CLI를 실행할 때는 기본적으로 DB 쿼리 로그(echo)를 끕니다.
 settings.debug = False
@@ -64,9 +64,7 @@ async def clear_user_cache(user_id: int):
 @app.command()
 def add_user(
     name: str = typer.Option(..., help="사용자 이름"),
-    user_type: UserType = typer.Option(
-        ..., help="사용자 유형 (student, teacher, or service)"
-    ),
+    user_type: UserType = typer.Option(..., help="사용자 유형 (student, teacher, or service)"),
     grade: int | None = typer.Option(None, help="학년 (학생용)"),
     number: int | None = typer.Option(None, help="반 (학생용)"),
     student_no: int | None = typer.Option(None, help="학번 (학생용)"),
@@ -94,6 +92,7 @@ def add_user(
                     name=name,
                     grade=grade,
                     number=number,
+                    permissions=UserPermission.STUDENT.value,
                 )
                 session.add(new_user)
                 print(f"ID {user_id}의 학생 '{name}'이(가) 성공적으로 추가되었습니다.")
@@ -108,12 +107,10 @@ def add_user(
                     current_teacher_id += 1
 
                 new_user = Users(
-                    id=current_teacher_id, type=UserType.teacher, name=name
+                    id=current_teacher_id, type=UserType.teacher, name=name, permissions=UserPermission.TEACHER.value
                 )
                 session.add(new_user)
-                print(
-                    f"ID {current_teacher_id}의 교사 '{name}'이(가) 성공적으로 추가되었습니다."
-                )
+                print(f"ID {current_teacher_id}의 교사 '{name}'이(가) 성공적으로 추가되었습니다.")
 
             elif user_type == UserType.service:
                 # Find the next available ID for a service user (starting from 5000)
@@ -124,13 +121,9 @@ def add_user(
                         break
                     current_service_id += 1
 
-                new_user = Users(
-                    id=current_service_id, type=UserType.service, name=name
-                )
+                new_user = Users(id=current_service_id, type=UserType.service, name=name)
                 session.add(new_user)
-                print(
-                    f"ID {current_service_id}의 서비스 사용자 '{name}'이(가) 성공적으로 추가되었습니다."
-                )
+                print(f"ID {current_service_id}의 서비스 사용자 '{name}'이(가) 성공적으로 추가되었습니다.")
 
     asyncio.run(run_with_client(_add_user()))
 
@@ -140,9 +133,7 @@ def manage_point(
     user_id: int = typer.Option(..., help="포인트를 관리할 사용자 ID"),
     amount: int = typer.Option(..., help="추가(양수) 또는 차감(음수)할 포인트 양"),
     reason: str = typer.Option(..., help="포인트 변경 사유"),
-    history_type: PointHistoryType = typer.Option(
-        PointHistoryType.etc, help="포인트 내역 유형"
-    ),
+    history_type: PointHistoryType = typer.Option(PointHistoryType.etc, help="포인트 내역 유형"),
 ):
     """
     사용자의 포인트를 관리합니다.
@@ -158,22 +149,16 @@ def manage_point(
             if amount >= 0:
                 await user.point_grant(amount=amount, reason=reason, type=history_type)
             else:
-                await user.point_deduct(
-                    amount=amount * -1, reason=reason, type=history_type
-                )
+                await user.point_deduct(amount=amount * -1, reason=reason, type=history_type)
         await client.redis.delete_pattern("search_users:*")
-        print(
-            f"사용자 {user_id}의 포인트를 성공적으로 변경했습니다. 현재 포인트: {user.point}"
-        )
+        print(f"사용자 {user_id}의 포인트를 성공적으로 변경했습니다. 현재 포인트: {user.point}")
 
     asyncio.run(run_with_client(_manage_point()))
 
 
 @app.command()
 def list_users(
-    user_type: UserType | None = typer.Option(
-        None, help="사용자 유형(student, teacher, service)으로 필터링"
-    ),
+    user_type: UserType | None = typer.Option(None, help="사용자 유형(student, teacher, service)으로 필터링"),
     limit: int = typer.Option(50, help="반환할 최대 사용자 수"),
 ):
     """
@@ -194,9 +179,7 @@ def list_users(
                 print("사용자를 찾을 수 없습니다.")
                 return
 
-            print(
-                f"{'ID':<10} | {'유형':<10} | {'이름':<15} | {'포인트':<10} | {'관리자'}"
-            )
+            print(f"{'ID':<10} | {'유형':<10} | {'이름':<15} | {'포인트':<10} | {'관리자'}")
             print("-" * 65)
             for u in users:
                 admin_str = "O" if u.is_admin else "X"
@@ -207,9 +190,7 @@ def list_users(
                 name_padding = " " * padding_needed if padding_needed > 0 else ""
                 padded_name = u.name + name_padding
 
-                print(
-                    f"{u.id:<10} | {u.type.value:<10} | {padded_name} | {u.point:<10} | {admin_str}"
-                )
+                print(f"{u.id:<10} | {u.type.value:<10} | {padded_name} | {u.point:<10} | {admin_str}")
 
     asyncio.run(run_with_client(_list_users()))
 
@@ -242,9 +223,7 @@ def user_info(user_id: int = typer.Option(..., help="조회할 사용자 ID")):
 @app.command()
 def delete_user(
     user_id: int = typer.Option(..., help="삭제할 사용자 ID"),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="확인 프롬프트 없이 강제 삭제"
-    ),
+    force: bool = typer.Option(False, "--force", "-f", help="확인 프롬프트 없이 강제 삭제"),
 ):
     """
     시스템에서 사용자를 삭제합니다.
@@ -258,9 +237,7 @@ def delete_user(
                 return
 
             if not force:
-                confirm = input(
-                    f"정말로 '{user.name}' 사용자(ID: {user.id})를 삭제하시겠습니까? [y/N]: "
-                )
+                confirm = input(f"정말로 '{user.name}' 사용자(ID: {user.id})를 삭제하시겠습니까? [y/N]: ")
                 if confirm.lower() != "y":
                     print("삭제가 취소되었습니다.")
                     return
@@ -277,9 +254,7 @@ def delete_user(
 @app.command()
 def reset_password(
     user_id: int = typer.Option(..., help="비밀번호를 초기화할 사용자 ID"),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="확인 프롬프트 없이 강제 초기화"
-    ),
+    force: bool = typer.Option(False, "--force", "-f", help="확인 프롬프트 없이 강제 초기화"),
 ):
     """
     사용자의 비밀번호를 None으로 초기화합니다.
@@ -293,9 +268,7 @@ def reset_password(
                 return
 
             if not force:
-                confirm = input(
-                    f"정말로 '{user.name}' 사용자(ID: {user.id})의 비밀번호를 초기화하시겠습니까? [y/N]: "
-                )
+                confirm = input(f"정말로 '{user.name}' 사용자(ID: {user.id})의 비밀번호를 초기화하시겠습니까? [y/N]: ")
                 if confirm.lower() != "y":
                     print("비밀번호 초기화가 취소되었습니다.")
                     return
@@ -304,9 +277,7 @@ def reset_password(
             await session.commit()  # Commit before clearing cache
 
             await clear_user_cache(user_id)
-            print(
-                f"'{user.name}' 사용자(ID: {user.id})의 비밀번호가 None으로 초기화되었습니다."
-            )
+            print(f"'{user.name}' 사용자(ID: {user.id})의 비밀번호가 None으로 초기화되었습니다.")
 
     asyncio.run(run_with_client(_reset_password()))
 
@@ -334,17 +305,11 @@ def point_history(
                 print("포인트 내역을 찾을 수 없습니다.")
                 return
 
-            print(
-                f"{'ID':<8} | {'사용자 ID':<10} | {'변동량':<10} | {'유형':<10} | {'사유':<20} | {'날짜'}"
-            )
+            print(f"{'ID':<8} | {'사용자 ID':<10} | {'변동량':<10} | {'유형':<10} | {'사유':<20} | {'날짜'}")
             print("-" * 90)
             for h in histories:
                 h_type = h.type.value if h.type else "N/A"
-                date_str = (
-                    h.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                    if h.created_at
-                    else "N/A"
-                )
+                date_str = h.created_at.strftime("%Y-%m-%d %H:%M:%S") if h.created_at else "N/A"
                 print(
                     f"{h.id:<8} | {h.user_id:<10} | {h.changed_amount:<10} | {h_type:<10} | {h.reason:<20} | {date_str}"
                 )
@@ -355,9 +320,7 @@ def point_history(
 @app.command()
 def delete_point_history(
     history_id: int = typer.Option(..., help="삭제할 포인트 내역 ID"),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="확인 프롬프트 없이 강제 삭제"
-    ),
+    force: bool = typer.Option(False, "--force", "-f", help="확인 프롬프트 없이 강제 삭제"),
 ):
     """
     포인트 내역을 삭제하고 사용자의 포인트를 재계산합니다.
@@ -434,9 +397,7 @@ def redis_delete_pattern(
         # RedisCore doesn't have a direct way to count deleted keys easily without changing it,
         # but it will log it. We just call it.
         await client.redis.delete_pattern(pattern)
-        print(
-            f"패턴 '{pattern}' 삭제가 시작되었습니다. 자세한 내용은 로그를 확인하세요."
-        )
+        print(f"패턴 '{pattern}' 삭제가 시작되었습니다. 자세한 내용은 로그를 확인하세요.")
 
     asyncio.run(run_with_client(_redis_delete_pattern()))
 

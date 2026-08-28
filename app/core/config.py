@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     redis: Redis = Field(alias="REDIS")
     service: Service = Field(Service(), alias="SERVICE")
     debug: bool = Field(False, alias="DEBUG")
+    database_debug: bool = Field(False, alias="DATABASE_DEBUG")
     allow_origins: Annotated[list[str], NoDecode] = Field(alias="ALLOWED_ORIGINS")
 
     @field_validator("allow_origins", mode="before")
