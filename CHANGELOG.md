@@ -1,3 +1,17 @@
+# [1.10.0](https://github.com/scfs-miraepass/BACKEND/compare/v1.9.1...v1.10.0) (2026-08-28)
+
+
+### Bug Fixes
+
+* 관리자 Endpoint에서 기존 제거된 `clear_search_cache` 를 사용하여 발생하는 오류 해결 ([f84bff7](https://github.com/scfs-miraepass/BACKEND/commit/f84bff724193b16390064db25367c0a1276b262a))
+* 실제 포인트 기록에 사용하는 redis key가 달라, 업데이트가 안되는 현상 해결 ([69aaeb6](https://github.com/scfs-miraepass/BACKEND/commit/69aaeb63da784021041b8a34689183c59465e48c))
+
+
+### Features
+
+* **cli:** 사용자 생성시, 기본 권한까지 추가되도록 처리 ([b565cac](https://github.com/scfs-miraepass/BACKEND/commit/b565cac7b61a2076f01e671a4514f8c021160cdc))
+* 데이터베이스 로그 콘솔 표기 환경변수로 따로 분리 ([c77cf0a](https://github.com/scfs-miraepass/BACKEND/commit/c77cf0a8680c43aa42a461e06fc80d8198da2eee))
+
 # [1.10.0-dev.3](https://github.com/scfs-miraepass/BACKEND/compare/v1.10.0-dev.2...v1.10.0-dev.3) (2026-08-28)
 
 
