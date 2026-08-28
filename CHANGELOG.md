@@ -1,3 +1,10 @@
+# [1.10.0-dev.3](https://github.com/scfs-miraepass/BACKEND/compare/v1.10.0-dev.2...v1.10.0-dev.3) (2026-08-28)
+
+
+### Bug Fixes
+
+* 실제 포인트 기록에 사용하는 redis key가 달라, 업데이트가 안되는 현상 해결 ([69aaeb6](https://github.com/scfs-miraepass/BACKEND/commit/69aaeb63da784021041b8a34689183c59465e48c))
+
 # [1.10.0-dev.2](https://github.com/scfs-miraepass/BACKEND/compare/v1.10.0-dev.1...v1.10.0-dev.2) (2026-08-28)
 
 
