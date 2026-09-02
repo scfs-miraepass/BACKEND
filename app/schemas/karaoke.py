@@ -37,13 +37,10 @@ class KaraokeAuction(SQLModel, table=True):
     status: AuctionStatus = Field(default=AuctionStatus.SCHEDULED, sa_column=Column(String(20), nullable=False))
 
     # 캐싱용으로 현재 최고 입찰 상태를 저장해두면 쿼리가 빠름
-    current_highest_bid_id: int | None = Field(None, foreign_key="karaokebid.id", description="현재 최고 입찰 ID")
+    current_highest_bid_id: int | None = Field(None, description="현재 최고 입찰 ID")
     current_highest_bid_amount: int = Field(default=0, description="현재 최고 입찰가")
 
-    bids: list["KaraokeBid"] = Relationship(
-        back_populates="auction",
-        sa_relationship_kwargs={"primaryjoin": "KaraokeAuction.id==KaraokeBid.auction_id", "lazy": "selectin"},
-    )
+    bids: list["KaraokeBid"] = Relationship(back_populates="auction", passive_deletes=True)
 
 
 class KaraokeBidStatus(StrEnum):
@@ -55,10 +52,8 @@ class KaraokeBidStatus(StrEnum):
 class KaraokeBid(SQLModel, table=True):
     id: int | None = Field(None, primary_key=True, index=True)
 
-    auction_id: int = Field(foreign_key="karaokeauction.id", nullable=False, index=True)
-    auction: KaraokeAuction = Relationship(
-        back_populates="bids", sa_relationship_kwargs={"primaryjoin": "KaraokeBid.auction_id==KaraokeAuction.id"}
-    )
+    auction: KaraokeAuction = Relationship(back_populates="bids")
+    auction_id: int = Field(foreign_key="karaokeauction.id", nullable=False, index=True, ondelete="CASCADE")
 
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
 
