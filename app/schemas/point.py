@@ -21,6 +21,8 @@ class PointHistoryType(StrEnum):
     quest = "quest"  # 퀘스트 보상
     stamp = "stamp"  # 스탬프 발급
     stamp_bonus = "stamp_bonus"  # 스탬프 보너스
+    karaoke_bid = "karaoke_bid"  # 경매 입찰
+    karaoke_refund = "karaoke_refund"  # 경매 유찰 환불
 
 
 class PointHistory(SQLModel, table=True):

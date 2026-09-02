@@ -103,7 +103,15 @@ class UserPermission(IntFlag):
     VIEW_QUEST = 2**16
     """퀘스트를 볼 수 있는 권한"""
 
-    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | JOIN_QUEST | VIEW_POST | VIEW_STAMP | VIEW_QUEST
+    JOIN_KARAOKE = 2**18
+    """노래방 경매에 참여할 수 있는 권한"""
+
+    MANAGE_KARAOKE = 2**19
+    """노래방 예약 관리 및 취소 권한"""
+
+    STUDENT = (
+        VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | JOIN_QUEST | VIEW_POST | VIEW_STAMP | VIEW_QUEST | JOIN_KARAOKE
+    )
     TEACHER = (
         GRANT_POINT
         | CREATE_QUEST
@@ -114,7 +122,7 @@ class UserPermission(IntFlag):
         | VIEW_POST
         | VIEW_STAMP
     )
-    ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST
+    ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST | MANAGE_KARAOKE
 
     @classmethod
     def __get_pydantic_json_schema__(
