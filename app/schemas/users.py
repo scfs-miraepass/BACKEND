@@ -156,7 +156,7 @@ class User(SQLModel):
     point: int = Field(0, description="보유 포인트")
     total_point: int = Field(0, description="누적 포인트")
 
-    permissions: int = Field(UserPermission.NONE.value, description="관리자 여부")
+    permissions: int = Field(UserPermission.NONE.value, description="사용자 권한")
 
     history_type: PointHistoryType | None = Field(None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입")
 
