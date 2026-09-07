@@ -53,13 +53,10 @@ class KaraokeBid(SQLModel, table=True):
         foreign_key="karaoke.id", nullable=False, index=True, ondelete="CASCADE", description="연결된 경매의 고유 ID"
     )
 
-    bidder_id: int = Field(
-        foreign_key="users.id", nullable=False, ondelete="CASCADE", description="입찰한 파티의 고유 ID"
+    bidder_id: int = Field(foreign_key="users.id", nullable=False, description="입찰한 유저의 고유ID")
+    party_id: int | None = Field(
+        foreign_key="karaoke_party.id", nullable=True, description="입찰한 유저의 파티 고유 ID"
     )
-    party_bidder: bool = Field(default=False, description="파티로 참가 여부")
-    # 만약 karaoke_party.auction_id == auction_id and karaoke_party.leader_id == bidder_id 이라면
-    # 즉, 파티로 참가한다는 소리. party_bidder에 따라 파티로 한거라면 True, 아니면 False
-    # 만약 입찰 하고 이후에 파티를 구성해 입찰 시에, 기존 입찰이 파티로 처리되지 않도록 하기 위한 조치
 
     amount: int = Field(nullable=False, description="입찰 금액")
 
@@ -94,6 +91,7 @@ class KaraokeParty(SQLModel, table=True):
         foreign_key="users.id", nullable=False, index=True, ondelete="CASCADE", description="파티 대표 유저의 고유ID"
     )
 
+    dispersed: bool = Field(default=False, description="파티 해산 여부")
     members: list["KaraokeMember"] = Relationship(back_populates="party", passive_deletes=True)
 
 

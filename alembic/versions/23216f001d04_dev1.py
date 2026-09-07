@@ -1,8 +1,8 @@
 """dev1
 
-Revision ID: 98c59464dc57
+Revision ID: 23216f001d04
 Revises: 2508b87106f3
-Create Date: 2026-09-07 09:45:21.279086
+Create Date: 2026-09-07 23:36:02.186177
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "98c59464dc57"
+revision: str = "23216f001d04"
 down_revision: str | Sequence[str] | None = "2508b87106f3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -37,25 +37,11 @@ def upgrade() -> None:
     op.create_index("ix_karaoke_date_time", "karaoke", ["date", "time"], unique=False)
     op.create_index(op.f("ix_karaoke_id"), "karaoke", ["id"], unique=False)
     op.create_table(
-        "karaoke_bid",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("auction_id", sa.Integer(), nullable=False),
-        sa.Column("bidder_id", sa.Integer(), nullable=False),
-        sa.Column("party_bidder", sa.Boolean(), nullable=False),
-        sa.Column("amount", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
-        sa.ForeignKeyConstraint(["auction_id"], ["karaoke.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["bidder_id"], ["users.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_karaoke_auction_id_bidder_id", "karaoke_bid", ["auction_id", "bidder_id"], unique=False)
-    op.create_index(op.f("ix_karaoke_bid_auction_id"), "karaoke_bid", ["auction_id"], unique=False)
-    op.create_index(op.f("ix_karaoke_bid_id"), "karaoke_bid", ["id"], unique=False)
-    op.create_table(
         "karaoke_party",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("auction_id", sa.Integer(), nullable=False),
         sa.Column("leader_id", sa.Integer(), nullable=False),
+        sa.Column("dispersed", sa.Boolean(), nullable=False),
         sa.ForeignKeyConstraint(["auction_id"], ["karaoke.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["leader_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -64,6 +50,28 @@ def upgrade() -> None:
     op.create_index(op.f("ix_karaoke_party_auction_id"), "karaoke_party", ["auction_id"], unique=False)
     op.create_index(op.f("ix_karaoke_party_id"), "karaoke_party", ["id"], unique=False)
     op.create_index(op.f("ix_karaoke_party_leader_id"), "karaoke_party", ["leader_id"], unique=False)
+    op.create_table(
+        "karaoke_bid",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("auction_id", sa.Integer(), nullable=False),
+        sa.Column("bidder_id", sa.Integer(), nullable=False),
+        sa.Column("party_id", sa.Integer(), nullable=True),
+        sa.Column("amount", sa.Integer(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.ForeignKeyConstraint(["auction_id"], ["karaoke.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["bidder_id"],
+            ["users.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["party_id"],
+            ["karaoke_party.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_karaoke_auction_id_bidder_id", "karaoke_bid", ["auction_id", "bidder_id"], unique=False)
+    op.create_index(op.f("ix_karaoke_bid_auction_id"), "karaoke_bid", ["auction_id"], unique=False)
+    op.create_index(op.f("ix_karaoke_bid_id"), "karaoke_bid", ["id"], unique=False)
     op.create_table(
         "karaoke_member",
         sa.Column("party_id", sa.Integer(), nullable=False),
@@ -84,15 +92,15 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_karaoke_member_user_id"), table_name="karaoke_member")
     op.drop_index(op.f("ix_karaoke_member_party_id"), table_name="karaoke_member")
     op.drop_table("karaoke_member")
+    op.drop_index(op.f("ix_karaoke_bid_id"), table_name="karaoke_bid")
+    op.drop_index(op.f("ix_karaoke_bid_auction_id"), table_name="karaoke_bid")
+    op.drop_index("ix_karaoke_auction_id_bidder_id", table_name="karaoke_bid")
+    op.drop_table("karaoke_bid")
     op.drop_index(op.f("ix_karaoke_party_leader_id"), table_name="karaoke_party")
     op.drop_index(op.f("ix_karaoke_party_id"), table_name="karaoke_party")
     op.drop_index(op.f("ix_karaoke_party_auction_id"), table_name="karaoke_party")
     op.drop_index("ix_karaoke_auction_id_leader_id", table_name="karaoke_party")
     op.drop_table("karaoke_party")
-    op.drop_index(op.f("ix_karaoke_bid_id"), table_name="karaoke_bid")
-    op.drop_index(op.f("ix_karaoke_bid_auction_id"), table_name="karaoke_bid")
-    op.drop_index("ix_karaoke_auction_id_bidder_id", table_name="karaoke_bid")
-    op.drop_table("karaoke_bid")
     op.drop_index(op.f("ix_karaoke_id"), table_name="karaoke")
     op.drop_index("ix_karaoke_date_time", table_name="karaoke")
     op.drop_index(op.f("ix_karaoke_date"), table_name="karaoke")
