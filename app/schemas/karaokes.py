@@ -12,7 +12,7 @@ class KaraokeStatus(StrEnum):
     CONFIRMED = "Confirmed"  # 경매 종료 후 예약 확정됨
 
 
-class Karaoke(SQLModel, table=True):
+class Karaokes(SQLModel, table=True):
     __tablename__ = "karaoke"
     __table_args__ = (Index("ix_karaoke_date_time", "date", "time"),)
 
@@ -48,7 +48,7 @@ class KaraokeBid(SQLModel, table=True):
 
     id: int | None = Field(None, primary_key=True, index=True)
 
-    auction: Karaoke = Relationship(back_populates="bids")
+    auction: Karaokes = Relationship(back_populates="bids")
     auction_id: int = Field(
         foreign_key="karaoke.id", nullable=False, index=True, ondelete="CASCADE", description="연결된 경매의 고유 ID"
     )
@@ -82,7 +82,7 @@ class KaraokeParty(SQLModel, table=True):
 
     id: int | None = Field(None, primary_key=True, index=True)
 
-    auction: Karaoke = Relationship(back_populates="parties")
+    auction: Karaokes = Relationship(back_populates="parties")
     auction_id: int = Field(
         foreign_key="karaoke.id", nullable=False, index=True, ondelete="CASCADE", description="연결된 경매의 고유 ID"
     )
