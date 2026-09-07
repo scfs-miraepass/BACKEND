@@ -7,9 +7,9 @@ from .core import SchemaCore
 
 
 class KaraokeStatus(StrEnum):
-    scheduled = "Scheduled"  # 경매가 시작 되기전, 예정됨 시간
-    progress = "Progress"  # 경매가 진행중
-    appointment = "Appointment"  # 경매가 끝나 예약이 확정됨
+    PENDING = "Pending"  # 경매 시작 전 대기/예정 상태
+    IN_PROGRESS = "In_Progress"  # 경매 진행 중 (Progress보다 명확함)
+    CONFIRMED = "Confirmed"  # 경매 종료 후 예약 확정됨
 
 
 class Karaoke(SQLModel, table=True):
@@ -20,7 +20,7 @@ class Karaoke(SQLModel, table=True):
     time: int = Field(..., nullable=False, primary_key=True, description="예약 시간 (1~7교시, 점심시간 8)")
 
     status: KaraokeStatus = Field(
-        default=KaraokeStatus.scheduled.value,
+        default=KaraokeStatus.PENDING,
         sa_column=Column(String(20), nullable=False),
         description="현재 예약 상태",
     )
