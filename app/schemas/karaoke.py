@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as dt_date, datetime
 from enum import StrEnum
 from pydantic import field_serializer
 from sqlmodel import SQLModel, Field, Index, Column, String, DateTime, Relationship, func
@@ -14,10 +14,12 @@ class KaraokeStatus(StrEnum):
 
 class Karaoke(SQLModel, table=True):
     __tablename__ = "karaoke"
-    __table_args__ = Index("ix_karaoke_date_time", "date", "time")
+    __table_args__ = (Index("ix_karaoke_date_time", "date", "time"),)
 
-    date: date = Field(..., nullable=False, index=True, primary_key=True, description="예약 일자")
-    time: int = Field(..., nullable=False, primary_key=True, description="예약 시간 (1~7교시, 점심시간 8)")
+    id: int | None = Field(default=None, primary_key=True, index=True)
+
+    date: dt_date = Field(..., nullable=False, index=True, description="예약 일자")
+    time: int = Field(..., nullable=False, description="예약 시간 (1~7교시, 점심시간 8)")
 
     status: KaraokeStatus = Field(
         default=KaraokeStatus.PENDING,
@@ -33,10 +35,16 @@ class Karaoke(SQLModel, table=True):
     bids: list["KaraokeBid"] = Relationship(back_populates="auction", passive_deletes=True)
     parties: list["KaraokeParty"] = Relationship(back_populates="auction", passive_deletes=True)
 
+    @field_serializer("start_time", "end_time")
+    def serialize_datetime(self, dt, _info):
+        if isinstance(dt, datetime):
+            return SchemaCore.sync_timezone(dt).isoformat()
+        return dt
+
 
 class KaraokeBid(SQLModel, table=True):
     __tablename__ = "karaoke_bid"
-    __table_args__ = Index("ix_karaoke_auction_id_bidder_id", "auction_id", "bidder_id")
+    __table_args__ = (Index("ix_karaoke_auction_id_bidder_id", "auction_id", "bidder_id"),)
 
     id: int | None = Field(None, primary_key=True, index=True)
 
@@ -73,7 +81,7 @@ class KaraokeBid(SQLModel, table=True):
 
 class KaraokeParty(SQLModel, table=True):
     __tablename__ = "karaoke_party"
-    __table_args__ = Index("ix_karaoke_auction_id_leader_id", "auction_id", "leader_id")
+    __table_args__ = (Index("ix_karaoke_auction_id_leader_id", "auction_id", "leader_id"),)
 
     id: int | None = Field(None, primary_key=True, index=True)
 
