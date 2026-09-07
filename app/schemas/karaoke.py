@@ -106,11 +106,17 @@ class KaraokeMember(SQLModel, table=True):
         nullable=False,
         index=True,
         ondelete="CASCADE",
+        primary_key=True,
         description="소속된 파티의 고유 ID",
     )
 
     user_id: int = Field(
-        foreign_key="users.id", nullable=False, index=True, ondelete="CASCADE", description="파티 멤버의 고유 ID"
+        foreign_key="users.id",
+        nullable=False,
+        index=True,
+        ondelete="CASCADE",
+        primary_key=True,
+        description="파티 멤버의 고유 ID",
     )
 
     pending: bool = Field(default=True, description="멤버 참여가 수락되었는지 여부")
