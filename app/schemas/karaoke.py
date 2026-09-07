@@ -17,7 +17,7 @@ class Karaoke(SQLModel, table=True):
     __table_args__ = Index("ix_karaoke_date_time", "date", "time")
 
     date: date = Field(..., nullable=False, index=True, primary_key=True, description="예약 일자")
-    time: int = Field(..., nullable=False, index=True, primary_key=True, description="예약 시간 (1~7교시, 점심시간 8)")
+    time: int = Field(..., nullable=False, primary_key=True, description="예약 시간 (1~7교시, 점심시간 8)")
 
     status: KaraokeStatus = Field(
         default=KaraokeStatus.scheduled.value,
@@ -31,15 +31,27 @@ class Karaoke(SQLModel, table=True):
     min_point: int = Field(default=0, description="최소 입찰가")
 
     bids: list["KaraokeBid"] = Relationship(back_populates="auction", passive_deletes=True)
+    parties: list["KaraokeParty"] = Relationship(back_populates="auction", passive_deletes=True)
 
 
 class KaraokeBid(SQLModel, table=True):
     __tablename__ = "karaoke_bid"
+    __table_args__ = Index("ix_karaoke_auction_id_bidder_id", "auction_id", "bidder_id")
 
     id: int | None = Field(None, primary_key=True, index=True)
 
     auction: Karaoke = Relationship(back_populates="bids")
-    auction_id: int = Field(foreign_key="karaoke.id", nullable=False, index=True, ondelete="CASCADE")
+    auction_id: int = Field(
+        foreign_key="karaoke.id", nullable=False, index=True, ondelete="CASCADE", description="연결된 경매의 고유 ID"
+    )
+
+    bidder_id: int = Field(
+        foreign_key="users.id", nullable=False, ondelete="CASCADE", description="입찰한 파티의 고유 ID"
+    )
+    party_bidder: bool = Field(default=False, description="파티로 참가 여부")
+    # 만약 karaoke_party.auction_id == auction_id and karaoke_party.leader_id == bidder_id 이라면
+    # 즉, 파티로 참가한다는 소리. party_bidder에 따라 파티로 한거라면 True, 아니면 False
+    # 만약 입찰 하고 이후에 파티를 구성해 입찰 시에, 기존 입찰이 파티로 처리되지 않도록 하기 위한 조치
 
     amount: int = Field(nullable=False, description="입찰 금액")
 
@@ -49,13 +61,48 @@ class KaraokeBid(SQLModel, table=True):
             DateTime(timezone=True),
             server_default=func.now(),
         ),
+        description="입찰된 시간",
     )
-
-    # TODO: 누가 입찰했는지 추가해야함, 이때 입찰자는 여러명일 수 있음으로 파티로 따로 묶어서 하자
-    # TODO: 경매의 최고 입찰가는 Redis에 저장하자
 
     @field_serializer("created_at")
     def serialize_created_at(self, dt, _info):
         if isinstance(dt, datetime):
             return SchemaCore.sync_timezone(dt).isoformat()
         return dt
+
+
+class KaraokeParty(SQLModel, table=True):
+    __tablename__ = "karaoke_party"
+    __table_args__ = Index("ix_karaoke_auction_id_leader_id", "auction_id", "leader_id")
+
+    id: int | None = Field(None, primary_key=True, index=True)
+
+    auction: Karaoke = Relationship(back_populates="parties")
+    auction_id: int = Field(
+        foreign_key="karaoke.id", nullable=False, index=True, ondelete="CASCADE", description="연결된 경매의 고유 ID"
+    )
+
+    leader_id: int = Field(
+        foreign_key="users.id", nullable=False, index=True, ondelete="CASCADE", description="파티 대표 유저의 고유ID"
+    )
+
+    members: list["KaraokeMember"] = Relationship(back_populates="party", passive_deletes=True)
+
+
+class KaraokeMember(SQLModel, table=True):
+    __tablename__ = "karaoke_member"
+
+    party: KaraokeParty = Relationship(back_populates="members")
+    party_id: int = Field(
+        foreign_key="karaoke_party.id",
+        nullable=False,
+        index=True,
+        ondelete="CASCADE",
+        description="소속된 파티의 고유 ID",
+    )
+
+    user_id: int = Field(
+        foreign_key="users.id", nullable=False, index=True, ondelete="CASCADE", description="파티 멤버의 고유 ID"
+    )
+
+    pending: bool = Field(default=True, description="멤버 참여가 수락되었는지 여부")
