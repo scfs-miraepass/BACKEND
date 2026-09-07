@@ -1,10 +1,11 @@
 from sqlmodel import select
+from datetime import date as dt_date
 
 from app.schemas import Posts, Quests, Users, PointHistory
 
 from .config import settings
 from .core import BaseCore
-from .service import Post, Quest, User, History
+from .service import Post, Quest, User, History, Karaoke
 
 
 class ServiceClient(BaseCore):
@@ -37,9 +38,9 @@ class ServiceClient(BaseCore):
             User | None
         """
         if cache and not lock:
-            cached_user = await self.redis.get(f"user:{_id}")
-            if cached_user:
-                return User(payload=Users.model_validate(cached_user))
+            cached = await self.redis.get(f"user:{_id}")
+            if cached:
+                return User(payload=Users.model_validate(cached))
 
         async with self.session as session:
             if lock:
@@ -79,9 +80,9 @@ class ServiceClient(BaseCore):
             Post | None
         """
         if cache and not lock:
-            cached_user = await self.redis.get(f"post:{_id}")
-            if cached_user:
-                return Post(payload=Posts.model_validate(cached_user))
+            cached = await self.redis.get(f"post:{_id}")
+            if cached:
+                return Post(payload=Posts.model_validate(cached))
 
         async with self.session as session:
             if lock:
@@ -121,9 +122,9 @@ class ServiceClient(BaseCore):
             Quest | None
         """
         if cache and not lock:
-            cached_user = await self.redis.get(f"quest:{_id}")
-            if cached_user:
-                return Quest(payload=Quests.model_validate(cached_user))
+            cached = await self.redis.get(f"quest:{_id}")
+            if cached:
+                return Quest(payload=Quests.model_validate(cached))
 
         async with self.session as session:
             if lock:
@@ -142,13 +143,7 @@ class ServiceClient(BaseCore):
         return Quest(payload=payload)
 
     async def get_history(
-        self,
-        /,
-        _id: int,
-        *,
-        cache: bool = False,
-        save_cache: bool = True,
-        lock: bool = False
+        self, /, _id: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
     ) -> History | None:
         """
         ID를 이용해 포인트 기록을 가져옵니다.
@@ -163,9 +158,9 @@ class ServiceClient(BaseCore):
             History | None
         """
         if cache and not lock:
-            cached_user = await self.redis.get(f"point_history:{_id}")
-            if cached_user:
-                return History(payload=PointHistory.model_validate(cached_user))
+            cached = await self.redis.get(f"point_history:{_id}")
+            if cached:
+                return History(payload=PointHistory.model_validate(cached))
 
         async with self.session as session:
             if lock:
@@ -182,3 +177,9 @@ class ServiceClient(BaseCore):
                 ttl=60 * 5,
             )
         return History(payload=payload)
+
+    async def get_karaoke(
+        self, date: dt_date, time: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
+    ) -> Karaoke | None:
+        ...
+        # TODO
