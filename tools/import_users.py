@@ -12,7 +12,7 @@ from app.core.config import settings
 
 settings.debug = False
 from app.core import ServiceClient
-from app.schemas.users import Users, UserType
+from app.schemas.users import Users, UserType, UserPermission
 
 client = ServiceClient()
 
@@ -56,6 +56,7 @@ async def import_students(session):
                 name=name,
                 grade=grade,
                 number=number,
+                permissions=UserPermission.STUDENT,
             )
             session.add(new_student)
             added_count += 1
@@ -88,23 +89,21 @@ async def import_teachers(session):
 
         # 이름으로 중복 확인
         result = await session.execute(
-            select(Users).where(
-                col(Users.name) == name, col(Users.type) == UserType.teacher
-            )
+            select(Users).where(col(Users.name) == name, col(Users.type) == UserType.teacher)
         )
         existing_user = result.scalars().first()
 
         if not existing_user:
             # 빈 ID 찾기 (4000번대)
             while True:
-                id_check = await session.execute(
-                    select(Users).where(col(Users.id) == current_teacher_id)
-                )
+                id_check = await session.execute(select(Users).where(col(Users.id) == current_teacher_id))
                 if not id_check.scalars().first():
                     break
                 current_teacher_id += 1
 
-            new_teacher = Users(id=current_teacher_id, type=UserType.teacher, name=name)
+            new_teacher = Users(
+                id=current_teacher_id, type=UserType.teacher, name=name, permissions=UserPermission.TEACHER
+            )
             session.add(new_teacher)
             added_count += 1
             current_teacher_id += 1  # 다음 교사를 위해 ID 증가
