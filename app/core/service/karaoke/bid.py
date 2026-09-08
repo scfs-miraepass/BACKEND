@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from app.schemas import KaraokeBids
 
-from app.core.core import ServiceCore
+from ...core import ServiceCore
 
 if TYPE_CHECKING:
     _Type = KaraokeBids

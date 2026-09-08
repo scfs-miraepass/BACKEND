@@ -3,7 +3,7 @@ from sqlmodel import delete, col
 
 from app.schemas import Karaokes, KaraokeStatus
 
-from app.core.core import ServiceCore
+from ...core import ServiceCore
 
 if TYPE_CHECKING:
     _Type = Karaokes
