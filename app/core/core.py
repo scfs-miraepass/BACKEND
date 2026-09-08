@@ -1,12 +1,20 @@
 from typing import TypeVar
 from functools import lru_cache
 from hangulpy import split_hangul_string
+from math import floor
+from dataclasses import dataclass
 
 from .database import DatabaseCore
 from .loggers import LoggerCore
 from .redis import RedisCore
 
 T = TypeVar("T")
+
+
+@dataclass
+class DutchPayReturn:
+    member: int
+    leader: int
 
 
 class BaseCore:
@@ -35,6 +43,24 @@ class BaseCore:
         동일한 검색어에 대한 중복 연산을 방지하기 위해 캐싱을 사용합니다.
         """
         return "".join(split_hangul_string(query.replace(" ", "")))
+
+    @classmethod
+    def dutch_pay(cls, amount: int, party_members: int) -> DutchPayReturn:
+        """
+        대표자와 파티 멤버가 각자 얼마 씩 분배해야하는지 계산하는 함수
+        100원 단위로 절사되며, 절사된 금액은 대표자에게 적용됩니다.
+
+        Args:
+            amount: 더치페이 해야하는 금액
+            party_members: 대표자를 포함한, 모든 파티원의 인원 수
+
+        Returns:
+            DutchPayReturn
+        """
+        member_share = floor(amount / (party_members * 100)) * 100
+        leader_share = amount - (member_share * (party_members - 1))
+
+        return DutchPayReturn(member=member_share, leader=leader_share)
 
 
 class ServiceCore[T](BaseCore):

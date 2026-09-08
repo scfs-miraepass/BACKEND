@@ -102,27 +102,48 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         # TODO: 입찰자(들)에게 입찰가 만큼의 돈이 있는가 확인 로직 필요함
 
         async with self.session as session:
+            if party is None:
+                await bidder.point_deduct(
+                    amount,
+                    reason="노래방 예약",
+                    memo=f"{self.date} {self.time_format} 노래방 예약",
+                    type=PointHistoryType.karaoke_bid,
+                )  # 포인트 차감
+            else:
+                party_members = await party.get_members()
+                point = self.dutch_pay(amount, len(party_members) + 1)
+
+                # 만약에 차감을 할때, 포인트가 부족할경우 ValueError가 발생하니깐.. 세션 commit이 안되고 롤백처리 되니깐..
+                # 따로 포인트가 있는지 확인하는 로직을 작성하지 않아도 되지 않을까?
+
+                # 대표자 차감
+                await bidder.point_deduct(
+                    point.leader,
+                    reason="노래방 예약",
+                    memo=f"{self.date} {self.time_format} 노래방 예약",
+                    type=PointHistoryType.karaoke_bid,
+                )
+
+                # 팀원 차감
+                for user in party_members:
+                    await user.point_deduct(
+                        point.member,
+                        reason="노래방 예약",
+                        memo=f"{self.date} {self.time_format} 노래방 예약",
+                        type=PointHistoryType.karaoke_bid,
+                    )
+
+                # TODO: 이걸 보는 미래의 영재야, 만들다 말았으니 만들어야 한단다.
+
+            if highest is not None:
+                # 기존에 최고가가 있는경우, 해당 입찰 취소처리
+                await highest.cancel()
+
             obj = KaraokeBids(
                 auction_id=self.id, bidder_id=bidder.id, party_id=party.id if party is not None else None, amount=amount
             )
             session.add(obj)
             await session.flush()
-
-        if party is None:
-            await bidder.point_deduct(
-                amount,
-                reason="노래방 예약",
-                memo=f"{self.date} {self.time_format} 노래방 예약",
-                type=PointHistoryType.karaoke_bid,
-            )  # 포인트 차감
-        else:
-            # TODO: 파티 멤버에게서 각각 돈을 빼도록 해야함
-            ...
-
-        if highest is not None:
-            ...
-
-        # TODO: 입찰시 기존 최고가 입찰자 포인트 환불, 파티가 있을경우 분리해서 환불이랑 지출 할 수 있도록
 
         await self.redis.delete(f"karaoke:{self.id}")
         await self.redis.delete_pattern(f"karaoke_list:{self.date}")

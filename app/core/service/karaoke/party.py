@@ -18,6 +18,7 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
     async def get_members(self) -> list[User]:
         """
         현재 파티에 소속된 유저들을 가져옵니다.
+        파티 대표자 유저는 포함하지 않습니다.
 
         Raises:
             ServiceError.NotFound: 유저 정보를 가져오지 못하거나, 찾지 못할 경우 발생합니다.
