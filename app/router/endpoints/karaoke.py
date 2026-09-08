@@ -12,7 +12,7 @@ client = ServiceClient()
 
 # 예약 경매 목록 조회 (GET /karaoke)
 # 예약 경매 생성 (POST /karaoke)
-# TODO: 예약 경매 조회 (GET /karaoke/{id})
+# 예약 경매 조회 (GET /karaoke/{id})
 # TODO: 예약 경매 삭제 (DELETE /karaoke/{id})
 # TODO: 예약 경매 입찰 (POST /karaoke/{id}/bid)
 # TODO: 파티원 초대
@@ -136,4 +136,38 @@ async def create_karaoke(body: KaraokeCreate, auth_data: LoginDep):
     client.logs.service_karaoke.info(
         f"{user.name}({user.id})님이 {karaoke.id}({karaoke.date} / {karaoke.time}) 노래방 예약을 생성했습니다"
     )
+    return ResponseModel[Karaokes](success=True, data=karaoke)
+
+
+@router.get(
+    "/{karaoke_id}",
+    response_model=ResponseModel[Karaokes],
+    responses={
+        200: {"description": "정상적으로 처리됨."},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한 없음",
+        },
+        404: {
+            "model": ErrorResponse,
+            "description": "예약을 찾을 수 없음",
+        },
+    },
+    status_code=status.HTTP_201_CREATED,
+    summary="예약 조회",
+    description="특정 예약을 조회합니다.",
+)
+async def get_karaoke(auth_data: LoginDep, karaoke_id: int):
+    user, _ = auth_data
+
+    if not user.has_permission(UserPermission.VIEW_KARAOKE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    karaoke = await client.get_karaoke(karaoke_id, cache=True)
+    if karaoke is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
+
     return ResponseModel[Karaokes](success=True, data=karaoke)
