@@ -32,8 +32,8 @@ class Karaokes(SQLModel, table=True):
 
     min_point: int = Field(default=0, description="최소 입찰가")
 
-    bids: list["KaraokeBid"] = Relationship(back_populates="auction", passive_deletes=True)
-    parties: list["KaraokeParty"] = Relationship(back_populates="auction", passive_deletes=True)
+    bids: list["KaraokeBids"] = Relationship(back_populates="auction", passive_deletes=True)
+    parties: list["KaraokePartis"] = Relationship(back_populates="auction", passive_deletes=True)
 
     @field_serializer("start_time", "end_time")
     def serialize_datetime(self, dt, _info):
@@ -42,7 +42,7 @@ class Karaokes(SQLModel, table=True):
         return dt
 
 
-class KaraokeBid(SQLModel, table=True):
+class KaraokeBids(SQLModel, table=True):
     __tablename__ = "karaoke_bid"
     __table_args__ = (Index("ix_karaoke_auction_id_bidder_id", "auction_id", "bidder_id"),)
 
@@ -76,7 +76,7 @@ class KaraokeBid(SQLModel, table=True):
         return dt
 
 
-class KaraokeParty(SQLModel, table=True):
+class KaraokePartis(SQLModel, table=True):
     __tablename__ = "karaoke_party"
     __table_args__ = (Index("ix_karaoke_auction_id_leader_id", "auction_id", "leader_id"),)
 
@@ -92,13 +92,13 @@ class KaraokeParty(SQLModel, table=True):
     )
 
     dispersed: bool = Field(default=False, description="파티 해산 여부")
-    members: list["KaraokeMember"] = Relationship(back_populates="party", passive_deletes=True)
+    members: list["KaraokeMembers"] = Relationship(back_populates="party", passive_deletes=True)
 
 
-class KaraokeMember(SQLModel, table=True):
+class KaraokeMembers(SQLModel, table=True):
     __tablename__ = "karaoke_member"
 
-    party: KaraokeParty = Relationship(back_populates="members")
+    party: KaraokePartis = Relationship(back_populates="members")
     party_id: int = Field(
         foreign_key="karaoke_party.id",
         nullable=False,
