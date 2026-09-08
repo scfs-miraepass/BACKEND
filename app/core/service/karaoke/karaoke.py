@@ -21,6 +21,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
     karaoke:{karaoke.id} - karaoke.id에 대한 노래방 예약 데이터
     karaoke_list:{karaoke.date} - karaoke.date 날에 소속된 노래방 예약 목록 데이터
     karaoke:{karaoke.id}:highest - karaoke.id 의 최고 입찰 기록
+    karaoke_party:{karaoke_party.id} - karaoke_party.id의 파티 데이터
 
     - key에 들어가는 date요소의 포멧팅은 datetime의 기본 포멧팅인 YYYY-MM-DD으로 할 것.
     """
@@ -98,6 +99,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         if amount < (self.min_point if highest is None else highest.amount):
             raise ValueError(f"입찰 금액은 최소 입찰가({self.min_point}) 이상이어야 합니다.")
 
+        # TODO: 입찰자(들)에게 입찰가 만큼의 돈이 있는가 확인 로직 필요함
+
         async with self.session as session:
             obj = KaraokeBids(
                 auction_id=self.id, bidder_id=bidder.id, party_id=party.id if party is not None else None, amount=amount
@@ -105,19 +108,26 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             session.add(obj)
             await session.flush()
 
+        if party is None:
+            await bidder.point_deduct(
+                amount,
+                reason="노래방 예약",
+                memo=f"{self.date} {self.time_format} 노래방 예약",
+                type=PointHistoryType.karaoke_bid,
+            )  # 포인트 차감
+        else:
+            # TODO: 파티 멤버에게서 각각 돈을 빼도록 해야함
+            ...
+
+        if highest is not None:
+            ...
+
+        # TODO: 입찰시 기존 최고가 입찰자 포인트 환불, 파티가 있을경우 분리해서 환불이랑 지출 할 수 있도록
+
         await self.redis.delete(f"karaoke:{self.id}")
         await self.redis.delete_pattern(f"karaoke_list:{self.date}")
 
         await self.redis.set(f"karaoke:{self.id}:highest", obj.model_dump())  # 최고 입찰가 갱신
         # TODO: 위에 이거 TTL 설정필요
-
-        await bidder.point_deduct(
-            amount,
-            reason="노래방 예약",
-            memo=f"{self.date} {self.time_format} 노래방 예약",
-            type=PointHistoryType.karaoke_bid,
-        )  # 포인트 차감
-
-        # TODO: 입찰시 기존 최고가 입찰자 포인트 환불
 
         return KaraokeBid(payload=obj)
