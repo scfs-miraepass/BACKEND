@@ -1,5 +1,4 @@
 from sqlmodel import select
-from datetime import date as dt_date
 
 from app.schemas import Posts, Quests, Users, PointHistory
 
@@ -179,7 +178,37 @@ class ServiceClient(BaseCore):
         return History(payload=payload)
 
     async def get_karaoke(
-        self, date: dt_date, time: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
+        self, /, _id: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
     ) -> Karaoke | None:
-        ...
-        # TODO
+        """
+        ID를 이용해 노래방 예약을 가져옵니다.
+
+        Args:
+            _id: 노래방 예약 ID
+            cache: 캐시 사용 여부 (lock이 True 일경우 무시됨)
+            save_cache: 가져온 후 캐시를 저장 여부
+            lock: 조회후 Row-level Lock를 설정 여부
+
+        Returns:
+            Karaoke | None
+        """
+        if cache and not lock:
+            cached = await self.redis.get(f"karaoke:{_id}")
+            if cached:
+                return Karaoke(payload=Karaoke.model_validate(cached))
+
+        async with self.session as session:
+            if lock:
+                query = select(Karaoke).where(Karaoke.id == _id).with_for_update()
+                result = await session.execute(query)
+                payload: Karaoke | None = result.scalar_one_or_none()
+            else:
+                payload = await session.get(Karaoke, _id)
+
+        if save_cache and payload is not None:
+            await self.redis.set(
+                f"karaoke:{payload.id}",
+                payload.model_dump(),
+                ttl=60 * 5,
+            )
+        return Karaoke(payload=payload)
