@@ -1,7 +1,7 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status, HTTPException, Response
 from pydantic import BaseModel, Field
 from datetime import date as dt_date, datetime
-from sqlmodel import select
+from sqlmodel import select, col
 
 from app.core import ServiceClient, LoginDep
 from app.schemas import Karaokes, UserPermission
@@ -10,7 +10,7 @@ from app.schemas.response import ResponseModel, ErrorResponse
 router = APIRouter(prefix="/karaoke", tags=["karaoke"])
 client = ServiceClient()
 
-# TODO: 예약 경매 목록 조회 (GET /karaoke)
+# 예약 경매 목록 조회 (GET /karaoke)
 # 예약 경매 생성 (POST /karaoke)
 # TODO: 예약 경매 조회 (GET /karaoke/{id})
 # TODO: 예약 경매 삭제 (DELETE /karaoke/{id})
@@ -35,12 +35,44 @@ class KaraokeCreate(BaseModel):
     response_model=ResponseModel[list[Karaokes]],
     responses={
         200: {"description": "정상적으로 처리됨."},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한 없음",
+        },
     },
     status_code=status.HTTP_201_CREATED,
     summary="예약 목록 조회",
     description="현재 예약할 수 있는 목록을 조회합니다",
 )
-async def get_list_karaoke(auth_data: LoginDep, date: dt_date | None = None): ...
+async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_date | None = None):
+    user, _ = auth_data
+
+    if not user.has_permission(UserPermission.VIEW_KARAOKE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    if date is None:
+        date = dt_date.today()
+
+    cache_key = f"karaoke_list:{date}"
+    cached = await client.redis.get(cache_key)
+    if cached is not None:
+        # 캐시가 있는경우 캐시 응답
+        response.headers["X-CACHED"] = "true"
+        return ResponseModel[list[Karaokes]](success=True, data=[Karaokes(**item) for item in cached])
+
+    async with client.session as session:
+        response.headers["X-CACHED"] = "false"
+        query = select(Karaokes).order_by(col(Karaokes.time))
+        result = await session.execute(query)
+        karaokes = list(result.scalars().all())
+
+        # 캐시 저장
+        await client.redis.set(cache_key, [item.model_dump() for item in karaokes], ttl=60 * 5)
+
+    return ResponseModel[list[Karaokes]](success=True, data=karaokes)
 
 
 @router.post(
