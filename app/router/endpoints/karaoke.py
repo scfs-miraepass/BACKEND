@@ -101,5 +101,7 @@ async def create_karaoke(body: KaraokeCreate, auth_data: LoginDep):
         session.add(karaoke)
         await session.flush()
 
-    client.logs.service_karaoke.info(f"{user.name}({user.id})님이 {karaoke.id} 노래방 예약을 생성했습니다")
+    client.logs.service_karaoke.info(
+        f"{user.name}({user.id})님이 {karaoke.id}({karaoke.date} / {karaoke.time}) 노래방 예약을 생성했습니다"
+    )
     return ResponseModel[Karaokes](success=True, data=karaoke)
