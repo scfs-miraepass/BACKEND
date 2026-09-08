@@ -30,6 +30,19 @@ class KaraokeCreate(BaseModel):
     min_point: int = Field(default=0, description="최소 입찰가")
 
 
+@router.get(
+    "",
+    response_model=ResponseModel[list[Karaokes]],
+    responses={
+        200: {"description": "정상적으로 처리됨."},
+    },
+    status_code=status.HTTP_201_CREATED,
+    summary="예약 목록 조회",
+    description="현재 예약할 수 있는 목록을 조회합니다",
+)
+async def get_list_karaoke(auth_data: LoginDep, date: dt_date | None = None): ...
+
+
 @router.post(
     "",
     response_model=ResponseModel[Karaokes],
@@ -88,5 +101,5 @@ async def create_karaoke(body: KaraokeCreate, auth_data: LoginDep):
         session.add(karaoke)
         await session.flush()
 
-    client.logs.service_karaoke.info(f"노래방 경매 생성 {karaoke.id}")
+    client.logs.service_karaoke.info(f"{user.name}({user.id})님이 {karaoke.id} 노래방 예약을 생성했습니다")
     return ResponseModel[Karaokes](success=True, data=karaoke)
