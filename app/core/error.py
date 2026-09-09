@@ -1,3 +1,9 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .service.user import User
+
+
 class ServiceError(Exception):
     pass
 
@@ -32,3 +38,9 @@ class ExpiredError(ServiceError):
     """
 
     pass
+
+
+class PointInsufficient(ServiceError):
+    def __init__(self, user: "User"):
+        self.user = user
+        super().__init__(f"User '{user.id} ({user.name})' does not have enough points")

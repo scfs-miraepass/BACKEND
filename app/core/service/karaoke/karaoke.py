@@ -4,6 +4,7 @@ from sqlmodel import delete, col
 from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType
 
 from ...core import ServiceCore
+from ...error import PointInsufficient
 from ..user import User
 from .bid import KaraokeBid
 from .party import KaraokeParty
@@ -88,6 +89,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
 
         Raises:
             ValueError: 입찰 조건(상태, 금액 등)을 만족하지 않을 경우 발생합니다.
+            ServiceError.PointInsufficient: 입찰자, 입찰하는 파티의 멤버가 포인트가 부족할 경우 발생합니다.
 
         Returns:
             KaraokeBid
@@ -99,22 +101,27 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         if amount < (self.min_point if highest is None else highest.amount):
             raise ValueError(f"입찰 금액은 최소 입찰가({self.min_point}) 이상이어야 합니다.")
 
-        # TODO: 입찰자(들)에게 입찰가 만큼의 돈이 있는가 확인 로직 필요함
-
         async with self.session as session:
             if party is None:
+                if bidder.point < amount:
+                    raise PointInsufficient(user=bidder)
+
                 await bidder.point_deduct(
                     amount,
                     reason="노래방 예약",
                     memo=f"{self.date} {self.time_format} 노래방 예약",
                     type=PointHistoryType.karaoke_bid,
-                )  # 포인트 차감
+                )
             else:
                 party_members = await party.get_members()
                 point = self.dutch_pay(amount, len(party_members) + 1)
 
-                # 만약에 차감을 할때, 포인트가 부족할경우 ValueError가 발생하니깐.. 세션 commit이 안되고 롤백처리 되니깐..
-                # 따로 포인트가 있는지 확인하는 로직을 작성하지 않아도 되지 않을까?
+                if bidder.point < point.leader:
+                    raise PointInsufficient(user=bidder)
+
+                for user in party_members:
+                    if user.point < point.member:
+                        raise PointInsufficient(user=user)
 
                 # 대표자 차감
                 await bidder.point_deduct(
@@ -132,8 +139,6 @@ class Karaoke(ServiceCore[Karaokes], _Type):
                         memo=f"{self.date} {self.time_format} 노래방 예약",
                         type=PointHistoryType.karaoke_bid,
                     )
-
-                # TODO: 이걸 보는 미래의 영재야, 만들다 말았으니 만들어야 한단다.
 
             if highest is not None:
                 # 기존에 최고가가 있는경우, 해당 입찰 취소처리
