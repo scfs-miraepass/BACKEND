@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING
 from sqlmodel import delete, col
+from datetime import datetime
 
 from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType
 
@@ -98,52 +99,45 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             raise ValueError("경매가 진행 중인 상태가 아닙니다.")
 
         highest = await self.get_highest()
-        if amount < (self.min_point if highest is None else highest.amount):
-            raise ValueError(f"입찰 금액은 최소 입찰가({self.min_point}) 이상이어야 합니다.")
+        min_point = self.min_point if highest is None else highest.amount
+        if amount < min_point:
+            raise ValueError(f"입찰 금액은 최소 입찰가({min_point}) 이상이어야 합니다.")
 
         async with self.session as session:
+            # 차감 대상 유저와 금액 목록 구성
+            deductions: list[tuple[User, int]] = []
             if party is None:
-                if bidder.point < amount:
-                    raise PointInsufficient(user=bidder)
-
-                await bidder.point_deduct(
-                    amount,
-                    reason="노래방 예약",
-                    memo=f"{self.date} {self.time_format} 노래방 예약",
-                    type=PointHistoryType.karaoke_bid,
-                )
+                deductions.append((bidder, amount))
             else:
                 party_members = await party.get_members()
                 point = self.dutch_pay(amount, len(party_members) + 1)
 
-                if bidder.point < point.leader:
-                    raise PointInsufficient(user=bidder)
+                deductions.append((bidder, point.leader))
+                for member in party_members:
+                    deductions.append((member, point.member))
 
-                for user in party_members:
-                    if user.point < point.member:
-                        raise PointInsufficient(user=user)
+            # 차감할 포인트가 있는지 확인
+            for user, deduct_amount in deductions:
+                if user.point < deduct_amount:
+                    raise PointInsufficient(user=user)
 
-                # 대표자 차감
-                await bidder.point_deduct(
-                    point.leader,
-                    reason="노래방 예약",
-                    memo=f"{self.date} {self.time_format} 노래방 예약",
+            # 실제 결제 처리
+            reason = "노래방 예약"
+            memo = f"{self.date} {self.time_format} 노래방 예약"
+
+            for user, deduct_amount in deductions:
+                await user.point_deduct(
+                    deduct_amount,
+                    reason=reason,
+                    memo=memo,
                     type=PointHistoryType.karaoke_bid,
                 )
-
-                # 팀원 차감
-                for user in party_members:
-                    await user.point_deduct(
-                        point.member,
-                        reason="노래방 예약",
-                        memo=f"{self.date} {self.time_format} 노래방 예약",
-                        type=PointHistoryType.karaoke_bid,
-                    )
 
             if highest is not None:
                 # 기존에 최고가가 있는경우, 해당 입찰 취소처리
                 await highest.cancel()
 
+            # 입찰 기록 생성
             obj = KaraokeBids(
                 auction_id=self.id, bidder_id=bidder.id, party_id=party.id if party is not None else None, amount=amount
             )
@@ -153,7 +147,11 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         await self.redis.delete(f"karaoke:{self.id}")
         await self.redis.delete_pattern(f"karaoke_list:{self.date}")
 
-        await self.redis.set(f"karaoke:{self.id}:highest", obj.model_dump())  # 최고 입찰가 갱신
-        # TODO: 위에 이거 TTL 설정필요
+        # 최고가 TTL은 종료 시간까지로 하며, 최소 60초
+        now = datetime.now().astimezone() if self.end_time.tzinfo else datetime.now()
+        ttl_seconds = int((self.end_time - now).total_seconds()) + 60
+        ttl = max(60, ttl_seconds)
+
+        await self.redis.set(f"karaoke:{self.id}:highest", obj.model_dump(), ttl=ttl)  # 최고 입찰 갱신
 
         return KaraokeBid(payload=obj)
