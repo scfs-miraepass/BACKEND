@@ -1,15 +1,7 @@
-from typing import Type, TypeVar
+from app.schemas import Posts, Quests
 
-from sqlmodel import SQLModel, select
-
-from app.schemas import Karaokes, PointHistory, Posts, Quests, Users
-
-from .config import settings
 from .core import BaseCore
 from .service import History, Karaoke, Post, Quest, User
-
-TModel = TypeVar("TModel", bound=SQLModel)
-TWrapper = TypeVar("TWrapper")
 
 
 class ServiceClient(BaseCore):
@@ -20,38 +12,10 @@ class ServiceClient(BaseCore):
             cls.instance = super().__new__(cls)
         return cls.instance
 
-    async def _get_item(
-        self,
-        _id: int,
-        wrapper_cls: Type[TWrapper],
-        model_cls: Type[TModel],
-        prefix: str,
-        cache: bool,
-        save_cache: bool,
-        lock: bool,
-        ttl: int = 60,
-    ) -> TWrapper | None:
-        if cache and not lock:
-            cached = await self.redis.get(f"{prefix}:{_id}")
-            if cached:
-                return wrapper_cls(payload=model_cls.model_validate(cached))
-
-        async with self.session as session:
-            if lock:
-                query = select(model_cls).where(getattr(model_cls, "id") == _id).with_for_update()
-                result = await session.execute(query)
-                payload: TModel | None = result.scalar_one_or_none()
-            else:
-                payload = await session.get(model_cls, _id)
-
-        if save_cache and payload is not None:
-            await self.redis.set(f"{prefix}:{getattr(payload, 'id')}", payload.model_dump(), ttl=ttl)
-        return wrapper_cls(payload=payload)
-
+    @staticmethod
     async def get_user(
-        self,
-        /,
         _id: int,
+        /,
         *,
         cache: bool = False,
         save_cache: bool = True,
@@ -69,16 +33,7 @@ class ServiceClient(BaseCore):
         Returns:
             User | None
         """
-        return await self._get_item(
-            _id=_id,
-            wrapper_cls=User,
-            model_cls=Users,
-            prefix="user",
-            ttl=settings.service.session.expire_seconds,
-            cache=cache,
-            save_cache=save_cache,
-            lock=lock,
-        )
+        return await User.get_by_id(user_id=_id, cache=cache, save_cache=save_cache, lock=lock)
 
     async def get_post(
         self,
@@ -144,8 +99,9 @@ class ServiceClient(BaseCore):
             lock=lock,
         )
 
+    @staticmethod
     async def get_history(
-        self, /, _id: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
+        _id: int, /, *, cache: bool = False, save_cache: bool = True, lock: bool = False
     ) -> History | None:
         """
         ID를 이용해 포인트 기록을 가져옵니다.
@@ -159,19 +115,11 @@ class ServiceClient(BaseCore):
         Returns:
             History | None
         """
-        return await self._get_item(
-            _id=_id,
-            wrapper_cls=History,
-            model_cls=PointHistory,
-            prefix="point_history",
-            ttl=60 * 5,
-            cache=cache,
-            save_cache=save_cache,
-            lock=lock,
-        )
+        return await History.get_by_id(history_id=_id, cache=cache, save_cache=save_cache, lock=lock)
 
+    @staticmethod
     async def get_karaoke(
-        self, /, _id: int, *, cache: bool = False, save_cache: bool = True, lock: bool = False
+        _id: int, /, *, cache: bool = False, save_cache: bool = True, lock: bool = False
     ) -> Karaoke | None:
         """
         ID를 이용해 노래방 예약을 가져옵니다.
@@ -185,13 +133,4 @@ class ServiceClient(BaseCore):
         Returns:
             Karaoke | None
         """
-        return await self._get_item(
-            _id=_id,
-            wrapper_cls=Karaoke,
-            model_cls=Karaokes,
-            prefix="karaoke",
-            ttl=60 * 5,
-            cache=cache,
-            save_cache=save_cache,
-            lock=lock,
-        )
+        return await Karaoke.get_by_id(karaoke_id=_id, cache=cache, save_cache=save_cache, lock=lock)

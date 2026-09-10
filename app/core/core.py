@@ -1,14 +1,18 @@
-from typing import TypeVar
+from typing import TypeVar, Type
 from functools import lru_cache
 from hangulpy import split_hangul_string
 from math import floor
 from dataclasses import dataclass
+from sqlmodel import SQLModel, select
 
 from .database import DatabaseCore
 from .loggers import LoggerCore
 from .redis import RedisCore
 
 T = TypeVar("T")
+
+TModel = TypeVar("TModel", bound=SQLModel)
+TWrapper = TypeVar("TWrapper")
 
 
 @dataclass
@@ -61,6 +65,34 @@ class BaseCore:
         leader_share = amount - (member_share * (party_members - 1))
 
         return DutchPayReturn(member=member_share, leader=leader_share)
+
+    async def _get_item(
+        self,
+        _id: int,
+        wrapper_cls: Type[TWrapper],
+        model_cls: Type[TModel],
+        prefix: str,
+        cache: bool = False,
+        save_cache: bool = True,
+        lock: bool = False,
+        ttl: int = 60,
+    ) -> TWrapper | None:
+        if cache and not lock:
+            cached = await self.redis.get(f"{prefix}:{_id}")
+            if cached:
+                return wrapper_cls(payload=model_cls.model_validate(cached))
+
+        async with self.session as session:
+            if lock:
+                query = select(model_cls).where(getattr(model_cls, "id") == _id).with_for_update()
+                result = await session.execute(query)
+                payload: TModel | None = result.scalar_one_or_none()
+            else:
+                payload = await session.get(model_cls, _id)
+
+        if save_cache and payload is not None:
+            await self.redis.set(f"{prefix}:{getattr(payload, 'id')}", payload.model_dump(), ttl=ttl)
+        return wrapper_cls(payload=payload)
 
 
 class ServiceCore[T](BaseCore):

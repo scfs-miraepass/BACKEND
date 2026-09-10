@@ -28,6 +28,21 @@ class Karaoke(ServiceCore[Karaokes], _Type):
     - key에 들어가는 date요소의 포멧팅은 datetime의 기본 포멧팅인 YYYY-MM-DD으로 할 것.
     """
 
+    @classmethod
+    async def get_by_id(cls, karaoke_id: int, **kwargs) -> Karaoke | None:
+        """
+        ID를 기반으로 노래방 예약을 가져옵니다.
+
+        Args:
+            karaoke_id: ID
+
+        Returns:
+            Karaoke | None
+        """
+        return await cls._get_item(
+            _id=karaoke_id, wrapper_cls=Karaoke, model_cls=Karaokes, prefix="karaoke", ttl=60 * 5, **kwargs
+        )
+
     @property
     def time_format(self) -> str:
         if self.time >= 8:
@@ -121,15 +136,11 @@ class Karaoke(ServiceCore[Karaokes], _Type):
                 if user.point < deduct_amount:
                     raise PointInsufficient(user=user)
 
-            # 실제 결제 처리
-            reason = "노래방 예약"
-            memo = f"{self.date} {self.time_format} 노래방 예약"
-
             for user, deduct_amount in deductions:
                 await user.point_deduct(
                     deduct_amount,
-                    reason=reason,
-                    memo=memo,
+                    reason="노래방 예약",
+                    memo=f"{self.date} {self.time_format} 노래방 예약",
                     type=PointHistoryType.karaoke_bid,
                 )
 

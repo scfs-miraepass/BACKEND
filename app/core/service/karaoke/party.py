@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING
-from app.schemas import KaraokePartis, KaraokeMembers, Users
+from app.schemas import KaraokePartis, KaraokeMembers
 
 from sqlmodel import select
 
@@ -15,6 +15,26 @@ else:
 
 
 class KaraokeParty(ServiceCore[KaraokePartis], _Type):
+    @classmethod
+    async def get_by_id(cls, party_id: int, **kwargs) -> KaraokeParty | None:
+        """
+        ID를 기반으로 경매 파티를 가져옵니다.
+
+        Args:
+            party_id: ID
+
+        Returns:
+            KaraokeParty | None
+        """
+        return await cls._get_item(
+            _id=party_id,
+            wrapper_cls=KaraokeParty,
+            model_cls=KaraokePartis,
+            prefix="karaoke_party",
+            ttl=60 * 60 * 24,
+            **kwargs,
+        )
+
     async def get_members(self) -> list[User]:
         """
         현재 파티에 소속된 유저들을 가져옵니다.
@@ -33,14 +53,11 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
 
             return_obj: list[User] = []
             for i in payload:
-                cached = await self.redis.get(f"user:{i.user_id}")
-                user_payload = cached
-                if cached is None:
-                    user_payload = await session.get(Users, i.user_id)
-                    if user_payload is None:
-                        raise NotFound("Party Member User not found!")
+                user = await User.get_by_id(id=i.user_id)
+                if user is None:
+                    raise NotFound("Party Member User not found!")
 
-                return_obj.append(User(payload=user_payload))
+                return_obj.append(user)
 
         return return_obj
 

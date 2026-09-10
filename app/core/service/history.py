@@ -14,6 +14,21 @@ else:
 
 
 class History(ServiceCore[PointHistory], _Type):
+    @classmethod
+    async def get_by_id(cls, history_id: int, **kwargs) -> History | None:
+        """
+        ID를 기반으로 포인트 기록을 가져옵니다.
+
+        Args:
+            history_id: ID
+
+        Returns:
+            History | None
+        """
+        return await cls._get_item(
+            _id=history_id, wrapper_cls=History, model_cls=PointHistory, prefix="point_history", ttl=60 * 5, **kwargs
+        )
+
     async def delete(self, *, revert: bool = True, total_revert: bool = True):
         """
         포인트 기록을 삭제합니다

@@ -12,6 +12,7 @@ from app.schemas import (
     UserType,
 )
 
+from ..config import settings
 from ..core import ServiceCore
 from ..error import Forbidden
 from ..security import get_password_hash
@@ -26,6 +27,26 @@ else:
 
 
 class User(ServiceCore[Users], _Type):
+    @classmethod
+    async def get_by_id(cls, user_id: int, **kwargs) -> User | None:
+        """
+        ID를 기반으로 사용자를 가져옵니다.
+
+        Args:
+            user_id: ID
+
+        Returns:
+            User | None
+        """
+        return await cls._get_item(
+            _id=user_id,
+            wrapper_cls=User,
+            model_cls=Users,
+            prefix="user",
+            ttl=settings.service.session.expire_seconds,
+            **kwargs,
+        )
+
     @property
     def permission(self) -> UserPermission:
         return UserPermission(self.permissions)
