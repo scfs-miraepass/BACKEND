@@ -10,9 +10,12 @@ from app.schemas import (
     UserPermission,
     Users,
     UserType,
+    KaraokeMembers,
+    KaraokePartis,
+    Karaokes,
 )
 
-from sqlmodel import col
+from sqlmodel import col, select
 
 from ..config import settings
 from ..core import ServiceCore
@@ -26,6 +29,7 @@ if TYPE_CHECKING:
     _Type = Users
     from .karaoke.karaoke import Karaoke
     from .karaoke.member import KaraokeMember
+    from .karaoke.party import KaraokeParty
 else:
     _Type = object
 
@@ -331,8 +335,6 @@ class User(ServiceCore[Users], _Type):
             list[Karaoke]
         """
         from app.core.service.karaoke.karaoke import Karaoke
-        from app.schemas import KaraokeMembers, KaraokePartis, Karaokes
-        from sqlmodel import select
 
         async with self.session as session:
             query = (
@@ -361,3 +363,40 @@ class User(ServiceCore[Users], _Type):
         from app.core.service.karaoke.member import KaraokeMember
 
         return await KaraokeMember.get_member(party_id=party_id, user_id=self.id)
+
+    async def get_party(self, karaoke: "Karaoke") -> "KaraokeParty | None":
+        """
+        유저가 해당 노래방 예약 경매에서 참여하거나, 리더로 있는 노래방 파티를 가져옵니다.
+
+        Args:
+            karaoke: 가져오려는 노래방 예약 경매
+
+        Returns:
+            KaraokeParty | None
+        """
+        from .karaoke.party import KaraokeParty
+
+        cache_key = f"karaoke:{karaoke.id}:member:{self.id}"
+        cached = await self.redis.get(cache_key)
+        if cached:
+            party = await KaraokeParty.get_by_id(cached)
+            return party
+
+        async with self.session as session:
+            query = (
+                select(KaraokePartis)
+                .join(KaraokeMembers)
+                .where(
+                    KaraokePartis.auction_id == karaoke.id,
+                    KaraokePartis.dispersed == False,
+                    (KaraokePartis.leader_id == self.id) | (KaraokeMembers.user_id == self.id),
+                )
+            )
+            exc = await session.execute(query)
+            payload: KaraokePartis | None = exc.scalar_one_or_none()
+
+        if payload is None:
+            return None
+
+        await self.redis.set(cache_key, payload.model_dump(), ttl=60 * 5)
+        return KaraokeParty(payload)
