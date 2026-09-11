@@ -40,7 +40,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             Karaoke | None
         """
         return await cls._get_item(
-            _id=karaoke_id, wrapper_cls=Karaoke, model_cls=Karaokes, prefix="karaoke", ttl=60 * 5, **kwargs
+            _id=karaoke_id, wrapper_cls=cls, model_cls=Karaokes, prefix="karaoke", ttl=60 * 5, **kwargs
         )
 
     @property
@@ -111,12 +111,12 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             KaraokeBid
         """
         if self.status != KaraokeStatus.IN_PROGRESS:
-            raise ValueError("경매가 진행 중인 상태가 아닙니다.")
+            raise ValueError("The auction is not in progress.")
 
         highest = await self.get_highest()
         min_point = self.min_point if highest is None else highest.amount
         if amount < min_point:
-            raise ValueError(f"입찰 금액은 최소 입찰가({min_point}) 이상이어야 합니다.")
+            raise ValueError(f"The bid amount must be greater than or equal to the minimum bid ({min_point}).")
 
         async with self.session as session:
             # 차감 대상 유저와 금액 목록 구성

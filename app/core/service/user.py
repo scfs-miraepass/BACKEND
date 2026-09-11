@@ -40,7 +40,7 @@ class User(ServiceCore[Users], _Type):
         """
         return await cls._get_item(
             _id=user_id,
-            wrapper_cls=User,
+            wrapper_cls=cls,
             model_cls=Users,
             prefix="user",
             ttl=settings.service.session.expire_seconds,

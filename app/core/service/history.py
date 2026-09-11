@@ -26,7 +26,7 @@ class History(ServiceCore[PointHistory], _Type):
             History | None
         """
         return await cls._get_item(
-            _id=history_id, wrapper_cls=History, model_cls=PointHistory, prefix="point_history", ttl=60 * 5, **kwargs
+            _id=history_id, wrapper_cls=cls, model_cls=PointHistory, prefix="point_history", ttl=60 * 5, **kwargs
         )
 
     async def delete(self, *, revert: bool = True, total_revert: bool = True):

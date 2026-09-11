@@ -29,7 +29,7 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
         """
         return await cls._get_item(
             _id=party_id,
-            wrapper_cls=KaraokeParty,
+            wrapper_cls=cls,
             model_cls=KaraokePartis,
             prefix="karaoke_party",
             ttl=60 * 60 * 24,
