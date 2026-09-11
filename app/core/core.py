@@ -1,5 +1,5 @@
 from typing import TypeVar, Type
-from functools import lru_cache
+from functools import lru_cache, wraps
 from hangulpy import split_hangul_string
 from math import floor
 from dataclasses import dataclass
@@ -102,7 +102,7 @@ class ServiceCore[T](BaseCore):
         return super().__new__(cls)
 
     def __init__(self, payload: T | None):
-        self._payload: T = payload
+        self._payload: T | None = payload
         super().__init__()
 
     def __str__(self):
@@ -118,7 +118,18 @@ class ServiceCore[T](BaseCore):
         payload = super().__getattribute__("_payload")
         if hasattr(payload, name):
             return getattr(payload, name)
-        return super().__getattribute__(name)
+
+        attr = super().__getattribute__(name)
+        if callable(attr) and not name.startswith("__"):
+
+            @wraps(attr)
+            def wrapper(*args, **kwargs):
+                if super(ServiceCore, self).__getattribute__("_payload") is None:
+                    raise RuntimeError("This object has been deleted.")
+                return attr(*args, **kwargs)
+
+            return wrapper
+        return attr
 
     def __setattr__(self, name, value):
         if name == "_payload":
