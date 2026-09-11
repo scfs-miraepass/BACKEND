@@ -164,13 +164,11 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
                     session.add(new_member)
 
             # 기존 파티는 해산(dispersed) 처리하여 유효하지 않도록 만듦
-            old_party = await session.merge(self._payload)
-            old_party.dispersed = True
+            await self.set_dispersed(True)
 
         # 기존 파티의 캐시 삭제
         await self.redis.delete(f"karaoke_party:{self.id}")
         await self.redis.delete(f"karaoke_members:{self.id}")
-        self._payload = old_party
         self.logs.service_karaoke.info(
             f"노래방 파티 멤버 강퇴 - 파티 ID {self.id}에서 유저 {user_ids}를 강퇴하고 새 파티 ID {new_party_model.id}를 생성했습니다."
         )
