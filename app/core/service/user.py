@@ -12,6 +12,8 @@ from app.schemas import (
     UserType,
 )
 
+from sqlmodel import col
+
 from ..config import settings
 from ..core import ServiceCore
 from ..error import Forbidden
@@ -22,6 +24,8 @@ from .quest import Quest
 
 if TYPE_CHECKING:
     _Type = Users
+    from .karaoke.karaoke import Karaoke
+    from .karaoke.member import KaraokeMember
 else:
     _Type = object
 
@@ -318,3 +322,42 @@ class User(ServiceCore[Users], _Type):
         self._payload = user
 
         self.logs.service.info(f"{self.id}({self.name})의 권한을 제거했습니다. (-{perm.name})")
+
+    async def get_pending_karaokes(self) -> list["Karaoke"]:
+        """
+        현재 초대되어 수락 또는 거절 대기중인 노래방 예약(Karaokes) 목록을 가져옵니다.
+
+        Returns:
+            list[Karaoke]
+        """
+        from app.core.service.karaoke.karaoke import Karaoke
+        from app.schemas import KaraokeMembers, KaraokePartis, Karaokes
+        from sqlmodel import select
+
+        async with self.session as session:
+            query = (
+                select(Karaokes)
+                .join(KaraokePartis, col(Karaokes.id) == KaraokePartis.auction_id)
+                .join(KaraokeMembers, col(KaraokePartis.id) == KaraokeMembers.party_id)
+                .where(KaraokeMembers.user_id == self.id, KaraokeMembers.pending == True)
+            )
+            exc = await session.execute(query)
+            payload = exc.scalars().all()
+
+        return [Karaoke(payload=p) for p in payload]
+
+    async def get_karaoke_member(self, party_id: int) -> "KaraokeMember | None":
+        """
+        특정 파티에 대한 자기 자신의 KaraokeMember 정보를 가져옵니다.
+
+        Args:
+            party_id: 조회할 파티의 고유 ID
+
+        Returns:
+            KaraokeMember | None
+        """
+        if self.id is None:
+            raise RuntimeError()
+        from app.core.service.karaoke.member import KaraokeMember
+
+        return await KaraokeMember.get_member(party_id=party_id, user_id=self.id)
