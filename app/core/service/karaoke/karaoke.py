@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING
-from sqlmodel import delete, col
+from sqlmodel import delete, col, select, or_
 from datetime import datetime
 
-from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType
+from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType, KaraokePartis, KaraokeMembers
 
 from ...core import ServiceCore
 from ...error import PointInsufficient
@@ -171,3 +171,67 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         )
 
         return KaraokeBid(payload=obj)
+
+    async def get_party(self, leader: User) -> KaraokeParty | None:
+        """
+        해당 경매에서, 유저가 리더이거나 참여중인 파티를 가져옵니다.
+
+        Args:
+            leader: 가져오는 유저
+
+        Returns:
+            KaraokeParty | None
+        """
+        async with self.session as session:
+            select(KaraokePartis).where(KaraokePartis.auction_id == self.id, or_())
+
+            query_leader = select(KaraokePartis).where(
+                KaraokePartis.auction_id == self.id,
+                KaraokePartis.leader_id == leader.id,
+                KaraokePartis.dispersed == False,  # noqa: E712
+            )
+            exc = await session.execute(query_leader)
+            payload: KaraokeParty | None = exc.scalar_one_or_none()
+
+        return payload
+
+    async def create_party(self, leader: User) -> KaraokeParty:
+        """
+        현재 노래방 경매에 대한 새로운 파티를 생성합니다.
+
+        Args:
+            leader: 파티장이 될 유저
+
+        Raises:
+            ValueError: 이미 해당 경매에 자신이 파티장인 파티가 있거나 속해있는 파티가 있는 경우
+
+        Returns:
+            KaraokeParty
+        """
+        async with self.session as session:
+            party_leader = await self.get_party_by_leader(leader)
+            if party_leader is not None:
+                raise ValueError("User is already a leader of a party in this auction.")
+
+            # Check if leader is a member of a non-dispersed party in this auction
+            query_member = (
+                select(KaraokePartis)
+                .join(KaraokeMembers)
+                .where(
+                    KaraokePartis.auction_id == self.id,
+                    KaraokePartis.dispersed == False,  # noqa: E712
+                    KaraokeMembers.user_id == leader.id,
+                )
+            )
+            exc = await session.execute(query_member)
+            if exc.scalars().first():
+                raise ValueError("User is already a member of a party in this auction.")
+
+            party = KaraokePartis(auction_id=self.id, leader_id=leader.id)
+            session.add(party)
+            await session.flush()
+
+            self.logs.service_karaoke.info(
+                f"파티 생성 성공 - 경매 {self.id}에 {leader.name}({leader.id})님이 파티(ID {party.id})를 생성했습니다."
+            )
+            return KaraokeParty(party)
