@@ -9,6 +9,8 @@ from ...core import RedisCore
 
 
 if TYPE_CHECKING:
+    from .party import KaraokeParty
+
     _Type = KaraokeMembers
 else:
     _Type = object
@@ -42,7 +44,23 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
 
             return cls(payload=payload)
 
-    async def accept(self) -> None:
+    async def get_party(self) -> "KaraokeParty":
+        """
+        이 멤버 객체가 소속된 파티를 가져옵니다.
+
+        Raises:
+            RuntimeError: 파티가 없는 경우 발생합니다. 논리상 발생할 수 없습니다.
+        """
+        from .party import KaraokeParty
+
+        if self.party:
+            return KaraokeParty(self.party)
+        party = await KaraokeParty.get_by_id(self.party_id)
+        if party is None:
+            raise RuntimeError()
+        return KaraokeParty(party)
+
+    async def accept(self):
         """
         초대를 수락합니다.
         """
@@ -56,10 +74,10 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
             f"노래방 파티 멤버 초대 수락 - 파티 ID {self.party_id}의 유저 {self.user_id}가 초대를 수락했습니다."
         )
 
-    async def reject(self) -> None:
+    async def reject(self):
         """
-        초대를 거절합니다.
-        해당 멤버 기록을 삭제합니다.
+        기본적으론 초대를 거절하는 목적으로 사용됩니다.
+        단, 초대 상태 상관없이 DB에서 객체를 삭제하는 동작을 수행합니다.
         """
         async with self.session as session:
             member = await session.merge(self._payload)
