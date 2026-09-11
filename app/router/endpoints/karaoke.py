@@ -9,8 +9,6 @@ from app.schemas.response import ResponseModel, ErrorResponse
 from app.core.service.karaoke import KaraokeParty, KaraokeMember
 from app.core.error import PointInsufficient
 
-# feat(endpoints): 노래방 예약 경매 입찰, 파티 초대, 초대 응답(수락/거절) Endpoint 추가
-
 router = APIRouter(prefix="/karaoke", tags=["karaoke"])
 client = ServiceClient()
 
@@ -232,18 +230,16 @@ async def create_karaoke_bid(auth_data: LoginDep, karaoke_id: int, body: Karaoke
     if not karaoke:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
 
-    party = None
-
-    # if body.party_id is not None:
-    #     party = await KaraokeParty.get_by_id(body.party_id)
-    #     if not party:
-    #         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Party not found")
-    #     if party.leader_id != user.id:
-    #         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only party leader can bid on behalf of the party")
+    party = await user.get_party(karaoke)
+    if party is not None:
+        if party.leader_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Only party leader can bid on behalf of the party"
+            )
 
     try:
         bid = await karaoke.add_bid(bidder=user, amount=body.amount, party=party)
-        return ResponseModel[KaraokeBids](success=True, data=bid._payload)
+        return ResponseModel[KaraokeBids](success=True, data=bid)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PointInsufficient as e:
@@ -286,7 +282,7 @@ async def invite_karaoke_party_member(auth_data: LoginDep, party_id: int, body: 
     if not invite_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User to invite not found")
 
-    member = await party.invite_user(invite_user)
+    await party.invite_user(invite_user)
 
 
 @router.get(
@@ -337,6 +333,7 @@ async def decide_karaoke_party_invite(auth_data: LoginDep, party_id: int, body: 
             detail="Permission denied.",
         )
 
+    # noinspection bad-argument-type
     member = await KaraokeMember.get_member(party_id, user.id)
     if not member or not member.pending:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pending invitation not found")
