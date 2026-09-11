@@ -4,7 +4,7 @@ from datetime import date as dt_date, datetime
 from sqlmodel import select, col
 
 from app.core import ServiceClient, LoginDep
-from app.schemas import Karaokes, UserPermission, KaraokeBids, KaraokeMembers
+from app.schemas import Karaokes, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis
 from app.schemas.response import ResponseModel, ErrorResponse
 from app.core.service.karaoke import KaraokeParty, KaraokeMember
 from app.core.error import PointInsufficient
@@ -14,17 +14,21 @@ client = ServiceClient()
 
 
 class KaraokeCreate(BaseModel):
-    date: dt_date = Field(description="예약 일자")
-    time: int = Field(ge=1, le=8, description="예약 시간 (1~7교시, 점심시간 8)")
+    date: dt_date = Field(description="일자")
+    time: int = Field(ge=1, le=8, description="시간 (1~7교시, 점심시간 8)")
 
-    start_time: datetime = Field(description="예약 경매 시작 시간")
-    end_time: datetime = Field(description="예약 경매 종료 시간, 'start_time' 시간보다 앞서 있으면 안됩니다.")
+    start_time: datetime = Field(description="경매 시작 시간")
+    end_time: datetime = Field(description="경매 종료 시간, 'start_time' 시간보다 앞서 있으면 안됩니다.")
 
     min_point: int = Field(default=0, description="최소 입찰가")
 
 
 class KaraokeBidCreate(BaseModel):
     amount: int = Field(gt=0, description="입찰 금액")
+
+
+class KaraokeInviteAction(BaseModel):
+    accept: bool = Field(description="초대 수락 여부")
 
 
 @router.get(
@@ -204,6 +208,39 @@ async def delete_karaoke(auth_data: LoginDep, karaoke_id: int):
 
 
 @router.post(
+    "/{karaoke_id}/party",
+    response_model=ResponseModel[KaraokePartis],
+    responses={
+        201: {"description": "정상적으로 파티 생성 완료"},
+        400: {"model": ErrorResponse, "description": "파티 생성 조건 불만족 (이미 생성 등)"},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "예약을 찾을 수 없음"},
+    },
+    status_code=status.HTTP_201_CREATED,
+    summary="예약 경매 파티 생성",
+    description="진행중인 노래방 예약 경매에 파티를 생성합니다.",
+)
+async def create_karaoke_party(auth_data: LoginDep, karaoke_id: int):
+    user, _ = auth_data
+
+    if not user.has_permission(UserPermission.JOIN_KARAOKE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    karaoke = await client.get_karaoke(karaoke_id)
+    if not karaoke:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
+
+    try:
+        party = await karaoke.create_party(leader=user)
+        return ResponseModel[KaraokePartis](success=True, data=party)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
     "/{karaoke_id}/bid",
     response_model=ResponseModel[KaraokeBids],
     responses={
@@ -220,7 +257,7 @@ async def delete_karaoke(auth_data: LoginDep, karaoke_id: int):
 async def create_karaoke_bid(auth_data: LoginDep, karaoke_id: int, body: KaraokeBidCreate):
     user, _ = auth_data
 
-    if not user.has_permission(UserPermission.VIEW_KARAOKE):
+    if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -265,7 +302,7 @@ class KaraokeInviteCreate(BaseModel):
 async def invite_karaoke_party_member(auth_data: LoginDep, party_id: int, body: KaraokeInviteCreate):
     user, _ = auth_data
 
-    if not user.has_permission(UserPermission.VIEW_KARAOKE):
+    if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -295,7 +332,7 @@ async def invite_karaoke_party_member(auth_data: LoginDep, party_id: int, body: 
 async def get_my_party_invites(auth_data: LoginDep):
     user, _ = auth_data
 
-    if not user.has_permission(UserPermission.VIEW_KARAOKE):
+    if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -307,10 +344,6 @@ async def get_my_party_invites(auth_data: LoginDep):
         invites = list(exc.scalars().all())
 
     return ResponseModel[list[KaraokeMembers]](success=True, data=invites)
-
-
-class KaraokeInviteAction(BaseModel):
-    accept: bool = Field(description="초대 수락 여부 (True: 수락, False: 거절)")
 
 
 @router.post(
@@ -327,7 +360,7 @@ class KaraokeInviteAction(BaseModel):
 async def decide_karaoke_party_invite(auth_data: LoginDep, party_id: int, body: KaraokeInviteAction):
     user, _ = auth_data
 
-    if not user.has_permission(UserPermission.VIEW_KARAOKE):
+    if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
