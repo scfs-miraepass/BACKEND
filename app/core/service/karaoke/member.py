@@ -52,6 +52,9 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
 
         self._payload = member
         await self.redis.delete(f"karaoke_members:{self.party_id}")
+        self.logs.service_karaoke.info(
+            f"노래방 파티 멤버 초대 수락 - 파티 ID {self.party_id}의 유저 {self.user_id}가 초대를 수락했습니다."
+        )
 
     async def reject(self) -> None:
         """
@@ -64,3 +67,6 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
 
         self._payload = None
         await self.redis.delete(f"karaoke_members:{self.party_id}")
+        self.logs.service_karaoke.info(
+            f"노래방 파티 멤버 초대 거절/삭제 - 파티 ID {self.party_id}의 유저 {self.user_id}가 초대를 거절/삭제했습니다."
+        )

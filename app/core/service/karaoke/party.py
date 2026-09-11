@@ -90,6 +90,9 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
 
         await self.redis.delete(f"karaoke_party:{self.id}")
         self._payload = party
+        self.logs.service_karaoke.info(
+            f"노래방 파티 해산 상태 변경 - 파티 ID {self.id}의 해산 상태가 {dispersed}로 변경되었습니다."
+        )
 
     async def get_pending_members(self) -> list[User]:
         """
@@ -126,6 +129,7 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
             session.add(member)
 
         await self.redis.delete(f"karaoke_members:{self.id}")
+        self.logs.service_karaoke.info(f"노래방 파티 유저 초대 - 파티 ID {self.id}에 유저 {user.id}를 초대했습니다.")
         return KaraokeMember(member)
 
     async def kick_members(self, users: User | list[User]) -> "KaraokeParty":
@@ -167,5 +171,8 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
         await self.redis.delete(f"karaoke_party:{self.id}")
         await self.redis.delete(f"karaoke_members:{self.id}")
         self._payload = old_party
+        self.logs.service_karaoke.info(
+            f"노래방 파티 멤버 강퇴 - 파티 ID {self.id}에서 유저 {user_ids}를 강퇴하고 새 파티 ID {new_party_model.id}를 생성했습니다."
+        )
 
         return KaraokeParty(new_party_model)

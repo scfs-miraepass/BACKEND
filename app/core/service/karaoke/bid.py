@@ -81,3 +81,7 @@ class KaraokeBid(ServiceCore[KaraokeBids], _Type):
                     memo=f"{self.date} {self.time_format} 노래방 예약 취소로 인한 환불",
                     type=PointHistoryType.karaoke_cancel,
                 )
+
+            self.logs.service_karaoke.info(
+                f"노래방 입찰 취소 (환불) - ID {self.auction_id}의 입찰({self.amount} 포인트)이 취소되었습니다."
+            )

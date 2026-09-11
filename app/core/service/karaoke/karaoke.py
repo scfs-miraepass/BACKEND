@@ -166,4 +166,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
 
         await self.redis.set(f"karaoke:{self.id}:highest", obj.model_dump(), ttl=ttl)  # 최고 입찰 갱신
 
+        self.logs.service_karaoke.info(
+            f"노래방 입찰 성공 - {self.id}({self.date} / {self.time})에 {bidder.name}({bidder.id})님이 {amount} 포인트로 입찰했습니다."
+        )
+
         return KaraokeBid(payload=obj)
