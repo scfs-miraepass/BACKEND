@@ -205,7 +205,7 @@ class User(ServiceCore[Users], _Type):
             await session.flush()
 
         await self.redis.delete("posts_count")
-        await self.edis.delete_pattern("posts:list:*")
+        await self.redis.delete_pattern("posts:list:*")
 
         self.logs.service_post.info(
             f"게시글 생성 - ID {obj.id} ({obj.title[:10] + '...' if len(obj.title) > 10 else obj.title}) By. {self.name}({self.id})"

@@ -66,8 +66,9 @@ class BaseCore:
 
         return DutchPayReturn(member=member_share, leader=leader_share)
 
+    @classmethod
     async def _get_item(
-        self,
+        cls,
         _id: int,
         wrapper_cls: Type[TWrapper],
         model_cls: Type[TModel],
@@ -78,11 +79,11 @@ class BaseCore:
         ttl: int = 60,
     ) -> TWrapper | None:
         if cache and not lock:
-            cached = await self.redis.get(f"{prefix}:{_id}")
+            cached = await RedisCore.get(f"{prefix}:{_id}")
             if cached:
                 return wrapper_cls(payload=model_cls.model_validate(cached))
 
-        async with self.session as session:
+        async with DatabaseCore.session() as session:
             if lock:
                 query = select(model_cls).where(getattr(model_cls, "id") == _id).with_for_update()
                 result = await session.execute(query)
@@ -91,7 +92,7 @@ class BaseCore:
                 payload = await session.get(model_cls, _id)
 
         if save_cache and payload is not None:
-            await self.redis.set(f"{prefix}:{getattr(payload, 'id')}", payload.model_dump(), ttl=ttl)
+            await RedisCore.set(f"{prefix}:{getattr(payload, 'id')}", payload.model_dump(), ttl=ttl)
         return wrapper_cls(payload=payload)
 
 

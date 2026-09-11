@@ -68,6 +68,7 @@ class History(ServiceCore[PointHistory], _Type):
                     await self.redis.delete_pattern(f"ranking:{user.type}:*")
 
         # 포인트 기록 변경에 따른 캐시 삭제
+        await self.redis.delete(f"point_history:{self.id}")
         await self.redis.delete(f"point_history_count:{self.user_id}")
         await self.redis.delete_pattern(f"point_history:{self.user_id}:*")
 
