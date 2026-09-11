@@ -117,4 +117,4 @@ class KaraokeMembers(SQLModel, table=True):
         description="파티 멤버의 고유 ID",
     )
 
-    pending: bool = Field(default=True, description="멤버 참여가 수락되었는지 여부")
+    pending: bool = Field(default=True, description="멤버 참여가 수락 대기중인지 여부")

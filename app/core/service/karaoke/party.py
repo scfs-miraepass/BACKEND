@@ -6,6 +6,7 @@ from sqlmodel import select
 from ...error import NotFound
 from ...core import ServiceCore
 from ..user import User
+from .member import KaraokeMember
 
 
 if TYPE_CHECKING:
@@ -47,13 +48,13 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
             list[User]
         """
         async with self.session as session:
-            query = select(KaraokeMembers).where(KaraokeMembers.party_id == self.id)
+            query = select(KaraokeMembers).where(KaraokeMembers.party_id == self.id, KaraokeMembers.pending == False)  # noqa: E712
             exc = await session.execute(query)
             payload = exc.scalars().all()
 
             return_obj: list[User] = []
             for i in payload:
-                user = await User.get_by_id(id=i.user_id)
+                user = await User.get_by_id(i.user_id)
                 if user is None:
                     raise NotFound("Party Member User not found!")
 
@@ -75,3 +76,19 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
 
         await self.redis.delete(f"karaoke_party:{self.id}")
         self._payload = party
+
+    async def invite_user(self, user_id: int) -> KaraokeMember:
+        """
+        특정 유저를 파티에 초대합니다.
+
+        Args:
+            user_id: 초대할 유저의 ID
+
+        Returns:
+            KaraokeMember: 생성된 멤버 객체
+        """
+        async with self.session as session:
+            member = KaraokeMembers(party_id=self.id, user_id=user_id, pending=True)
+            session.add(member)
+
+        return KaraokeMember(member)
