@@ -24,6 +24,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
     karaoke_list:{karaoke.date} - karaoke.date 날에 소속된 노래방 예약 목록 데이터
     karaoke:{karaoke.id}:highest - karaoke.id 의 최고 입찰 기록
     karaoke_party:{karaoke_party.id} - karaoke_party.id의 파티 데이터
+    karaoke_members:{karaoke_party.id} - karaoke_party.id의 파티 멤버 데이터
 
     - key에 들어가는 date요소의 포멧팅은 datetime의 기본 포멧팅인 YYYY-MM-DD으로 할 것.
     """
