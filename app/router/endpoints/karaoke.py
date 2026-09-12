@@ -4,8 +4,8 @@ from datetime import date as dt_date, datetime
 from sqlmodel import select, col
 
 from app.core import ServiceClient, LoginDep
-from app.core.service import Karaoke
 from app.schemas import Karaokes, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis, KaraokeStatus
+from app.schemas.karaokes import Karaoke
 from app.schemas.response import ResponseModel, ErrorResponse
 from app.core.service.karaoke import KaraokeParty, KaraokeMember
 from app.core.error import PointInsufficient
@@ -34,7 +34,7 @@ class KaraokeInviteAction(BaseModel):
     accept: bool = Field(description="초대 수락 여부")
 
 
-class KaraokeResponse(Karaokes):
+class KaraokeResponse(Karaoke):
     highest_bid: int | None = None
 
 

@@ -12,12 +12,8 @@ class KaraokeStatus(StrEnum):
     CONFIRMED = "Confirmed"  # 경매 종료 후 예약 확정됨
 
 
-class Karaokes(SQLModel, table=True):
-    __tablename__ = "karaoke"
-    __table_args__ = (Index("ix_karaoke_date_time", "date", "time"),)
-
+class Karaoke(SQLModel):
     id: int | None = Field(default=None, primary_key=True, index=True)
-
     date: dt_date = Field(..., nullable=False, index=True, description="예약 일자")
     time: int = Field(..., nullable=False, description="예약 시간 (1~7교시, 점심시간 8)")
 
@@ -32,14 +28,19 @@ class Karaokes(SQLModel, table=True):
 
     min_point: int = Field(default=0, description="최소 입찰가")
 
-    bids: list["KaraokeBids"] = Relationship(back_populates="auction", passive_deletes=True)
-    parties: list["KaraokePartis"] = Relationship(back_populates="auction", passive_deletes=True)
-
     @field_serializer("start_time", "end_time")
     def serialize_datetime(self, dt, _info):
         if isinstance(dt, datetime):
             return SchemaCore.sync_timezone(dt).isoformat()
         return dt
+
+
+class Karaokes(Karaoke, table=True):
+    __tablename__ = "karaoke"
+    __table_args__ = (Index("ix_karaoke_date_time", "date", "time"),)
+
+    bids: list["KaraokeBids"] = Relationship(back_populates="auction", passive_deletes=True)
+    parties: list["KaraokePartis"] = Relationship(back_populates="auction", passive_deletes=True)
 
 
 class KaraokeBids(SQLModel, table=True):
