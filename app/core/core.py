@@ -1,3 +1,4 @@
+from inspect import isroutine
 from typing import TypeVar, Type
 from functools import lru_cache, wraps
 from hangulpy import split_hangul_string
@@ -121,7 +122,7 @@ class ServiceCore[T](BaseCore):
             return getattr(payload, name)
 
         attr = super().__getattribute__(name)
-        if callable(attr) and not name.startswith("__"):
+        if callable(attr) and isroutine(attr) and not name.startswith("__"):
 
             @wraps(attr)
             def wrapper(*args, **kwargs):
