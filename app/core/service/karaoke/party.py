@@ -94,6 +94,17 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
             f"노래방 파티 해산 상태 변경 - 파티 ID {self.id}의 해산 상태가 {dispersed}로 변경되었습니다."
         )
 
+    async def disperse(self):
+        """
+        파티를 해산합니다.
+        파티장이 자발적으로 파티를 해산할 때 사용되며,
+        기존 파티/멤버(KaraokeMember) 데이터는 삭제하지 않고 해산 상태로만 변경합니다.
+        """
+        await self.set_dispersed(True)
+        await self.redis.delete(f"karaoke_members:{self.id}")
+
+        self.logs.service_karaoke.info(f"노래방 파티 자진 해산 - 파티 ID {self.id}가 해산되었습니다.")
+
     async def get_pending_members(self) -> list[User]:
         """
         현재 파티에 초대되어 수락 대기중인 유저들을 가져옵니다.

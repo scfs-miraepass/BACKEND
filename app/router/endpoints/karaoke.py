@@ -5,9 +5,9 @@ from sqlmodel import select, col
 
 from app.core import ServiceClient, LoginDep
 from app.schemas import Karaokes, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis, KaraokeStatus
-from app.schemas.karaokes import Karaoke
+from app.schemas.karaokes import Karaoke as SchemasKaraoke
 from app.schemas.response import ResponseModel, ErrorResponse
-from app.core.service.karaoke import KaraokeParty, KaraokeMember
+from app.core.service.karaoke import KaraokeParty, KaraokeMember, Karaoke
 from app.core.error import PointInsufficient
 from fastapi import WebSocket, WebSocketDisconnect
 from asyncio import create_task
@@ -34,7 +34,7 @@ class KaraokeInviteAction(BaseModel):
     accept: bool = Field(description="초대 수락 여부")
 
 
-class KaraokeResponse(Karaoke):
+class KaraokeResponse(SchemasKaraoke):
     highest_bid: int | None = None
 
 
@@ -303,6 +303,42 @@ async def create_karaoke_bid(auth_data: LoginDep, karaoke_id: int, body: Karaoke
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PointInsufficient as e:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(e))
+
+
+@router.delete(
+    "/party/{party_id}",
+    responses={
+        204: {"description": "정상적으로 파티 해산 완료"},
+        400: {"model": ErrorResponse, "description": "이미 해산된 파티"},
+        403: {"model": ErrorResponse, "description": "권한 없음 (파티장이 아님)"},
+        404: {"model": ErrorResponse, "description": "파티를 찾을 수 없음"},
+    },
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="파티 해산",
+    description="파티장이 자신이 리더인 파티를 자발적으로 해산합니다.",
+)
+async def disperse_karaoke_party(auth_data: LoginDep, party_id: int):
+    user, _ = auth_data
+
+    if not user.has_permission(UserPermission.JOIN_KARAOKE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    party = await KaraokeParty.get_by_id(party_id)
+    if not party:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Party not found")
+
+    if party.leader_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only the party leader can disperse the party"
+        )
+
+    if party.dispersed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Party is already dispersed")
+
+    await party.disperse()
 
 
 class KaraokeInviteCreate(BaseModel):
