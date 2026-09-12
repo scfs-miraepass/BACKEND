@@ -122,6 +122,7 @@ class UserPermission(IntFlag):
         | VIEW_QUEST
         | VIEW_KARAOKE
         | JOIN_KARAOKE
+        | SEARCH_USER  # 노래방 파티원을 초대하려면 유저 검색이 필요함
     )
     TEACHER = (
         GRANT_POINT

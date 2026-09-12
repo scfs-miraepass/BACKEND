@@ -1,9 +1,9 @@
 from typing import TYPE_CHECKING
 from app.schemas import KaraokePartis, KaraokeMembers
 
-from sqlmodel import select
+from sqlmodel import col, select
 
-from ...error import NotFound
+from ...error import Conflict, NotFound
 from ...core import ServiceCore
 from ..user import User
 from .member import KaraokeMember
@@ -111,6 +111,7 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
         user_ids.add(self.leader_id)
         for user_id in user_ids:
             await self.redis.delete(f"karaoke:{self.auction_id}:member:{user_id}")
+            await self.redis.delete(f"karaoke_party_member:{self.id}:{user_id}")
 
     async def disperse(self):
         """
@@ -148,13 +149,43 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
         """
         특정 유저를 파티에 초대합니다.
 
+        한 유저는 하나의 경매에서 단 하나의 파티에만 소속될 수 있으므로,
+        초대 대상이 같은 경매의 다른 파티(자기 자신 포함)에 이미 소속되어 있거나
+        초대 대기중인 경우 초대를 거부합니다.
+
         Args:
             user: 초대할 유저
+
+        Raises:
+            ValueError: 해산된 파티에 초대하거나, 파티장 자신을 초대할 경우 발생합니다.
+            ServiceError.Conflict: 초대 대상이 이 경매의 파티에 이미 소속/초대되어 있을 경우 발생합니다.
 
         Returns:
             KaraokeMember: 생성된 멤버 객체
         """
+        if self.dispersed:
+            raise ValueError("Cannot invite a user to a dispersed party.")
+
+        if user.id == self.leader_id:
+            raise ValueError("The party leader is already in the party.")
+
         async with self.session as session:
+            # 같은 경매의 해산되지 않은 파티 중, 초대 대상이 리더이거나 멤버(대기중 포함)인 파티를 찾습니다.
+            query = (
+                select(KaraokePartis.id)
+                .outerjoin(KaraokeMembers, col(KaraokeMembers.party_id) == col(KaraokePartis.id))
+                .where(
+                    KaraokePartis.auction_id == self.auction_id,
+                    KaraokePartis.dispersed == False,  # noqa: E712
+                    (KaraokePartis.leader_id == user.id) | (KaraokeMembers.user_id == user.id),
+                )
+            )
+            exists = (await session.execute(query)).scalars().first()
+            if exists is not None:
+                if exists == self.id:
+                    raise Conflict("The user is already invited to or a member of this party.")
+                raise Conflict("The user already belongs to another party in this auction.")
+
             member = KaraokeMembers(party_id=self.id, user_id=user.id, pending=True)
             session.add(member)
 

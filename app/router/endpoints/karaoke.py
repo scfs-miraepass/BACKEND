@@ -8,7 +8,7 @@ from app.schemas import Karaokes, User, UserPermission, KaraokeBids, KaraokeMemb
 from app.schemas.karaokes import Karaoke as SchemasKaraoke
 from app.schemas.response import ResponseModel, ErrorResponse
 from app.core.service.karaoke import KaraokeParty, KaraokeMember, Karaoke
-from app.core.error import PointInsufficient
+from app.core.error import Conflict, PointInsufficient
 from fastapi import WebSocket, WebSocketDisconnect
 from asyncio import create_task
 
@@ -79,6 +79,7 @@ async def _build_party_detail(party: KaraokeParty) -> KaraokePartyDetail:
 
 @router.get(
     "",
+    operation_id="get_karaoke_list",
     response_model=ResponseModel[list[KaraokeResponse]],
     responses={
         200: {"description": "정상적으로 처리됨."},
@@ -134,6 +135,7 @@ async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_dat
 
 @router.post(
     "",
+    operation_id="create_karaoke",
     response_model=ResponseModel[Karaokes],
     responses={
         201: {"description": "정상적으로 생성이 완료됨"},
@@ -198,6 +200,7 @@ async def create_karaoke(body: KaraokeCreate, auth_data: LoginDep):
 
 @router.get(
     "/{karaoke_id}",
+    operation_id="get_karaoke",
     response_model=ResponseModel[KaraokeResponse],
     responses={
         200: {"description": "정상적으로 처리됨."},
@@ -237,6 +240,7 @@ async def get_karaoke(auth_data: LoginDep, karaoke_id: int):
 
 @router.delete(
     "/{karaoke_id}",
+    operation_id="delete_karaoke",
     responses={
         204: {"description": "정상적으로 처리됨."},
         403: {
@@ -270,6 +274,7 @@ async def delete_karaoke(auth_data: LoginDep, karaoke_id: int):
 
 @router.post(
     "/{karaoke_id}/party",
+    operation_id="create_karaoke_party",
     response_model=ResponseModel[KaraokePartis],
     responses={
         201: {"description": "정상적으로 파티 생성 완료"},
@@ -303,6 +308,7 @@ async def create_karaoke_party(auth_data: LoginDep, karaoke_id: int):
 
 @router.get(
     "/{karaoke_id}/party/me",
+    operation_id="get_my_karaoke_party",
     response_model=ResponseModel[KaraokePartyDetail],
     responses={
         200: {"description": "정상적으로 처리됨."},
@@ -335,6 +341,7 @@ async def get_my_karaoke_party(auth_data: LoginDep, karaoke_id: int):
 
 @router.post(
     "/{karaoke_id}/bid",
+    operation_id="create_karaoke_bid",
     response_model=ResponseModel[KaraokeBids],
     responses={
         201: {"description": "정상적으로 입찰 완료"},
@@ -378,6 +385,7 @@ async def create_karaoke_bid(auth_data: LoginDep, karaoke_id: int, body: Karaoke
 
 @router.get(
     "/{karaoke_id}/final-bid",
+    operation_id="get_karaoke_final_bid",
     response_model=ResponseModel[KaraokeFinalBidResponse],
     responses={
         200: {"description": "정상적으로 처리됨."},
@@ -426,8 +434,46 @@ async def get_karaoke_final_bid(auth_data: LoginDep, karaoke_id: int):
     )
 
 
+@router.get(
+    "/party/{party_id}",
+    operation_id="get_karaoke_party",
+    response_model=ResponseModel[KaraokePartyDetail],
+    responses={
+        200: {"description": "정상적으로 처리됨."},
+        403: {"model": ErrorResponse, "description": "권한 없음 (파티에 소속되거나 초대받지 않음)"},
+        404: {"model": ErrorResponse, "description": "파티를 찾을 수 없음"},
+    },
+    status_code=status.HTTP_200_OK,
+    summary="파티 조회",
+    description=(
+        "파티 ID로 파티 상세 정보를 조회합니다. 자신이 파티장이거나, 파티에 소속(또는 초대 대기중)인 경우에만 "
+        "조회할 수 있습니다. 초대장 목록(`/karaoke/party/invites/me`)에서 받은 `party_id`로 "
+        "초대받은 파티가 어떤 경매의, 누구의 파티인지 확인할 때 사용합니다."
+    ),
+)
+async def get_karaoke_party(auth_data: LoginDep, party_id: int):
+    user, _ = auth_data
+
+    if not user.has_permission(UserPermission.JOIN_KARAOKE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    party = await KaraokeParty.get_by_id(party_id)
+    if not party:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Party not found")
+
+    # 파티장 본인이거나, 파티에 소속(초대 대기중 포함)된 유저만 조회할 수 있습니다.
+    if party.leader_id != user.id and await user.get_karaoke_member(party_id) is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this party")
+
+    return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(party))
+
+
 @router.delete(
     "/party/{party_id}",
+    operation_id="disperse_karaoke_party",
     responses={
         204: {"description": "정상적으로 파티 해산 완료"},
         400: {"model": ErrorResponse, "description": "이미 해산된 파티"},
@@ -464,6 +510,7 @@ async def disperse_karaoke_party(auth_data: LoginDep, party_id: int):
 
 @router.delete(
     "/party/{party_id}/leave",
+    operation_id="leave_karaoke_party",
     responses={
         204: {"description": "정상적으로 파티 탈퇴 완료"},
         400: {"model": ErrorResponse, "description": "파티장은 탈퇴할 수 없음 (해산 API 사용 필요)"},
@@ -501,6 +548,7 @@ async def leave_karaoke_party(auth_data: LoginDep, party_id: int):
 
 @router.delete(
     "/party/{party_id}/members/{user_id}",
+    operation_id="kick_karaoke_party_member",
     response_model=ResponseModel[KaraokePartyDetail],
     responses={
         200: {"description": "정상적으로 멤버 강퇴 완료"},
@@ -549,14 +597,21 @@ class KaraokeInviteCreate(BaseModel):
 
 @router.post(
     "/party/{party_id}/invite",
+    operation_id="invite_karaoke_party_member",
     responses={
         204: {"description": "정상적으로 초대 완료"},
+        400: {"model": ErrorResponse, "description": "해산된 파티이거나, 파티장 자신을 초대함"},
         403: {"model": ErrorResponse, "description": "권한 없음 (파티장이 아님)"},
         404: {"model": ErrorResponse, "description": "파티나 초대할 유저를 찾을 수 없음"},
+        409: {"model": ErrorResponse, "description": "이미 이 경매의 파티에 소속되었거나 초대된 유저"},
     },
     status_code=status.HTTP_204_NO_CONTENT,
     summary="파티원 초대",
-    description="자신이 파티장인 파티에 파티원을 초대합니다.",
+    description=(
+        "자신이 파티장인 파티에 파티원을 초대합니다. "
+        "한 유저는 하나의 경매에서 하나의 파티에만 소속될 수 있으므로, "
+        "이미 같은 경매의 파티에 소속되었거나 초대 대기중인 유저는 초대할 수 없습니다."
+    ),
 )
 async def invite_karaoke_party_member(auth_data: LoginDep, party_id: int, body: KaraokeInviteCreate):
     user, _ = auth_data
@@ -578,11 +633,17 @@ async def invite_karaoke_party_member(auth_data: LoginDep, party_id: int, body: 
     if not invite_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User to invite not found")
 
-    await party.invite_user(invite_user)
+    try:
+        await party.invite_user(invite_user)
+    except Conflict as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get(
     "/party/invites/me",
+    operation_id="get_my_karaoke_party_invites",
     response_model=ResponseModel[list[KaraokeMembers]],
     status_code=status.HTTP_200_OK,
     summary="파티원 초대장 목록 보기",
@@ -607,6 +668,7 @@ async def get_my_party_invites(auth_data: LoginDep):
 
 @router.post(
     "/party/{party_id}/action",
+    operation_id="decide_karaoke_party_invite",
     response_model=ResponseModel[bool],
     responses={
         200: {"description": "정상적으로 수락/거절 완료"},

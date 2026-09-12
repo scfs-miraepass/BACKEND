@@ -147,9 +147,15 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             # (Redis 캐시는 동시 요청 사이에서 갱신 타이밍이 어긋날 수 있어 신뢰할 수 없습니다)
             highest = await self.get_final_bid()
 
-            min_point = self.min_point if highest is None else highest.amount
-            if amount < min_point:
-                raise ValueError(f"The bid amount must be greater than or equal to the minimum bid ({min_point}).")
+            if highest is None:
+                # 첫 입찰은 최소 입찰가 이상이기만 하면 됩니다.
+                if amount < self.min_point:
+                    raise ValueError(
+                        f"The bid amount must be greater than or equal to the minimum bid ({self.min_point})."
+                    )
+            elif amount <= highest.amount:
+                # 이후 입찰은 직전 최고가를 반드시 넘어야 합니다. (동일 금액으로 최고가를 가져갈 수 없음)
+                raise ValueError(f"The bid amount must be greater than the current highest bid ({highest.amount}).")
 
             # 차감 대상 유저와 금액 목록 구성
             deductions: list[tuple[User, int]] = []

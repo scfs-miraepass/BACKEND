@@ -24,6 +24,14 @@ class Forbidden(ServiceError):
     pass
 
 
+class Conflict(ServiceError):
+    """
+    이미 존재하는 데이터와 충돌할 경우 발생합니다.
+    """
+
+    pass
+
+
 class LimitExceeded(ServiceError):
     """
     제한을 초과했을 때 발생합니다.
