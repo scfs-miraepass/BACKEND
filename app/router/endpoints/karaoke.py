@@ -38,6 +38,15 @@ class KaraokeResponse(SchemasKaraoke):
     highest_bid: int | None = None
 
 
+class KaraokeFinalBidResponse(BaseModel):
+    id: int
+    auction_id: int
+    party_id: int | None
+    amount: int
+    created_at: datetime
+    bidder: User
+
+
 class KaraokePartyDetail(BaseModel):
     id: int
     auction_id: int
@@ -56,6 +65,7 @@ async def _build_party_detail(party: KaraokeParty) -> KaraokePartyDetail:
     members = await party.get_members()
     pending_members = await party.get_pending_members()
 
+    # noinspection bad-argument-type
     return KaraokePartyDetail(
         id=party.id,
         auction_id=party.auction_id,
@@ -366,15 +376,6 @@ async def create_karaoke_bid(auth_data: LoginDep, karaoke_id: int, body: Karaoke
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(e))
 
 
-class KaraokeFinalBidResponse(BaseModel):
-    id: int
-    auction_id: int
-    party_id: int | None
-    amount: int
-    created_at: datetime
-    bidder: User
-
-
 @router.get(
     "/{karaoke_id}/final-bid",
     response_model=ResponseModel[KaraokeFinalBidResponse],
@@ -411,6 +412,7 @@ async def get_karaoke_final_bid(auth_data: LoginDep, karaoke_id: int):
     if bidder is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bidder user not found")
 
+    # noinspection bad-argument-type
     return ResponseModel[KaraokeFinalBidResponse](
         success=True,
         data=KaraokeFinalBidResponse(
