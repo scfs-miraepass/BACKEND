@@ -6,6 +6,7 @@ from sqlmodel import select, col
 from app.core import ServiceClient, LoginDep
 from app.schemas import Karaokes, User, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis, KaraokeStatus
 from app.schemas.karaokes import Karaoke as SchemasKaraoke
+from app.schemas.core import SchemaCore
 from app.schemas.response import ResponseModel, ErrorResponse
 from app.core.service.karaoke import KaraokeParty, KaraokeMember, Karaoke
 from app.core.error import Conflict, PointInsufficient
@@ -738,8 +739,9 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
 
             await client.redis.set(cache_key, bids_history_dump, ttl=60 * 5)
 
-        now = datetime.now().astimezone() if karaoke.end_time.tzinfo else datetime.now()
-        remaining_time = int((karaoke.end_time - now).total_seconds())
+        # end_time은 DB 시간대 기준의 naive 값이라 시간대를 맞춰야 합니다.
+        # (맞추지 않으면 시차 때문에 남은 시간이 늘 음수가 되어 항상 0으로 내려갑니다)
+        remaining_time = int((SchemaCore.sync_timezone(karaoke.end_time) - SchemaCore.now()).total_seconds())
 
         return {
             "highest_bid": highest_bid.model_dump(mode="json") if highest_bid else None,

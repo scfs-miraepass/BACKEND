@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING
 from sqlmodel import delete, select, col
-from datetime import datetime
 
 from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType, KaraokePartis
+from app.schemas.core import SchemaCore
 
 from ...core import ServiceCore
 from ...error import PointInsufficient
@@ -198,9 +198,10 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         await self.redis.delete_pattern(f"karaoke_list:{self.date}")
 
         # 최고가 TTL은 종료 시간까지로 하며, 최소 60초
-        now = datetime.now().astimezone() if self.end_time.tzinfo else datetime.now()
-        ttl_seconds = int((self.end_time - now).total_seconds()) + 60
-        ttl = max(60, ttl_seconds)
+        # end_time은 DB 시간대 기준의 naive 값이므로 시간대를 맞춘 뒤 계산해야 합니다.
+        # (맞추지 않으면 남은 시간이 항상 음수가 되어 TTL이 늘 최소값 60초로 떨어집니다)
+        remaining = (SchemaCore.sync_timezone(self.end_time) - SchemaCore.now()).total_seconds()
+        ttl = max(60, int(remaining) + 60)
 
         dump_str = obj.model_dump_json()
         await self.redis.set(f"karaoke:{self.id}:highest", obj.model_dump(), ttl=ttl)  # 최고 입찰 갱신

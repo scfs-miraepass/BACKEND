@@ -1,6 +1,5 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 from tomllib import load
 
@@ -63,8 +62,10 @@ async def process_karaoke_auctions():
         karaoke = KaraokeService(row)
 
         if row.status == KaraokeStatus.PENDING:
-            now = datetime.now().astimezone() if row.start_time.tzinfo else datetime.now()
-            if row.start_time > now:
+            # start_time/end_time은 시간대 정보가 없는 DATETIME 컬럼이라 DB 서버 시간대 기준의
+            # wall clock으로 저장됩니다. 백엔드 프로세스의 로컬 시계(datetime.now())와 그대로
+            # 비교하면 두 시간대의 시차만큼 어긋나므로, DB 시간대를 붙여 aware끼리 비교합니다.
+            if SchemaCore.sync_timezone(row.start_time) > SchemaCore.now():
                 continue
 
             await karaoke.set_status(KaraokeStatus.IN_PROGRESS)
@@ -72,8 +73,7 @@ async def process_karaoke_auctions():
             client.logs.service_karaoke.info(f"노래방 경매 자동 시작 - ID {row.id}({row.date} / {row.time})")
 
         elif row.status == KaraokeStatus.IN_PROGRESS:
-            now = datetime.now().astimezone() if row.end_time.tzinfo else datetime.now()
-            if row.end_time > now:
+            if SchemaCore.sync_timezone(row.end_time) > SchemaCore.now():
                 continue
 
             await karaoke.set_status(KaraokeStatus.CONFIRMED)
