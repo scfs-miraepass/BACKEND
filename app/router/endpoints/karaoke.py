@@ -289,7 +289,6 @@ class KaraokeInviteCreate(BaseModel):
 
 @router.post(
     "/party/{party_id}/invite",
-    response_model=ResponseModel[KaraokeMembers],
     responses={
         204: {"description": "정상적으로 초대 완료"},
         403: {"model": ErrorResponse, "description": "권한 없음 (파티장이 아님)"},

@@ -6,6 +6,7 @@ from sqlmodel import select
 from ...core import ServiceCore
 from ...core import DatabaseCore
 from ...core import RedisCore
+from ..user import User
 
 
 if TYPE_CHECKING:
@@ -88,3 +89,16 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
         self.logs.service_karaoke.info(
             f"노래방 파티 멤버 초대 거절/삭제 - 파티 ID {self.party_id}의 유저 {self.user_id}가 초대를 거절/삭제했습니다."
         )
+
+    async def leave(self):
+        """
+        이 멤버가 파티에서 나감니다.
+
+        Raises:
+            RuntimeError: 유저가 없는 경우 발생합니다. 논리상 발생할 수 없습니다.
+        """
+        karaoke = await self.get_party()
+        user = await User.get_by_id(self.user_id)
+        if user is None:
+            raise RuntimeError()
+        await karaoke.kick_members(user)
