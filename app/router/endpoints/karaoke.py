@@ -233,7 +233,7 @@ async def get_karaoke(auth_data: LoginDep, karaoke_id: int):
     if karaoke is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
 
-    dump = karaoke.payload.model_dump()
+    dump = karaoke.model_dump()
     if karaoke.status == KaraokeStatus.IN_PROGRESS:
         highest = await karaoke.get_highest()
         dump["highest_bid"] = highest.amount if highest else None
