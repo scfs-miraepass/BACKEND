@@ -4,10 +4,13 @@ from datetime import date as dt_date, datetime
 from sqlmodel import select, col
 
 from app.core import ServiceClient, LoginDep
+from app.core.service import Karaoke
 from app.schemas import Karaokes, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis
 from app.schemas.response import ResponseModel, ErrorResponse
 from app.core.service.karaoke import KaraokeParty, KaraokeMember
 from app.core.error import PointInsufficient
+from fastapi import WebSocket, WebSocketDisconnect
+from asyncio import create_task
 
 router = APIRouter(prefix="/karaoke", tags=["karaoke"])
 client = ServiceClient()
@@ -376,3 +379,78 @@ async def decide_karaoke_party_invite(auth_data: LoginDep, party_id: int, body: 
         await member.reject()
 
     return ResponseModel[bool](success=True, data=True)
+
+
+@router.websocket("/{karaoke_id}/ws")
+async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_id: int):
+    user, _ = auth_data
+
+    await websocket.accept()
+
+    if not user.has_permission(UserPermission.VIEW_KARAOKE):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    _karaoke = await client.get_karaoke(karaoke_id, cache=True)
+    if _karaoke is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    async def get_state(karaoke: Karaoke):
+        highest_bid = await karaoke.get_highest()
+
+        cache_key = f"karaoke:{karaoke.id}:bids_history"
+        cached_bids = await client.redis.get(cache_key)
+
+        if cached_bids is not None:
+            bids_history_dump = cached_bids
+        else:
+            async with client.session as session:
+                query = (
+                    select(KaraokeBids)
+                    .where(KaraokeBids.auction_id == karaoke_id)
+                    .order_by(col(KaraokeBids.created_at).desc())
+                )
+                res = await session.execute(query)
+                bids_history = res.scalars().all()
+                bids_history_dump = [b.model_dump(mode="json") for b in bids_history]
+
+            await client.redis.set(cache_key, bids_history_dump, ttl=60 * 5)
+
+        now = datetime.now().astimezone() if karaoke.end_time.tzinfo else datetime.now()
+        remaining_time = int((karaoke.end_time - now).total_seconds())
+
+        return {
+            "highest_bid": highest_bid.model_dump(mode="json") if highest_bid else None,
+            "bids_history": bids_history_dump,
+            "remaining_time": remaining_time if remaining_time > 0 else 0,
+        }
+
+    # 초기 상태 전송
+    await websocket.send_json(await get_state(_karaoke))
+
+    # Redis Pub/Sub 구독
+    pubsub = client.redis.pubsub()
+    await pubsub.subscribe(f"ws_karaoke_{karaoke_id}")
+
+    async def redis_listener(karaoke: Karaoke):
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                # 최고가가 갱신되면 다시 조회 후 상태 전송
+                state = await get_state(karaoke)
+                try:
+                    await websocket.send_json(state)
+                except Exception:
+                    break
+
+    listener_task = create_task(redis_listener(_karaoke))
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        listener_task.cancel()
+        await pubsub.unsubscribe(f"ws_karaoke_{karaoke_id}")
+        await pubsub.close()

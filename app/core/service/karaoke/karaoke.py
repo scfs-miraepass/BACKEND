@@ -95,7 +95,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         bid = await self.redis.get(f"karaoke:{self.id}:highest")
         if bid is None:
             return None
-        return KaraokeBid.model_validate(bid)
+        return KaraokeBid(payload=KaraokeBids.model_validate(bid))
 
     async def add_bid(self, bidder: User, amount: int, party: KaraokeParty | None = None) -> KaraokeBid:
         """
@@ -159,6 +159,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             await session.flush()
 
         await self.redis.delete(f"karaoke:{self.id}")
+        await self.redis.delete(f"karaoke:{self.id}:bids_history")  # 기록 캐시 무효화
         await self.redis.delete_pattern(f"karaoke_list:{self.date}")
 
         # 최고가 TTL은 종료 시간까지로 하며, 최소 60초
@@ -166,7 +167,9 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         ttl_seconds = int((self.end_time - now).total_seconds()) + 60
         ttl = max(60, ttl_seconds)
 
+        dump_str = obj.model_dump_json()
         await self.redis.set(f"karaoke:{self.id}:highest", obj.model_dump(), ttl=ttl)  # 최고 입찰 갱신
+        await self.redis.publish(f"ws_karaoke_{self.id}", dump_str)  # 구독 공지
 
         self.logs.service_karaoke.info(
             f"노래방 입찰 성공 - {self.id}({self.date} / {self.time})에 {bidder.name}({bidder.id})님이 {amount} 포인트로 입찰했습니다."
