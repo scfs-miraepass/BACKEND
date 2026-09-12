@@ -1,19 +1,23 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from tomllib import load
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlmodel import select, col
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .core import ServiceClient, settings
+from .core.service.karaoke import Karaoke as KaraokeService
 from .router import router
-from .schemas import UserPermission
+from .schemas import Karaokes, KaraokeStatus, UserPermission
 from .schemas.response import ErrorResponse
 from .schemas.core import SchemaCore
 
@@ -40,6 +44,41 @@ async def reset_grant_limit():
 async def reset_student_limit():
     await client.redis.delete_pattern("point_limit:student:*")
     client.logs.service.info("학생 포인트 제한을 초기화 했습니다.")
+
+
+@scheduler.scheduled_job(IntervalTrigger(seconds=30))
+async def process_karaoke_auctions():
+    """
+    노래방 예약 경매의 시작/종료 시간을 확인하여 상태를 자동으로 전환합니다.
+
+    - `PENDING` 상태이고 시작 시간이 지난 경매는 `IN_PROGRESS`로 변경합니다.
+    - `IN_PROGRESS` 상태이고 종료 시간이 지난 경매는 `CONFIRMED`로 변경합니다.
+    """
+    async with client.session as session:
+        query = select(Karaokes).where(col(Karaokes.status).in_([KaraokeStatus.PENDING, KaraokeStatus.IN_PROGRESS]))
+        result = await session.execute(query)
+        karaokes = list(result.scalars().all())
+
+    for row in karaokes:
+        karaoke = KaraokeService(row)
+
+        if row.status == KaraokeStatus.PENDING:
+            now = datetime.now().astimezone() if row.start_time.tzinfo else datetime.now()
+            if row.start_time > now:
+                continue
+
+            await karaoke.set_status(KaraokeStatus.IN_PROGRESS)
+            await client.redis.publish(f"ws_karaoke_{row.id}", "started")
+            client.logs.service_karaoke.info(f"노래방 경매 자동 시작 - ID {row.id}({row.date} / {row.time})")
+
+        elif row.status == KaraokeStatus.IN_PROGRESS:
+            now = datetime.now().astimezone() if row.end_time.tzinfo else datetime.now()
+            if row.end_time > now:
+                continue
+
+            await karaoke.set_status(KaraokeStatus.CONFIRMED)
+            await client.redis.publish(f"ws_karaoke_{row.id}", "ended")
+            client.logs.service_karaoke.info(f"노래방 경매 자동 종료 - ID {row.id}({row.date} / {row.time})")
 
 
 @asynccontextmanager
