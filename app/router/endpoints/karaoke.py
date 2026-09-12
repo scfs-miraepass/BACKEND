@@ -5,7 +5,7 @@ from sqlmodel import select, col
 
 from app.core import ServiceClient, LoginDep
 from app.core.service import Karaoke
-from app.schemas import Karaokes, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis
+from app.schemas import Karaokes, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis, KaraokeStatus
 from app.schemas.response import ResponseModel, ErrorResponse
 from app.core.service.karaoke import KaraokeParty, KaraokeMember
 from app.core.error import PointInsufficient
@@ -34,9 +34,13 @@ class KaraokeInviteAction(BaseModel):
     accept: bool = Field(description="초대 수락 여부")
 
 
+class KaraokeResponse(Karaokes):
+    highest_bid: int | None = None
+
+
 @router.get(
     "",
-    response_model=ResponseModel[list[Karaokes]],
+    response_model=ResponseModel[list[KaraokeResponse]],
     responses={
         200: {"description": "정상적으로 처리됨."},
         403: {
@@ -65,18 +69,28 @@ async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_dat
     if cached is not None:
         # 캐시가 있는경우 캐시 응답
         response.headers["X-CACHED"] = "true"
-        return ResponseModel[list[Karaokes]](success=True, data=[Karaokes(**item) for item in cached])
+        return ResponseModel[list[KaraokeResponse]](success=True, data=[KaraokeResponse(**item) for item in cached])
 
     async with client.session as session:
         response.headers["X-CACHED"] = "false"
-        query = select(Karaokes).order_by(col(Karaokes.time))
+        query = select(Karaokes).where(Karaokes.date == date).order_by(col(Karaokes.time))
         result = await session.execute(query)
         karaokes = list(result.scalars().all())
 
-        # 캐시 저장
-        await client.redis.set(cache_key, [item.model_dump() for item in karaokes], ttl=60 * 5)
+        karaoke_responses = []
+        for k in karaokes:
+            dump = k.model_dump()
+            if k.status == KaraokeStatus.IN_PROGRESS:
+                k_serv = await client.get_karaoke(k.id)
+                if k_serv:
+                    highest = await k_serv.get_highest()
+                    dump["highest_bid"] = highest.amount if highest else None
+            karaoke_responses.append(KaraokeResponse(**dump))
 
-    return ResponseModel[list[Karaokes]](success=True, data=karaokes)
+        # 캐시 저장
+        await client.redis.set(cache_key, [item.model_dump(mode="json") for item in karaoke_responses], ttl=60 * 5)
+
+    return ResponseModel[list[KaraokeResponse]](success=True, data=karaoke_responses)
 
 
 @router.post(
@@ -145,7 +159,7 @@ async def create_karaoke(body: KaraokeCreate, auth_data: LoginDep):
 
 @router.get(
     "/{karaoke_id}",
-    response_model=ResponseModel[Karaokes],
+    response_model=ResponseModel[KaraokeResponse],
     responses={
         200: {"description": "정상적으로 처리됨."},
         403: {
@@ -174,7 +188,12 @@ async def get_karaoke(auth_data: LoginDep, karaoke_id: int):
     if karaoke is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
 
-    return ResponseModel[Karaokes](success=True, data=karaoke)
+    dump = karaoke.payload.model_dump()
+    if karaoke.status == KaraokeStatus.IN_PROGRESS:
+        highest = await karaoke.get_highest()
+        dump["highest_bid"] = highest.amount if highest else None
+
+    return ResponseModel[KaraokeResponse](success=True, data=KaraokeResponse(**dump))
 
 
 @router.delete(
