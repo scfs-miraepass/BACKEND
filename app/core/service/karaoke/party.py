@@ -94,6 +94,24 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
             f"노래방 파티 해산 상태 변경 - 파티 ID {self.id}의 해산 상태가 {dispersed}로 변경되었습니다."
         )
 
+    async def _invalidate_member_caches(self):
+        """
+        이 파티의 리더 및 멤버(대기중인 초대 포함)가 들고 있는
+        `User.get_party()` 캐시(`karaoke:{auction_id}:member:{user_id}`)를 무효화합니다.
+
+        파티가 해산되거나 강퇴로 인해 새 파티로 대체될 때 호출되며,
+        캐시 TTL(5분)이 만료될 때까지 기다리지 않고 관련 유저들이 즉시 최신 상태를
+        조회할 수 있도록 합니다.
+        """
+        async with self.session as session:
+            query = select(KaraokeMembers.user_id).where(KaraokeMembers.party_id == self.id)
+            result = await session.execute(query)
+            user_ids = {row[0] for row in result.all()}
+
+        user_ids.add(self.leader_id)
+        for user_id in user_ids:
+            await self.redis.delete(f"karaoke:{self.auction_id}:member:{user_id}")
+
     async def disperse(self):
         """
         파티를 해산합니다.
@@ -102,6 +120,7 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
         """
         await self.set_dispersed(True)
         await self.redis.delete(f"karaoke_members:{self.id}")
+        await self._invalidate_member_caches()
 
         self.logs.service_karaoke.info(f"노래방 파티 자진 해산 - 파티 ID {self.id}가 해산되었습니다.")
 
@@ -180,6 +199,7 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
         # 기존 파티의 캐시 삭제
         await self.redis.delete(f"karaoke_party:{self.id}")
         await self.redis.delete(f"karaoke_members:{self.id}")
+        await self._invalidate_member_caches()
         self.logs.service_karaoke.info(
             f"노래방 파티 멤버 강퇴 - 파티 ID {self.id}에서 유저 {user_ids}를 강퇴하고 새 파티 ID {new_party_model.id}를 생성했습니다."
         )

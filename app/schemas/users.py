@@ -103,14 +103,14 @@ class UserPermission(IntFlag):
     VIEW_QUEST = 2**16
     """퀘스트를 볼 수 있는 권한"""
 
-    VIEW_KARAOKE = 2**17
-    """노래방 경매를 확인할 수 있는 권한"""
-
     JOIN_KARAOKE = 2**18
     """노래방 경매를 참여 할 수 있는 권한"""
 
     MANAGE_KARAOKE = 2**19
     """노래방 경매를 관리(예약 생성, 삭제 및 확인) 할 수 있는 사람"""
+
+    VIEW_KARAOKE = 2**20
+    """노래방 경매를 확인할 수 있는 권한"""
 
     STUDENT = (
         VIEW_RANK
