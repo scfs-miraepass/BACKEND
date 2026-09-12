@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING
-from sqlmodel import delete, col
+from sqlmodel import delete, select, col
 from datetime import datetime
 
 from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType, KaraokePartis
@@ -102,6 +102,23 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             return None
         return KaraokeBid(payload=KaraokeBids.model_validate(bid))
 
+    async def get_final_bid(self) -> KaraokeBid | None:
+        """
+        최종(마지막) 입찰 기록을 DB에서 직접 조회합니다.
+
+        `get_highest`가 사용하는 Redis 캐시는 경매 종료 시각 기준으로 TTL이 걸려 있어
+        시간이 지나면 만료되므로, 경매가 끝난 뒤 최종 낙찰 내역(낙찰자)을 확인할 때는
+        이 함수를 사용해야 합니다.
+
+        Returns:
+            KaraokeBid | None
+        """
+        async with self.session as session:
+            query = select(KaraokeBids).where(KaraokeBids.auction_id == self.id).order_by(col(KaraokeBids.id).desc())
+            row = (await session.execute(query)).scalars().first()
+
+        return KaraokeBid(payload=row) if row is not None else None
+
     async def add_bid(self, bidder: User, amount: int, party: KaraokeParty | None = None) -> KaraokeBid:
         """
         노래방 경매에 입찰합니다.
@@ -118,15 +135,22 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         Returns:
             KaraokeBid
         """
-        if self.status != KaraokeStatus.IN_PROGRESS:
-            raise ValueError("The auction is not in progress.")
-
-        highest = await self.get_highest()
-        min_point = self.min_point if highest is None else highest.amount
-        if amount < min_point:
-            raise ValueError(f"The bid amount must be greater than or equal to the minimum bid ({min_point}).")
-
         async with self.session as session:
+            # 동시 입찰로 인한 레이스 컨디션(중복 최고가 인정 등)을 막기 위해
+            # 경매 Row에 락을 걸어 같은 경매에 대한 입찰 처리를 직렬화합니다.
+            lock_query = select(Karaokes).where(col(Karaokes.id) == self.id).with_for_update()
+            locked_karaoke = (await session.execute(lock_query)).scalar_one_or_none()
+            if locked_karaoke is None or locked_karaoke.status != KaraokeStatus.IN_PROGRESS:
+                raise ValueError("The auction is not in progress.")
+
+            # 락을 잡은 상태에서 DB 기준 최신(최고) 입찰을 다시 조회합니다.
+            # (Redis 캐시는 동시 요청 사이에서 갱신 타이밍이 어긋날 수 있어 신뢰할 수 없습니다)
+            highest = await self.get_final_bid()
+
+            min_point = self.min_point if highest is None else highest.amount
+            if amount < min_point:
+                raise ValueError(f"The bid amount must be greater than or equal to the minimum bid ({min_point}).")
+
             # 차감 대상 유저와 금액 목록 구성
             deductions: list[tuple[User, int]] = []
             if party is None:

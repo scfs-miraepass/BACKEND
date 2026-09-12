@@ -366,6 +366,64 @@ async def create_karaoke_bid(auth_data: LoginDep, karaoke_id: int, body: Karaoke
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(e))
 
 
+class KaraokeFinalBidResponse(BaseModel):
+    id: int
+    auction_id: int
+    party_id: int | None
+    amount: int
+    created_at: datetime
+    bidder: User
+
+
+@router.get(
+    "/{karaoke_id}/final-bid",
+    response_model=ResponseModel[KaraokeFinalBidResponse],
+    responses={
+        200: {"description": "정상적으로 처리됨."},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "예약을 찾을 수 없거나, 입찰 기록이 없음"},
+    },
+    status_code=status.HTTP_200_OK,
+    summary="최종 입찰(낙찰자) 조회",
+    description=(
+        "해당 경매의 최종(마지막) 입찰 기록과 낙찰자 정보를 조회합니다. "
+        "Redis 캐시(highest_bid)와 달리 DB를 직접 조회하므로 경매 종료 후 캐시가 만료되어도 확인할 수 있습니다."
+    ),
+)
+async def get_karaoke_final_bid(auth_data: LoginDep, karaoke_id: int):
+    user, _ = auth_data
+
+    if not user.has_permission(UserPermission.VIEW_KARAOKE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied.",
+        )
+
+    karaoke = await client.get_karaoke(karaoke_id, cache=True)
+    if not karaoke:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
+
+    bid = await karaoke.get_final_bid()
+    if bid is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No bids have been placed for this auction")
+
+    bidder = await client.get_user(bid.bidder_id)
+    if bidder is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bidder user not found")
+
+    return ResponseModel[KaraokeFinalBidResponse](
+        success=True,
+        data=KaraokeFinalBidResponse(
+            id=bid.id,
+            auction_id=bid.auction_id,
+            party_id=bid.party_id,
+            amount=bid.amount,
+            created_at=bid.created_at,
+            bidder=bidder,
+        ),
+    )
+
+
 @router.delete(
     "/party/{party_id}",
     responses={
