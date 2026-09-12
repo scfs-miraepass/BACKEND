@@ -46,9 +46,15 @@ class KaraokeBid(ServiceCore[KaraokeBids], _Type):
         유찰이 발생하는 경우 호출되며, 취소시 입찰한 금액은 다시 지급됩니다.
 
         Raises:
-            RuntimeError: 파티를 찾을 수 없는 경우 발생합니다. 이론상 발생할 수 없습니다.
+            RuntimeError: 경매 또는 파티를 찾을 수 없는 경우 발생합니다. 이론상 발생할 수 없습니다.
         """
+        from .karaoke import Karaoke
+
         async with self.session:
+            auction = await Karaoke.get_by_id(self.auction_id)
+            if auction is None:
+                raise RuntimeError("It has to be there, but it’s not..!")
+
             bidder = await self.get_bidder()  # 입찰자 가져오기
             deductions: list[tuple[User, int]] = []
 
@@ -78,7 +84,7 @@ class KaraokeBid(ServiceCore[KaraokeBids], _Type):
                 await user.point_grant(
                     deduct_amount,
                     reason="노래방 예약 취소",
-                    memo=f"{self.date} {self.time_format} 노래방 예약 취소로 인한 환불",
+                    memo=f"{auction.date} {auction.time_format} 노래방 예약 취소로 인한 환불",
                     type=PointHistoryType.karaoke_cancel,
                 )
 

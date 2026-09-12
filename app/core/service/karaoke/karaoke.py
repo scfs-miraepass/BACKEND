@@ -54,7 +54,12 @@ class Karaoke(ServiceCore[Karaokes], _Type):
     async def delete(self):
         """
         노래방 예약을 삭제합니다.
+        현재 최고 입찰이 있는 경우, 삭제 전에 해당 입찰을 취소(환불) 처리합니다.
         """
+        highest = await self.get_highest()
+        if highest is not None:
+            await highest.cancel()
+
         async with self.session as session:
             exc = delete(Karaokes).where(col(Karaokes.id) == self.id)
             await session.execute(exc)
