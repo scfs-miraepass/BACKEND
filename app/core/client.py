@@ -1,10 +1,7 @@
-from sqlmodel import select
+from app.schemas import Posts, Quests
 
-from app.schemas import Posts, Quests, Users, PointHistory
-
-from .config import settings
 from .core import BaseCore
-from .service import Post, Quest, User, History
+from .service import History, Karaoke, Post, Quest, User
 
 
 class ServiceClient(BaseCore):
@@ -15,10 +12,10 @@ class ServiceClient(BaseCore):
             cls.instance = super().__new__(cls)
         return cls.instance
 
+    @staticmethod
     async def get_user(
-        self,
-        /,
         _id: int,
+        /,
         *,
         cache: bool = False,
         save_cache: bool = True,
@@ -36,26 +33,7 @@ class ServiceClient(BaseCore):
         Returns:
             User | None
         """
-        if cache and not lock:
-            cached_user = await self.redis.get(f"user:{_id}")
-            if cached_user:
-                return User(payload=Users.model_validate(cached_user))
-
-        async with self.session as session:
-            if lock:
-                query = select(Users).where(Users.id == _id).with_for_update()
-                result = await session.execute(query)
-                payload: Users | None = result.scalar_one_or_none()
-            else:
-                payload = await session.get(Users, _id)
-
-        if save_cache and payload is not None:
-            await self.redis.set(
-                f"user:{payload.id}",
-                payload.model_dump(),
-                ttl=settings.service.session.expire_seconds,
-            )
-        return User(payload=payload)
+        return await User.get_by_id(user_id=_id, cache=cache, save_cache=save_cache, lock=lock)
 
     async def get_post(
         self,
@@ -78,26 +56,16 @@ class ServiceClient(BaseCore):
         Returns:
             Post | None
         """
-        if cache and not lock:
-            cached_user = await self.redis.get(f"post:{_id}")
-            if cached_user:
-                return Post(payload=Posts.model_validate(cached_user))
-
-        async with self.session as session:
-            if lock:
-                query = select(Posts).where(Posts.id == _id).with_for_update()
-                result = await session.execute(query)
-                payload: Posts | None = result.scalar_one_or_none()
-            else:
-                payload = await session.get(Posts, _id)
-
-        if save_cache and payload is not None:
-            await self.redis.set(
-                f"post:{payload.id}",
-                payload.model_dump(),
-                ttl=60 * 60 * 24,
-            )
-        return Post(payload=payload)
+        return await self._get_item(
+            _id=_id,
+            wrapper_cls=Post,
+            model_cls=Posts,
+            prefix="post",
+            ttl=60 * 60 * 24,
+            cache=cache,
+            save_cache=save_cache,
+            lock=lock,
+        )
 
     async def get_quest(
         self,
@@ -120,41 +88,26 @@ class ServiceClient(BaseCore):
         Returns:
             Quest | None
         """
-        if cache and not lock:
-            cached_user = await self.redis.get(f"quest:{_id}")
-            if cached_user:
-                return Quest(payload=Quests.model_validate(cached_user))
+        return await self._get_item(
+            _id=_id,
+            wrapper_cls=Quest,
+            model_cls=Quests,
+            prefix="quest",
+            ttl=60 * 5,
+            cache=cache,
+            save_cache=save_cache,
+            lock=lock,
+        )
 
-        async with self.session as session:
-            if lock:
-                query = select(Quests).where(Quests.id == _id).with_for_update()
-                result = await session.execute(query)
-                payload: Quests | None = result.scalar_one_or_none()
-            else:
-                payload = await session.get(Quests, _id)
-
-        if save_cache and payload is not None:
-            await self.redis.set(
-                f"quest:{payload.id}",
-                payload.model_dump(),
-                ttl=60 * 5,
-            )
-        return Quest(payload=payload)
-
+    @staticmethod
     async def get_history(
-        self,
-        /,
-        _id: int,
-        *,
-        cache: bool = False,
-        save_cache: bool = True,
-        lock: bool = False
+        _id: int, /, *, cache: bool = False, save_cache: bool = True, lock: bool = False
     ) -> History | None:
         """
         ID를 이용해 포인트 기록을 가져옵니다.
 
         Args:
-            _id: 퀘스트 ID
+            _id: 포인트 기록 ID
             cache: 캐시 사용 여부 (lock이 True 일경우 무시됨)
             save_cache: 가져온 후 캐시를 저장 여부
             lock: 조회후 Row-level Lock를 설정 여부
@@ -162,23 +115,22 @@ class ServiceClient(BaseCore):
         Returns:
             History | None
         """
-        if cache and not lock:
-            cached_user = await self.redis.get(f"point_history:{_id}")
-            if cached_user:
-                return History(payload=PointHistory.model_validate(cached_user))
+        return await History.get_by_id(history_id=_id, cache=cache, save_cache=save_cache, lock=lock)
 
-        async with self.session as session:
-            if lock:
-                query = select(PointHistory).where(PointHistory.id == _id).with_for_update()
-                result = await session.execute(query)
-                payload: PointHistory | None = result.scalar_one_or_none()
-            else:
-                payload = await session.get(PointHistory, _id)
+    @staticmethod
+    async def get_karaoke(
+        _id: int, /, *, cache: bool = False, save_cache: bool = True, lock: bool = False
+    ) -> Karaoke | None:
+        """
+        ID를 이용해 노래방 예약을 가져옵니다.
 
-        if save_cache and payload is not None:
-            await self.redis.set(
-                f"point_history:{payload.id}",
-                payload.model_dump(),
-                ttl=60 * 5,
-            )
-        return History(payload=payload)
+        Args:
+            _id: 노래방 예약 ID
+            cache: 캐시 사용 여부 (lock이 True 일경우 무시됨)
+            save_cache: 가져온 후 캐시를 저장 여부
+            lock: 조회후 Row-level Lock를 설정 여부
+
+        Returns:
+            Karaoke | None
+        """
+        return await Karaoke.get_by_id(karaoke_id=_id, cache=cache, save_cache=save_cache, lock=lock)

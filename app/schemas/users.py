@@ -103,7 +103,27 @@ class UserPermission(IntFlag):
     VIEW_QUEST = 2**16
     """퀘스트를 볼 수 있는 권한"""
 
-    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | JOIN_QUEST | VIEW_POST | VIEW_STAMP | VIEW_QUEST
+    JOIN_KARAOKE = 2**18
+    """노래방 경매를 참여 할 수 있는 권한"""
+
+    MANAGE_KARAOKE = 2**19
+    """노래방 경매를 관리(예약 생성, 삭제 및 확인) 할 수 있는 사람"""
+
+    VIEW_KARAOKE = 2**20
+    """노래방 경매를 확인할 수 있는 권한"""
+
+    STUDENT = (
+        VIEW_RANK
+        | VIEW_POINT
+        | VIEW_POINT_HISTORY
+        | JOIN_QUEST
+        | VIEW_POST
+        | VIEW_STAMP
+        | VIEW_QUEST
+        | VIEW_KARAOKE
+        | JOIN_KARAOKE
+        | SEARCH_USER  # 노래방 파티원을 초대하려면 유저 검색이 필요함
+    )
     TEACHER = (
         GRANT_POINT
         | CREATE_QUEST
@@ -114,7 +134,7 @@ class UserPermission(IntFlag):
         | VIEW_POST
         | VIEW_STAMP
     )
-    ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST
+    ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST | MANAGE_KARAOKE
 
     @classmethod
     def __get_pydantic_json_schema__(
@@ -156,7 +176,7 @@ class User(SQLModel):
     point: int = Field(0, description="보유 포인트")
     total_point: int = Field(0, description="누적 포인트")
 
-    permissions: int = Field(UserPermission.NONE.value, description="관리자 여부")
+    permissions: int = Field(UserPermission.NONE.value, description="사용자 권한")
 
     history_type: PointHistoryType | None = Field(None, description="해당 유저가 포인트 지급/차감시 포인트 기록 타입")
 
@@ -215,7 +235,7 @@ def user_search_insert(mapper, connection: Connection, target: Users):
     if not target.name or not target.id:
         return
 
-    LoggerCore.service_quest.info(f"Generating search entries for new user: {target.name} (ID: {target.id})")
+    LoggerCore.service.info(f"Generating search entries for new user: {target.name} (ID: {target.id})")
     search_entries = _generate_search_entries(target)
     # 성능을 위해 대량 삽입을 사용하거나 세션에 추가
     connection.execute(

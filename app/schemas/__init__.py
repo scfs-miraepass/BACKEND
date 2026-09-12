@@ -3,6 +3,7 @@ from .post import Post, PostContent, Posts
 from .quest import QuestCompletion, Quests
 from .stamp import Stamps, StampType
 from .users import User, UserPermission, Users, UserSearch, UserType
+from .karaokes import Karaokes, KaraokeBids, KaraokeMembers, KaraokePartis, KaraokeStatus
 
 __all__ = [
     "PointHistory",
@@ -19,4 +20,9 @@ __all__ = [
     "UserSearch",
     "UserType",
     "Users",
+    "Karaokes",
+    "KaraokeBids",
+    "KaraokeMembers",
+    "KaraokePartis",
+    "KaraokeStatus",
 ]

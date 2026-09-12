@@ -10,8 +10,14 @@ from app.schemas import (
     UserPermission,
     Users,
     UserType,
+    KaraokeMembers,
+    KaraokePartis,
+    Karaokes,
 )
 
+from sqlmodel import col, select
+
+from ..config import settings
 from ..core import ServiceCore
 from ..error import Forbidden
 from ..security import get_password_hash
@@ -21,11 +27,34 @@ from .quest import Quest
 
 if TYPE_CHECKING:
     _Type = Users
+    from .karaoke.karaoke import Karaoke
+    from .karaoke.member import KaraokeMember
+    from .karaoke.party import KaraokeParty
 else:
     _Type = object
 
 
 class User(ServiceCore[Users], _Type):
+    @classmethod
+    async def get_by_id(cls, user_id: int, **kwargs) -> User | None:
+        """
+        ID를 기반으로 사용자를 가져옵니다.
+
+        Args:
+            user_id: ID
+
+        Returns:
+            User | None
+        """
+        return await cls._get_item(
+            _id=user_id,
+            wrapper_cls=cls,
+            model_cls=Users,
+            prefix="user",
+            ttl=settings.service.session.expire_seconds,
+            **kwargs,
+        )
+
     @property
     def permission(self) -> UserPermission:
         return UserPermission(self.permissions)
@@ -180,7 +209,7 @@ class User(ServiceCore[Users], _Type):
             await session.flush()
 
         await self.redis.delete("posts_count")
-        await self.edis.delete_pattern("posts:list:*")
+        await self.redis.delete_pattern("posts:list:*")
 
         self.logs.service_post.info(
             f"게시글 생성 - ID {obj.id} ({obj.title[:10] + '...' if len(obj.title) > 10 else obj.title}) By. {self.name}({self.id})"
@@ -297,3 +326,77 @@ class User(ServiceCore[Users], _Type):
         self._payload = user
 
         self.logs.service.info(f"{self.id}({self.name})의 권한을 제거했습니다. (-{perm.name})")
+
+    async def get_pending_karaokes(self) -> list["Karaoke"]:
+        """
+        현재 초대되어 수락 또는 거절 대기중인 노래방 예약(Karaokes) 목록을 가져옵니다.
+
+        Returns:
+            list[Karaoke]
+        """
+        from app.core.service.karaoke.karaoke import Karaoke
+
+        async with self.session as session:
+            query = (
+                select(Karaokes)
+                .join(KaraokePartis, col(Karaokes.id) == KaraokePartis.auction_id)
+                .join(KaraokeMembers, col(KaraokePartis.id) == KaraokeMembers.party_id)
+                .where(KaraokeMembers.user_id == self.id, KaraokeMembers.pending == True)
+            )
+            exc = await session.execute(query)
+            payload = exc.scalars().all()
+
+        return [Karaoke(payload=p) for p in payload]
+
+    async def get_karaoke_member(self, party_id: int) -> "KaraokeMember | None":
+        """
+        특정 파티에 대한 자기 자신의 KaraokeMember 정보를 가져옵니다.
+
+        Args:
+            party_id: 조회할 파티의 고유 ID
+
+        Returns:
+            KaraokeMember | None
+        """
+        if self.id is None:
+            raise RuntimeError()
+        from app.core.service.karaoke.member import KaraokeMember
+
+        return await KaraokeMember.get_member(party_id=party_id, user_id=self.id)
+
+    async def get_party(self, karaoke: "Karaoke") -> "KaraokeParty | None":
+        """
+        유저가 해당 노래방 예약 경매에서 참여하거나, 리더로 있는 노래방 파티를 가져옵니다.
+
+        Args:
+            karaoke: 가져오려는 노래방 예약 경매
+
+        Returns:
+            KaraokeParty | None
+        """
+        from .karaoke.party import KaraokeParty
+
+        cache_key = f"karaoke:{karaoke.id}:member:{self.id}"
+        cached = await self.redis.get(cache_key)
+        if cached:
+            party = await KaraokeParty.get_by_id(cached)
+            return party
+
+        async with self.session as session:
+            query = (
+                select(KaraokePartis)
+                .join(KaraokeMembers)
+                .where(
+                    KaraokePartis.auction_id == karaoke.id,
+                    KaraokePartis.dispersed == False,
+                    (KaraokePartis.leader_id == self.id) | (KaraokeMembers.user_id == self.id),
+                )
+            )
+            exc = await session.execute(query)
+            payload: KaraokePartis | None = exc.scalar_one_or_none()
+
+        if payload is None:
+            return None
+
+        await self.redis.set(cache_key, payload.model_dump(), ttl=60 * 5)
+        return KaraokeParty(payload)
