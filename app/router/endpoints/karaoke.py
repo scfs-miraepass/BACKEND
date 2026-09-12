@@ -121,7 +121,7 @@ async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_dat
         for k in karaokes:
             dump = k.model_dump()
             if k.status == KaraokeStatus.IN_PROGRESS:
-                k_serv = await client.get_karaoke(k.id)
+                k_serv = await client.get_karaoke(k.id, cache=True)
                 if k_serv:
                     highest = await k_serv.get_highest()
                     dump["highest_bid"] = highest.amount if highest else None

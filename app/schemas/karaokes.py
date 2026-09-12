@@ -34,6 +34,16 @@ class Karaoke(SQLModel):
             return SchemaCore.sync_timezone(dt).isoformat()
         return dt
 
+    @field_serializer("status")
+    def serialize_status(self, _status, _info):
+        # status 컬럼은 String(20)이라 DB에서 KaraokeStatus가 아닌 순수 str로 로드됩니다.
+        # 필드 타입은 enum이므로 그대로 직렬화하면 Pydantic이 매번
+        # PydanticSerializationUnexpectedValue 경고를 냅니다. 값 자체는 동일하므로
+        # 직렬화 단계에서 명시적으로 문자열로 변환해 경고를 없앱니다.
+        if isinstance(_status, KaraokeStatus):
+            return _status.value
+        return _status
+
 
 class Karaokes(Karaoke, table=True):
     __tablename__ = "karaoke"

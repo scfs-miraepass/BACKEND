@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import date, time
 from inspect import isawaitable
 from typing import Any, TYPE_CHECKING
 
@@ -16,10 +16,9 @@ else:
     _Type = object
 
 
-# noinspection method-overriding
 class DateTimeEncoder(json.JSONEncoder):
-    def default(cls, obj):
-        if isinstance(obj, datetime):
+    def default(self, obj):
+        if isinstance(obj, (date, time)):
             return obj.isoformat()
         return super().default(obj)
 
