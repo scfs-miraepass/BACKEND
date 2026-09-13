@@ -385,7 +385,7 @@ class User(ServiceCore[Users], _Type):
         async with self.session as session:
             query = (
                 select(KaraokePartis)
-                .join(KaraokeMembers)
+                .join(KaraokeMembers, isouter=True)
                 .where(
                     KaraokePartis.auction_id == karaoke.id,
                     KaraokePartis.dispersed == False,
@@ -398,5 +398,5 @@ class User(ServiceCore[Users], _Type):
         if payload is None:
             return None
 
-        await self.redis.set(cache_key, payload.model_dump(), ttl=60 * 5)
+        await self.redis.set(cache_key, payload.id, ttl=60 * 5)
         return KaraokeParty(payload)
