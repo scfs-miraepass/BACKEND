@@ -5,7 +5,6 @@ from tomllib import load
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -45,7 +44,7 @@ async def reset_student_limit():
     client.logs.service.info("학생 포인트 제한을 초기화 했습니다.")
 
 
-@scheduler.scheduled_job(IntervalTrigger(seconds=30))
+@scheduler.scheduled_job(CronTrigger(second=0))
 async def process_karaoke_auctions():
     """
     노래방 예약 경매의 시작/종료 시간을 확인하여 상태를 자동으로 전환합니다.
@@ -53,11 +52,15 @@ async def process_karaoke_auctions():
     - `PENDING` 상태이고 시작 시간이 지난 경매는 `IN_PROGRESS`로 변경합니다.
     - `IN_PROGRESS` 상태이고 종료 시간이 지난 경매는 `CONFIRMED`로 변경합니다.
     """
+    client.logs.service_karaoke.debug("노래방 예약 경매 시작과 종료 처리를 시작하겠습니다.")
     async with client.session as session:
         query = select(Karaokes).where(col(Karaokes.status).in_([KaraokeStatus.PENDING, KaraokeStatus.IN_PROGRESS]))
         result = await session.execute(query)
         karaokes = list(result.scalars().all())
+    client.logs.service_karaoke.debug(f"{len(karaokes)}개의 예약이 있습니다.")
 
+    change_progress = 0
+    change_confirmed = 0
     for row in karaokes:
         karaoke = KaraokeService(row)
 
@@ -69,16 +72,20 @@ async def process_karaoke_auctions():
                 continue
 
             await karaoke.set_status(KaraokeStatus.IN_PROGRESS)
-            await client.redis.publish(f"ws_karaoke_{row.id}", "started")
             client.logs.service_karaoke.info(f"노래방 경매 자동 시작 - ID {row.id}({row.date} / {row.time})")
+            change_progress += 1
 
         elif row.status == KaraokeStatus.IN_PROGRESS:
             if SchemaCore.sync_timezone(row.end_time) > SchemaCore.now():
                 continue
 
             await karaoke.set_status(KaraokeStatus.CONFIRMED)
-            await client.redis.publish(f"ws_karaoke_{row.id}", "ended")
             client.logs.service_karaoke.info(f"노래방 경매 자동 종료 - ID {row.id}({row.date} / {row.time})")
+            change_confirmed += 1
+
+    client.logs.service_karaoke.debug(
+        f"경매 시작/종료 스케줄 완료되었습니다. {change_progress}개 시작, {change_confirmed}개 종료"
+    )
 
 
 @asynccontextmanager
@@ -166,21 +173,10 @@ async def read_root(_: UserPermission | None = None):
     return {"message": "Hello, World!"}
 
 
-# from .core import SessionDep
-# from .schemas import Users, UserType
-# @app.get("/test")
-# async def test(session: SessionDep):
-#
-#     # 1101~3699 : 학생
-#     # 4000~4999 : 교사
-#     # 5000~ : 서비스
-#
-#     # 테스트 학생
-#     # session.add(Users(id=3601, type=UserType.student, name="홍길동", grade=3, number=6))
-#
-#     # 테스트 서비스
-#     session.add(Users(type=UserType.service, name="카페테리아", id=5000))
-#     await session.commit()
+@app.get("/test")
+async def test(a: str):
+    k = await client.get_karaoke(22)
+    await k.publish("highest", a)
 
 
 app.include_router(router)

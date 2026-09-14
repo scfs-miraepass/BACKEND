@@ -1,8 +1,16 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, Callable, overload, Awaitable
 from sqlmodel import delete, select, col
+
+from json import loads, dumps
+
+from redis.asyncio.client import PubSub
 
 from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType, KaraokePartis
 from app.schemas.core import SchemaCore
+from app.schemas.object import SubscribeObject, KaraokeSubData
+
+from asyncio import create_task, Task
+
 
 from ...core import ServiceCore
 from ...error import PointInsufficient
@@ -84,9 +92,10 @@ class Karaoke(ServiceCore[Karaokes], _Type):
 
         await self.redis.delete(f"karaoke:{self.id}")
         await self.redis.delete_pattern(f"karaoke_list:{self.date}")
+        await self.publish("status", data=_status.value)
         self._payload = karaoke
 
-        self.logs.service_karaoke.info(
+        self.logs.service_karaoke.debug(
             f"노래방 예약 상태 변경 - {self.id}({self.date} / {self.time})의 상태가 '{_status}'으로 변경되었습니다."
         )
 
@@ -203,9 +212,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         remaining = (SchemaCore.sync_timezone(self.end_time) - SchemaCore.now()).total_seconds()
         ttl = max(60, int(remaining) + 60)
 
-        dump_str = obj.model_dump_json()
         await self.redis.set(f"karaoke:{self.id}:highest", obj.model_dump(), ttl=ttl)  # 최고 입찰 갱신
-        await self.redis.publish(f"ws_karaoke_{self.id}", dump_str)  # 구독 공지
+        await self.publish("highest", obj.model_dump(mode="json"))
 
         self.logs.service_karaoke.info(
             f"노래방 입찰 성공 - {self.id}({self.date} / {self.time})에 {bidder.name}({bidder.id})님이 {amount} 포인트로 입찰했습니다."
@@ -239,3 +247,82 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             f"파티 생성 성공 - 경매 {self.id}에 {leader.name}({leader.id})님이 파티(ID {party.id})를 생성했습니다."
         )
         return KaraokeParty(party)
+
+    @overload
+    async def subscribe(self, callback: None) -> PubSub: ...
+
+    @overload
+    async def subscribe(
+        self, callback: Callable[[SubscribeObject[KaraokeSubData]], Awaitable]
+    ) -> tuple[Task, PubSub]: ...
+
+    async def subscribe(
+        self, callback: Callable[[SubscribeObject[KaraokeSubData]], Awaitable] | None = None
+    ) -> PubSub | tuple[Task, PubSub]:
+        pubsub = self.redis.pubsub()
+        await pubsub.subscribe(f"ws_karaoke_{self.id}")
+
+        if callback is None:
+            return pubsub
+
+        async def listener():
+            async for message in pubsub.listen():
+                if isinstance(message["data"], str):
+                    message["data"] = KaraokeSubData(**loads(message["data"]))
+                await callback(SubscribeObject.model_validate(message))
+
+        task = create_task(listener())
+        return task, pubsub
+
+    async def unsubscribe(self, pubsub: PubSub):
+        """
+        노래방 경매의 Redis Pub/Sub 채널 구독을 해제합니다.
+
+        Args:
+            pubsub: 구독을 해제할 PubSub 객체
+        """
+        await pubsub.unsubscribe(f"ws_karaoke_{self.id}")
+        await pubsub.close()
+
+    async def publish(self, pub_type: Literal["status", "highest", "sync"], data: Any):
+        """
+        노래방 경매의 Redis Pub/Sub 채널에 메시지를 발행합니다.
+
+        `subscribe`로 구독 중인 클라이언트들에게 상태 변경, 최고가 갱신 등의 이벤트를 전파합니다.
+
+        Args:
+            pub_type: 발행하는 메시지의 종류 ("status" | "highest" | "sync")
+            data: 발행할 데이터
+        """
+
+        val = dumps(KaraokeSubData(type=pub_type, data=data).model_dump())
+
+        await self.redis.publish(f"ws_karaoke_{self.id}", message=val)
+
+    async def bids_history(self) -> list[KaraokeBid]:
+        """
+        노래방 경매의 전체 입찰 기록을 가져옵니다.
+
+        Redis에 캐시된 기록이 있으면 이를 사용하고, 없으면 DB에서 조회한 뒤 캐싱합니다.
+
+        Returns:
+            list[KaraokeBid]: 최신순으로 정렬된 입찰 기록 목록
+        """
+        cache_key = f"karaoke:{self.id}:bids_history"
+        cached_bids = await self.redis.get(cache_key)
+
+        if cached_bids is not None:
+            bids_history = [KaraokeBid(payload=item) for item in cached_bids]
+        else:
+            async with self.session as session:
+                query = (
+                    select(KaraokeBids)
+                    .where(KaraokeBids.auction_id == self.id)
+                    .order_by(col(KaraokeBids.created_at).desc())
+                )
+                res = await session.execute(query)
+                bids_history = res.scalars().all()
+
+            await self.redis.set(cache_key, [b.model_dump() for b in bids_history], ttl=60 * 5)
+
+        return bids_history

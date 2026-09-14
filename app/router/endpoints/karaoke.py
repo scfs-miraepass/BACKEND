@@ -7,11 +7,13 @@ from app.core import ServiceClient, LoginDep
 from app.schemas import Karaokes, User, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis, KaraokeStatus
 from app.schemas.karaokes import Karaoke as SchemasKaraoke
 from app.schemas.core import SchemaCore
-from app.schemas.response import ResponseModel, ErrorResponse
+from app.schemas.response import ResponseModel, ErrorResponse, KaraokeHighestResponse, KaraokeSyncResponse
 from app.core.service.karaoke import KaraokeParty, KaraokeMember, Karaoke
 from app.core.error import Conflict, PointInsufficient
 from fastapi import WebSocket, WebSocketDisconnect
-from asyncio import create_task
+
+from app.schemas.object import SubscribeObject, KaraokeSubData
+
 
 router = APIRouter(prefix="/karaoke", tags=["karaoke"])
 client = ServiceClient()
@@ -713,8 +715,8 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    _karaoke = await client.get_karaoke(karaoke_id, cache=True)
-    if _karaoke is None:
+    karaoke = await client.get_karaoke(karaoke_id, cache=True)
+    if karaoke is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -749,25 +751,22 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
             "remaining_time": remaining_time if remaining_time > 0 else 0,
         }
 
-    # 초기 상태 전송
-    await websocket.send_json(await get_state(_karaoke))
+    async def redis_callback(data: SubscribeObject[KaraokeSubData]):
+        if data.type != "message":
+            return
 
-    # Redis Pub/Sub 구독
-    pubsub = client.redis.pubsub()
-    await pubsub.subscribe(f"ws_karaoke_{karaoke_id}")
+        body = data.data
+        if body.type == "status":
+            body: KaraokeSubData[KaraokeStatus]
+            ...
+        elif body.type == "highest":
+            body: KaraokeSubData[KaraokeHighestResponse]
+            ...
+        elif body.type == "sync":
+            body: KaraokeSubData[KaraokeSyncResponse]
+            ...
 
-    async def redis_listener(karaoke: Karaoke):
-        async for message in pubsub.listen():
-            if message["type"] == "message":
-                # 최고가가 갱신되면 다시 조회 후 상태 전송
-                state = await get_state(karaoke)
-                try:
-                    await websocket.send_json(state)
-                except Exception:
-                    break
-
-    listener_task = create_task(redis_listener(_karaoke))
-
+    listener_task, pubsub = await karaoke.subscribe(redis_callback)
     try:
         while True:
             await websocket.receive_text()
@@ -775,5 +774,4 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
         pass
     finally:
         listener_task.cancel()
-        await pubsub.unsubscribe(f"ws_karaoke_{karaoke_id}")
-        await pubsub.close()
+        await karaoke.unsubscribe(pubsub)
