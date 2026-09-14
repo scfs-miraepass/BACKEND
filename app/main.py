@@ -173,10 +173,4 @@ async def read_root(_: UserPermission | None = None):
     return {"message": "Hello, World!"}
 
 
-@app.get("/test")
-async def test(a: str):
-    k = await client.get_karaoke(22)
-    await k.publish("highest", a)
-
-
 app.include_router(router)

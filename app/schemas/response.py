@@ -15,9 +15,3 @@ class ResponseModel[Data](ResponsePayload):
 
 class ErrorResponse(ResponsePayload):
     message: str = Field(description="에러 메시지")
-
-
-class KaraokeHighestResponse(BaseModel): ...
-
-
-class KaraokeSyncResponse(BaseModel): ...

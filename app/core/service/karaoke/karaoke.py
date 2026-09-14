@@ -284,14 +284,14 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         await pubsub.unsubscribe(f"ws_karaoke_{self.id}")
         await pubsub.close()
 
-    async def publish(self, pub_type: Literal["status", "highest", "sync"], data: Any):
+    async def publish(self, pub_type: Literal["status", "highest"], data: Any):
         """
         노래방 경매의 Redis Pub/Sub 채널에 메시지를 발행합니다.
 
         `subscribe`로 구독 중인 클라이언트들에게 상태 변경, 최고가 갱신 등의 이벤트를 전파합니다.
 
         Args:
-            pub_type: 발행하는 메시지의 종류 ("status" | "highest" | "sync")
+            pub_type: 발행하는 메시지의 종류 ("status" | "highest")
             data: 발행할 데이터
         """
 

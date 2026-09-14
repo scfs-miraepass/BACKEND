@@ -7,8 +7,8 @@ from app.core import ServiceClient, LoginDep
 from app.schemas import Karaokes, User, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis, KaraokeStatus
 from app.schemas.karaokes import Karaoke as SchemasKaraoke
 from app.schemas.core import SchemaCore
-from app.schemas.response import ResponseModel, ErrorResponse, KaraokeHighestResponse, KaraokeSyncResponse
-from app.core.service.karaoke import KaraokeParty, KaraokeMember, Karaoke
+from app.schemas.response import ResponseModel, ErrorResponse
+from app.core.service.karaoke import KaraokeParty, KaraokeMember
 from app.core.error import Conflict, PointInsufficient
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -720,51 +720,42 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    async def get_state(karaoke: Karaoke):
-        highest_bid = await karaoke.get_highest()
+    async def send_highest(highest_bid: dict | None = None):
+        if karaoke is None:
+            return
 
-        cache_key = f"karaoke:{karaoke.id}:bids_history"
-        cached_bids = await client.redis.get(cache_key)
+        if highest_bid is None:
+            high_bid = await karaoke.get_highest()
+            if high_bid is not None:
+                highest_bid = high_bid.model_dump(mode="json")
 
-        if cached_bids is not None:
-            bids_history_dump = cached_bids
-        else:
-            async with client.session as session:
-                query = (
-                    select(KaraokeBids)
-                    .where(KaraokeBids.auction_id == karaoke_id)
-                    .order_by(col(KaraokeBids.created_at).desc())
-                )
-                res = await session.execute(query)
-                bids_history = res.scalars().all()
-                bids_history_dump = [b.model_dump(mode="json") for b in bids_history]
-
-            await client.redis.set(cache_key, bids_history_dump, ttl=60 * 5)
-
-        # end_time은 DB 시간대 기준의 naive 값이라 시간대를 맞춰야 합니다.
-        # (맞추지 않으면 시차 때문에 남은 시간이 늘 음수가 되어 항상 0으로 내려갑니다)
+        bids_history = await karaoke.bids_history()
         remaining_time = int((SchemaCore.sync_timezone(karaoke.end_time) - SchemaCore.now()).total_seconds())
 
-        return {
-            "highest_bid": highest_bid.model_dump(mode="json") if highest_bid else None,
-            "bids_history": bids_history_dump,
-            "remaining_time": remaining_time if remaining_time > 0 else 0,
-        }
+        send_obj = KaraokeSubData(
+            type="highest",
+            data={
+                "highest_bid": highest_bid,
+                "bids_history": [b.model_dump(mode="json") for b in bids_history],
+                "remaining_time": remaining_time if remaining_time > 0 else 0,
+            },
+        )
+
+        await websocket.send_json(send_obj.model_dump(mode="json"))
+
+    # 기본적으로 처음 WS 연결시, highest에 대한 데이터를 전달합니다.
+    await send_highest()
 
     async def redis_callback(data: SubscribeObject[KaraokeSubData]):
-        if data.type != "message":
+        if data.type != "message" or karaoke is None:
             return
 
         body = data.data
         if body.type == "status":
             body: KaraokeSubData[KaraokeStatus]
-            ...
+            await websocket.send_json(body.model_dump(mode="json"))
         elif body.type == "highest":
-            body: KaraokeSubData[KaraokeHighestResponse]
-            ...
-        elif body.type == "sync":
-            body: KaraokeSubData[KaraokeSyncResponse]
-            ...
+            await send_highest(body.data)
 
     listener_task, pubsub = await karaoke.subscribe(redis_callback)
     try:
