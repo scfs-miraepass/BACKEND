@@ -91,6 +91,9 @@ async def process_karaoke_auctions():
 
 @scheduler.scheduled_job(IntervalTrigger(seconds=30))
 async def process_karaoke_sync_auctions():
+    """
+    진행 중인 노래방 경매의 남은 시간을 주기적으로 구독자에게 브로드캐스트합니다.
+    """
     async with client.session as session:
         query = select(Karaokes).where(col(Karaokes.status) == KaraokeStatus.IN_PROGRESS)
         result = await session.execute(query)
@@ -98,8 +101,12 @@ async def process_karaoke_sync_auctions():
 
     for row in karaokes:
         karaoke = KaraokeService(row)
-        remaining_time = int((SchemaCore.sync_timezone(karaoke.end_time) - SchemaCore.now()).total_seconds())
-        await karaoke.publish("sync", remaining_time)
+        remaining_time = SchemaCore.remaining_seconds(karaoke.end_time)
+        try:
+            await karaoke.publish("sync", remaining_time)
+        except Exception:
+            # 한 경매의 발행이 실패해도 나머지 경매의 sync 브로드캐스트는 계속 진행합니다.
+            client.logs.service_karaoke.exception(f"노래방 경매 sync 발행 실패 - ID {row.id}")
 
 
 @asynccontextmanager

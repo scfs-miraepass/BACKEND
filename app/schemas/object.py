@@ -3,6 +3,8 @@ from typing import TypeVar, Any, Literal
 
 T = TypeVar("T", default=Any)
 
+KaraokePubType = Literal["status", "highest", "sync"]
+
 
 class SubscribeObject[T](BaseModel):
     type: str
@@ -12,5 +14,5 @@ class SubscribeObject[T](BaseModel):
 
 
 class KaraokeSubData[T](BaseModel):
-    type: Literal["status", "highest", "sync"]
+    type: KaraokePubType
     data: T

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Literal, Callable, overload, Awaitable
+from typing import TYPE_CHECKING, Any, Callable, overload, Awaitable
 from sqlmodel import delete, select, col
 
 from json import loads, dumps
@@ -7,7 +7,7 @@ from redis.asyncio.client import PubSub
 
 from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType, KaraokePartis
 from app.schemas.core import SchemaCore
-from app.schemas.object import SubscribeObject, KaraokeSubData
+from app.schemas.object import SubscribeObject, KaraokeSubData, KaraokePubType
 
 from asyncio import create_task, Task
 
@@ -287,7 +287,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         await pubsub.close()
         self.logs.service_karaoke.debug(f"[PubSub] 채널 구독 해제 - ws_karaoke_{self.id}")
 
-    async def publish(self, pub_type: Literal["status", "highest", "sync"], data: Any):
+    async def publish(self, pub_type: KaraokePubType, data: Any):
         """
         노래방 경매의 Redis Pub/Sub 채널에 메시지를 발행합니다.
 

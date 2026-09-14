@@ -733,21 +733,15 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
                 highest_bid = high_bid.model_dump(mode="json")
 
         bids_history = await karaoke.bids_history()
-        remaining_time = int(
-            (
-                SchemaCore.sync_timezone(
-                    karaoke.start_time if karaoke.status == KaraokeStatus.PENDING else karaoke.end_time
-                )
-                - SchemaCore.now()
-            ).total_seconds()
-        )
+        target_time = karaoke.start_time if karaoke.status == KaraokeStatus.PENDING else karaoke.end_time
+        remaining_time = SchemaCore.remaining_seconds(target_time)
 
         send_obj = KaraokeSubData(
             type="highest",
             data={
                 "highest_bid": highest_bid,
                 "bids_history": [b.model_dump(mode="json") for b in bids_history],
-                "remaining_time": remaining_time if remaining_time > 0 else 0,
+                "remaining_time": remaining_time,
             },
         )
 
@@ -765,13 +759,14 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
         client.logs.service_karaoke.debug(
             f"[WS] pub/sub 이벤트 수신 - 경매 {karaoke_id} / type={body.type} -> {user.name}({user.id})"
         )
-        if body.type == "status":
-            body: KaraokeSubData[KaraokeStatus]
-            await websocket.send_json(body.model_dump(mode="json"))
-        elif body.type == "highest":
+        if body.type == "highest":
             await send_highest(body.data)
-        elif body.type == "sync":
-            body: KaraokeSubData[int]
+        else:
+            # "status"(상태 변경), "sync"(남은시간 갱신)는 그대로 클라이언트에 전달합니다.
+            # 로컬에 들고 있는 karaoke 스냅샷도 최신 상태로 갱신해, 이후 send_highest가
+            # remaining_time을 계산할 때(PENDING/IN_PROGRESS 분기) 오래된 상태를 참조하지 않도록 합니다.
+            if body.type == "status":
+                karaoke.status = KaraokeStatus(body.data)
             await websocket.send_json(body.model_dump(mode="json"))
 
     listener_task, pubsub = await karaoke.subscribe(redis_callback)

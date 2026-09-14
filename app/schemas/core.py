@@ -40,3 +40,14 @@ class SchemaCore:
             # TimeZone이 있지만, 서버와 다른경우
             return _.astimezone(tz=cls.timezone)
         return _
+
+    @classmethod
+    def remaining_seconds(cls, target: datetime) -> int:
+        """
+        현재 시각부터 `target`까지 남은 시간을 초 단위로 계산합니다.
+
+        `target`이 이미 지난 시각이면 0을 반환합니다. (클라이언트에 음수 남은시간이
+        노출되는 것을 막기 위해 항상 이 함수로 클램핑해서 사용해야 합니다)
+        """
+        remaining = int((cls.sync_timezone(target) - cls.now()).total_seconds())
+        return max(0, remaining)
