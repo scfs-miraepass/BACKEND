@@ -44,7 +44,7 @@ async def reset_student_limit():
     client.logs.service.info("학생 포인트 제한을 초기화 했습니다.")
 
 
-@scheduler.scheduled_job(CronTrigger(second="0,30"))
+@scheduler.scheduled_job(CronTrigger(second=0))
 async def process_karaoke_auctions():
     """
     노래방 예약 경매의 시작/종료 시간을 확인하여 상태를 자동으로 전환하고,
@@ -54,7 +54,7 @@ async def process_karaoke_auctions():
     - `IN_PROGRESS` 상태이고 종료 시간이 지난 경매는 `CONFIRMED`로 변경합니다.
     - `IN_PROGRESS` 상태이고 아직 종료 시간이 지나지 않은 경매는 남은 시간을 브로드캐스트합니다.
 
-    매 정각/30초에 실행되어, 상태 전환과 sync 브로드캐스트가 최대 30초 간격을 유지합니다.
+    매 분 정각에 실행됩니다.
     """
     client.logs.service_karaoke.debug("노래방 예약 경매 시작/종료 및 sync 처리를 시작하겠습니다.")
     async with client.session as session:
