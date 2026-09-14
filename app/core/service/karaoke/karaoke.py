@@ -261,12 +261,14 @@ class Karaoke(ServiceCore[Karaokes], _Type):
     ) -> PubSub | tuple[Task, PubSub]:
         pubsub = self.redis.pubsub()
         await pubsub.subscribe(f"ws_karaoke_{self.id}")
+        self.logs.service_karaoke.debug(f"[PubSub] 채널 구독 - ws_karaoke_{self.id}")
 
         if callback is None:
             return pubsub
 
         async def listener():
             async for message in pubsub.listen():
+                self.logs.service_karaoke.debug(f"[PubSub] 메시지 수신 - ws_karaoke_{self.id}: {message}")
                 if isinstance(message["data"], str):
                     message["data"] = KaraokeSubData(**loads(message["data"]))
                 await callback(SubscribeObject.model_validate(message))
@@ -283,6 +285,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         """
         await pubsub.unsubscribe(f"ws_karaoke_{self.id}")
         await pubsub.close()
+        self.logs.service_karaoke.debug(f"[PubSub] 채널 구독 해제 - ws_karaoke_{self.id}")
 
     async def publish(self, pub_type: Literal["status", "highest"], data: Any):
         """
@@ -298,6 +301,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         val = dumps(KaraokeSubData(type=pub_type, data=data).model_dump())
 
         await self.redis.publish(f"ws_karaoke_{self.id}", message=val)
+        self.logs.service_karaoke.debug(f"[PubSub] 메시지 발행 - ws_karaoke_{self.id} / type={pub_type}")
 
     async def bids_history(self) -> list[KaraokeBid]:
         """

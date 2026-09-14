@@ -710,13 +710,16 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
     user, _ = auth_data
 
     await websocket.accept()
+    client.logs.service_karaoke.info(f"[WS] 연결 수락 - 경매 {karaoke_id} / {user.name}({user.id})")
 
     if not user.has_permission(UserPermission.VIEW_KARAOKE):
+        client.logs.service_karaoke.warning(f"[WS] 연결 거부(권한 없음) - 경매 {karaoke_id} / {user.name}({user.id})")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
     karaoke = await client.get_karaoke(karaoke_id, cache=True)
     if karaoke is None:
+        client.logs.service_karaoke.warning(f"[WS] 연결 거부(경매 없음) - 경매 {karaoke_id} / {user.name}({user.id})")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -742,6 +745,7 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
         )
 
         await websocket.send_json(send_obj.model_dump(mode="json"))
+        client.logs.service_karaoke.debug(f"[WS] highest 전송 - 경매 {karaoke_id} / {user.name}({user.id})")
 
     # 기본적으로 처음 WS 연결시, highest에 대한 데이터를 전달합니다.
     await send_highest()
@@ -751,6 +755,9 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
             return
 
         body = data.data
+        client.logs.service_karaoke.debug(
+            f"[WS] pub/sub 이벤트 수신 - 경매 {karaoke_id} / type={body.type} -> {user.name}({user.id})"
+        )
         if body.type == "status":
             body: KaraokeSubData[KaraokeStatus]
             await websocket.send_json(body.model_dump(mode="json"))
@@ -758,11 +765,14 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
             await send_highest(body.data)
 
     listener_task, pubsub = await karaoke.subscribe(redis_callback)
+    client.logs.service_karaoke.info(f"[WS] 구독 시작 - 경매 {karaoke_id} / {user.name}({user.id})")
     try:
         while True:
-            await websocket.receive_text()
+            msg = await websocket.receive_text()
+            client.logs.service_karaoke.debug(f"[WS] 메시지 수신 - 경매 {karaoke_id} / {user.name}({user.id}): {msg}")
     except WebSocketDisconnect:
-        pass
+        client.logs.service_karaoke.info(f"[WS] 연결 종료 - 경매 {karaoke_id} / {user.name}({user.id})")
     finally:
         listener_task.cancel()
         await karaoke.unsubscribe(pubsub)
+        client.logs.service_karaoke.info(f"[WS] 구독 해제 - 경매 {karaoke_id} / {user.name}({user.id})")
