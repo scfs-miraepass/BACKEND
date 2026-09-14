@@ -5,7 +5,6 @@ from tomllib import load
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -45,15 +44,19 @@ async def reset_student_limit():
     client.logs.service.info("학생 포인트 제한을 초기화 했습니다.")
 
 
-@scheduler.scheduled_job(CronTrigger(second=0))
+@scheduler.scheduled_job(CronTrigger(second="0,30"))
 async def process_karaoke_auctions():
     """
-    노래방 예약 경매의 시작/종료 시간을 확인하여 상태를 자동으로 전환합니다.
+    노래방 예약 경매의 시작/종료 시간을 확인하여 상태를 자동으로 전환하고,
+    진행 중인 경매는 남은 시간을 sync 채널로 브로드캐스트합니다.
 
     - `PENDING` 상태이고 시작 시간이 지난 경매는 `IN_PROGRESS`로 변경합니다.
     - `IN_PROGRESS` 상태이고 종료 시간이 지난 경매는 `CONFIRMED`로 변경합니다.
+    - `IN_PROGRESS` 상태이고 아직 종료 시간이 지나지 않은 경매는 남은 시간을 브로드캐스트합니다.
+
+    매 정각/30초에 실행되어, 상태 전환과 sync 브로드캐스트가 최대 30초 간격을 유지합니다.
     """
-    client.logs.service_karaoke.debug("노래방 예약 경매 시작과 종료 처리를 시작하겠습니다.")
+    client.logs.service_karaoke.debug("노래방 예약 경매 시작/종료 및 sync 처리를 시작하겠습니다.")
     async with client.session as session:
         query = select(Karaokes).where(col(Karaokes.status).in_([KaraokeStatus.PENDING, KaraokeStatus.IN_PROGRESS]))
         result = await session.execute(query)
@@ -78,6 +81,12 @@ async def process_karaoke_auctions():
 
         elif row.status == KaraokeStatus.IN_PROGRESS:
             if SchemaCore.sync_timezone(row.end_time) > SchemaCore.now():
+                remaining_time = SchemaCore.remaining_seconds(row.end_time)
+                try:
+                    await karaoke.publish("sync", remaining_time)
+                except Exception:
+                    # 한 경매의 발행이 실패해도 나머지 경매 처리는 계속 진행합니다.
+                    client.logs.service_karaoke.exception(f"노래방 경매 sync 발행 실패 - ID {row.id}")
                 continue
 
             await karaoke.set_status(KaraokeStatus.CONFIRMED)
@@ -87,26 +96,6 @@ async def process_karaoke_auctions():
     client.logs.service_karaoke.debug(
         f"경매 시작/종료 스케줄 완료되었습니다. {change_progress}개 시작, {change_confirmed}개 종료"
     )
-
-
-@scheduler.scheduled_job(IntervalTrigger(seconds=30))
-async def process_karaoke_sync_auctions():
-    """
-    진행 중인 노래방 경매의 남은 시간을 주기적으로 구독자에게 브로드캐스트합니다.
-    """
-    async with client.session as session:
-        query = select(Karaokes).where(col(Karaokes.status) == KaraokeStatus.IN_PROGRESS)
-        result = await session.execute(query)
-        karaokes = list(result.scalars().all())
-
-    for row in karaokes:
-        karaoke = KaraokeService(row)
-        remaining_time = SchemaCore.remaining_seconds(karaoke.end_time)
-        try:
-            await karaoke.publish("sync", remaining_time)
-        except Exception:
-            # 한 경매의 발행이 실패해도 나머지 경매의 sync 브로드캐스트는 계속 진행합니다.
-            client.logs.service_karaoke.exception(f"노래방 경매 sync 발행 실패 - ID {row.id}")
 
 
 @asynccontextmanager
