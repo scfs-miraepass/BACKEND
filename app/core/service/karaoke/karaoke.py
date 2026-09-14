@@ -287,14 +287,14 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         await pubsub.close()
         self.logs.service_karaoke.debug(f"[PubSub] 채널 구독 해제 - ws_karaoke_{self.id}")
 
-    async def publish(self, pub_type: Literal["status", "highest"], data: Any):
+    async def publish(self, pub_type: Literal["status", "highest", "sync"], data: Any):
         """
         노래방 경매의 Redis Pub/Sub 채널에 메시지를 발행합니다.
 
         `subscribe`로 구독 중인 클라이언트들에게 상태 변경, 최고가 갱신 등의 이벤트를 전파합니다.
 
         Args:
-            pub_type: 발행하는 메시지의 종류 ("status" | "highest")
+            pub_type: 발행하는 메시지의 종류 ("status" | "highest" | "sync")
             data: 발행할 데이터
         """
 
@@ -316,7 +316,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         cached_bids = await self.redis.get(cache_key)
 
         if cached_bids is not None:
-            bids_history = [KaraokeBid(payload=item) for item in cached_bids]
+            bids_history = [KaraokeBid(payload=KaraokeBids.model_validate(item)) for item in cached_bids]
         else:
             async with self.session as session:
                 query = (
@@ -325,7 +325,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
                     .order_by(col(KaraokeBids.created_at).desc())
                 )
                 res = await session.execute(query)
-                bids_history = res.scalars().all()
+                payload = res.scalars().all()
+                bids_history = [KaraokeBid(payload=item) for item in payload]
 
             await self.redis.set(cache_key, [b.model_dump() for b in bids_history], ttl=60 * 5)
 

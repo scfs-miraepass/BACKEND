@@ -12,5 +12,5 @@ class SubscribeObject[T](BaseModel):
 
 
 class KaraokeSubData[T](BaseModel):
-    type: Literal["status", "highest"]
+    type: Literal["status", "highest", "sync"]
     data: T

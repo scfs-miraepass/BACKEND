@@ -5,6 +5,7 @@ from tomllib import load
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -86,6 +87,19 @@ async def process_karaoke_auctions():
     client.logs.service_karaoke.debug(
         f"경매 시작/종료 스케줄 완료되었습니다. {change_progress}개 시작, {change_confirmed}개 종료"
     )
+
+
+@scheduler.scheduled_job(IntervalTrigger(seconds=30))
+async def process_karaoke_sync_auctions():
+    async with client.session as session:
+        query = select(Karaokes).where(col(Karaokes.status) == KaraokeStatus.IN_PROGRESS)
+        result = await session.execute(query)
+        karaokes = list(result.scalars().all())
+
+    for row in karaokes:
+        karaoke = KaraokeService(row)
+        remaining_time = int((SchemaCore.sync_timezone(karaoke.end_time) - SchemaCore.now()).total_seconds())
+        await karaoke.publish("sync", remaining_time)
 
 
 @asynccontextmanager

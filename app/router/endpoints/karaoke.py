@@ -733,7 +733,14 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
                 highest_bid = high_bid.model_dump(mode="json")
 
         bids_history = await karaoke.bids_history()
-        remaining_time = int((SchemaCore.sync_timezone(karaoke.end_time) - SchemaCore.now()).total_seconds())
+        remaining_time = int(
+            (
+                SchemaCore.sync_timezone(
+                    karaoke.start_time if karaoke.status == KaraokeStatus.PENDING else karaoke.end_time
+                )
+                - SchemaCore.now()
+            ).total_seconds()
+        )
 
         send_obj = KaraokeSubData(
             type="highest",
@@ -763,6 +770,9 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
             await websocket.send_json(body.model_dump(mode="json"))
         elif body.type == "highest":
             await send_highest(body.data)
+        elif body.type == "sync":
+            body: KaraokeSubData[int]
+            await websocket.send_json(body.model_dump(mode="json"))
 
     listener_task, pubsub = await karaoke.subscribe(redis_callback)
     client.logs.service_karaoke.info(f"[WS] 구독 시작 - 경매 {karaoke_id} / {user.name}({user.id})")
