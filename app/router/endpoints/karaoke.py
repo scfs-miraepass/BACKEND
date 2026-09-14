@@ -769,6 +769,10 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
                 karaoke.status = KaraokeStatus(body.data)
             await websocket.send_json(body.model_dump(mode="json"))
 
+            # 상태가 변경되고, 남은 시간 전들을 위함
+            if body.type == "status":
+                await send_highest()
+
     listener_task, pubsub = await karaoke.subscribe(redis_callback)
     client.logs.service_karaoke.info(f"[WS] 구독 시작 - 경매 {karaoke_id} / {user.name}({user.id})")
     try:
