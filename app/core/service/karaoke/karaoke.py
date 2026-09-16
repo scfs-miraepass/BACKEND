@@ -73,7 +73,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             await session.execute(exc)
 
         await self.redis.delete(f"karaoke:{self.id}")
-        await self.redis.delete(f"karaoke:{self.id}:*")
+        await self.redis.delete_pattern(f"karaoke:{self.id}:*")
         await self.redis.delete_pattern(f"karaoke_list:{self.date}")
 
         self.logs.service_karaoke.info(f"노래방 예약 삭제 - ID {self.id}({self.date} / {self.time})")

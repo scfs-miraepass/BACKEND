@@ -66,12 +66,14 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
         초대를 수락합니다.
         """
         async with self.session as session:
+            party_obj = await self.get_party()
             member = await session.merge(self._payload)
             member.pending = False
 
         self._payload = member
         await self.redis.delete(f"karaoke_members:{self.party_id}")
         await self.redis.delete(f"karaoke_party_member:{self.party_id}:{self.user_id}")
+        await self.redis.delete(f"karaoke:{party_obj.auction_id}:member:{self.user_id}")
         self.logs.service_karaoke.info(
             f"노래방 파티 멤버 초대 수락 - 파티 ID {self.party_id}의 유저 {self.user_id}가 초대를 수락했습니다."
         )
@@ -85,12 +87,14 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
         party_id, user_id = self.party_id, self.user_id
 
         async with self.session as session:
+            party_obj = await self.get_party()
             member = await session.merge(self._payload)
             await session.delete(member)
 
         self._payload = None
         await self.redis.delete(f"karaoke_members:{party_id}")
         await self.redis.delete(f"karaoke_party_member:{party_id}:{user_id}")
+        await self.redis.delete(f"karaoke:{party_obj.auction_id}:member:{user_id}")
         self.logs.service_karaoke.info(
             f"노래방 파티 멤버 초대 거절/삭제 - 파티 ID {party_id}의 유저 {user_id}가 초대를 거절/삭제했습니다."
         )
