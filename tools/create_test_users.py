@@ -85,7 +85,12 @@ async def create_services(session):
                 break
             current_service_id += 1
 
-        new_user = Users(id=current_service_id, type=UserType.service, name=name)
+        new_user = Users(
+            id=current_service_id,
+            type=UserType.service,
+            name=name,
+            permissions=(UserPermission.TEACHER | UserPermission.ADMIN | UserPermission.STUDENT).value,
+        )
         session.add(new_user)
         client.logs.service.info(f"ID {current_service_id}의 서비스 계정 '{name}'을(를) 추가했습니다.")
         current_service_id += 1
