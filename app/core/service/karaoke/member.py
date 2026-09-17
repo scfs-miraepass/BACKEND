@@ -54,8 +54,8 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
         """
         from .party import KaraokeParty
 
-        if self.party:
-            return KaraokeParty(self.party)
+        # `self.party`(ORM relationship)는 lazy-load라 원본 세션이 닫힌 뒤 접근하면
+        # DetachedInstanceError가 발생한다. 항상 로드되어 있는 `party_id`로 다시 조회한다.
         party = await KaraokeParty.get_by_id(self.party_id)
         if party is None:
             raise RuntimeError()
