@@ -1,12 +1,27 @@
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar, Type
 from functools import lru_cache
 from hangulpy import split_hangul_string
+from math import floor
+from dataclasses import dataclass
+from sqlmodel import SQLModel, select
 
 from .database import DatabaseCore
 from .loggers import LoggerCore
 from .redis import RedisCore
 
+if TYPE_CHECKING:
+    from .service.user import User
+
 T = TypeVar("T")
+
+TModel = TypeVar("TModel", bound=SQLModel)
+TWrapper = TypeVar("TWrapper")
+
+
+@dataclass
+class DutchPayReturn:
+    member: int
+    leader: int
 
 
 class BaseCore:
@@ -36,6 +51,73 @@ class BaseCore:
         """
         return "".join(split_hangul_string(query.replace(" ", "")))
 
+    @classmethod
+    def dutch_pay(cls, amount: int, party_members: int) -> DutchPayReturn:
+        """
+        대표자와 파티 멤버가 각자 얼마 씩 분배해야하는지 계산하는 함수
+        100원 단위로 절사되며, 절사된 금액은 대표자에게 적용됩니다.
+
+        Args:
+            amount: 더치페이 해야하는 금액
+            party_members: 대표자를 포함한, 모든 파티원의 인원 수
+
+        Returns:
+            DutchPayReturn
+        """
+        member_share = floor(amount / (party_members * 100)) * 100
+        leader_share = amount - (member_share * (party_members - 1))
+
+        return DutchPayReturn(member=member_share, leader=leader_share)
+
+    @classmethod
+    def build_dutch_pay_deductions(cls, leader: "User", amount: int, members: list["User"]) -> list[tuple["User", int]]:
+        """
+        더치페이 대상 인원(대표자 + 파티원)에게 각자 부담할 금액을 배분합니다.
+        `members`가 비어있으면(개인 입찰) 대표자가 전액을 부담합니다.
+
+        Args:
+            leader: 대표자(입찰자)
+            amount: 분배할 전체 금액
+            members: 대표자를 제외한 파티원 목록
+
+        Returns:
+            list[tuple[User, int]]: (유저, 배분된 금액) 목록. 대표자가 첫 번째 원소입니다.
+        """
+        if not members:
+            return [(leader, amount)]
+
+        point = cls.dutch_pay(amount, len(members) + 1)
+        return [(leader, point.leader)] + [(member, point.member) for member in members]
+
+    @classmethod
+    async def _get_item(
+        cls,
+        _id: int,
+        wrapper_cls: Type[TWrapper],
+        model_cls: Type[TModel],
+        prefix: str,
+        cache: bool = False,
+        save_cache: bool = True,
+        lock: bool = False,
+        ttl: int = 60,
+    ) -> TWrapper | None:
+        if cache and not lock:
+            cached = await RedisCore.get(f"{prefix}:{_id}")
+            if cached:
+                return wrapper_cls(payload=model_cls.model_validate(cached))
+
+        async with DatabaseCore.session() as session:
+            if lock:
+                query = select(model_cls).where(getattr(model_cls, "id") == _id).with_for_update()
+                result = await session.execute(query)
+                payload: TModel | None = result.scalar_one_or_none()
+            else:
+                payload = await session.get(model_cls, _id)
+
+        if save_cache and payload is not None:
+            await RedisCore.set(f"{prefix}:{getattr(payload, 'id')}", payload.model_dump(), ttl=ttl)
+        return wrapper_cls(payload=payload)
+
 
 class ServiceCore[T](BaseCore):
     def __new__(cls, payload: T | None):
@@ -44,7 +126,7 @@ class ServiceCore[T](BaseCore):
         return super().__new__(cls)
 
     def __init__(self, payload: T | None):
-        self._payload: T = payload
+        self._payload: T | None = payload
         super().__init__()
 
     def __str__(self):
