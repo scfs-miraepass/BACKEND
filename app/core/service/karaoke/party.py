@@ -164,10 +164,10 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
             KaraokeMember: 생성된 멤버 객체
         """
         if self.dispersed:
-            raise ValueError("Cannot invite a user to a dispersed party.")
+            raise ValueError("해산된 파티에는 유저를 초대할 수 없습니다.")
 
         if user.id == self.leader_id:
-            raise ValueError("The party leader is already in the party.")
+            raise ValueError("파티장은 이미 파티에 속해 있습니다.")
 
         async with self.session as session:
             # 같은 경매의 해산되지 않은 파티 중, 초대 대상이 리더이거나 멤버(대기중 포함)인 파티를 찾습니다.
@@ -183,8 +183,8 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
             exists = (await session.execute(query)).scalars().first()
             if exists is not None:
                 if exists == self.id:
-                    raise Conflict("The user is already invited to or a member of this party.")
-                raise Conflict("The user already belongs to another party in this auction.")
+                    raise Conflict("해당 유저는 이미 이 파티에 초대되었거나 소속되어 있습니다.")
+                raise Conflict("해당 유저는 이미 이 경매의 다른 파티에 소속되어 있습니다.")
 
             member = KaraokeMembers(party_id=self.id, user_id=user.id, pending=True)
             session.add(member)

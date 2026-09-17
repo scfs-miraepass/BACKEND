@@ -74,7 +74,7 @@ class KaraokePartyDetail(BaseModel):
 async def _build_party_detail(party: KaraokeParty) -> KaraokePartyDetail:
     leader = await client.get_user(party.leader_id)
     if leader is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Party leader user not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티장 유저를 찾을 수 없습니다.")
 
     members = await party.get_members()
     pending_members = await party.get_pending_members()
@@ -112,7 +112,7 @@ async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_dat
     if not user.has_permission(UserPermission.VIEW_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     if date is None:
@@ -176,13 +176,13 @@ async def create_karaoke(body: KaraokeCreate, auth_data: LoginDep):
     if not user.has_permission(UserPermission.MANAGE_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     if body.end_time <= body.start_time:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="end_time must be after start_time.",
+            detail="종료 시간은 시작 시간보다 이후여야 합니다.",
         )
 
     async with client.session as session:
@@ -192,7 +192,7 @@ async def create_karaoke(body: KaraokeCreate, auth_data: LoginDep):
         if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Karaoke already exists for the given date and time.",
+                detail="해당 일자와 시간에 이미 노래방 예약이 존재합니다.",
             )
 
         # 생성
@@ -239,12 +239,12 @@ async def get_karaoke(auth_data: LoginDep, karaoke_id: int):
     if not user.has_permission(UserPermission.VIEW_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     karaoke = await client.get_karaoke(karaoke_id, cache=True)
     if karaoke is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="노래방 예약을 찾을 수 없습니다.")
 
     dump = karaoke.model_dump()
     if karaoke.status == KaraokeStatus.IN_PROGRESS:
@@ -278,12 +278,12 @@ async def delete_karaoke(auth_data: LoginDep, karaoke_id: int):
     if not user.has_permission(UserPermission.MANAGE_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     karaoke = await client.get_karaoke(karaoke_id, cache=True)
     if karaoke is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="노래방 예약을 찾을 수 없습니다.")
 
     await karaoke.delete()
 
@@ -308,12 +308,12 @@ async def create_karaoke_party(auth_data: LoginDep, karaoke_id: int):
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     karaoke = await client.get_karaoke(karaoke_id)
     if not karaoke:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="노래방 예약을 찾을 수 없습니다.")
 
     try:
         party = await karaoke.create_party(leader=user)
@@ -341,16 +341,16 @@ async def get_my_karaoke_party(auth_data: LoginDep, karaoke_id: int):
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     karaoke = await client.get_karaoke(karaoke_id, cache=True)
     if not karaoke:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="노래방 예약을 찾을 수 없습니다.")
 
     party = await user.get_party(karaoke)
     if party is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="You are not in a party for this auction")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="이 경매에 소속된 파티가 없습니다.")
 
     return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(party))
 
@@ -376,18 +376,18 @@ async def create_karaoke_bid(auth_data: LoginDep, karaoke_id: int, body: Karaoke
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     karaoke = await client.get_karaoke(karaoke_id)
     if not karaoke:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="노래방 예약을 찾을 수 없습니다.")
 
     party = await user.get_party(karaoke)
     if party is not None:
         if party.leader_id != user.id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only party leader can bid on behalf of the party"
+                status_code=status.HTTP_403_FORBIDDEN, detail="파티장만 파티를 대표해 입찰할 수 있습니다."
             )
 
     try:
@@ -421,20 +421,20 @@ async def get_karaoke_final_bid(auth_data: LoginDep, karaoke_id: int):
     if not user.has_permission(UserPermission.VIEW_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     karaoke = await client.get_karaoke(karaoke_id, cache=True)
     if not karaoke:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Karaoke not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="노래방 예약을 찾을 수 없습니다.")
 
     bid = await karaoke.get_final_bid()
     if bid is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No bids have been placed for this auction")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="이 경매에 입찰 기록이 없습니다.")
 
     bidder = await client.get_user(bid.bidder_id)
     if bidder is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bidder user not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="입찰자 유저를 찾을 수 없습니다.")
 
     # noinspection bad-argument-type
     return ResponseModel[KaraokeFinalBidResponse](
@@ -473,16 +473,16 @@ async def get_karaoke_party(auth_data: LoginDep, party_id: int):
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     party = await KaraokeParty.get_by_id(party_id)
     if not party:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Party not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     # 파티장 본인이거나, 파티에 소속(초대 대기중 포함)된 유저만 조회할 수 있습니다.
     if party.leader_id != user.id and await user.get_karaoke_member(party_id) is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this party")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="이 파티의 멤버가 아닙니다.")
 
     return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(party))
 
@@ -506,20 +506,18 @@ async def disperse_karaoke_party(auth_data: LoginDep, party_id: int):
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     party = await KaraokeParty.get_by_id(party_id)
     if not party:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Party not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     if party.leader_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Only the party leader can disperse the party"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="파티장만 파티를 해산할 수 있습니다.")
 
     if party.dispersed:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Party is already dispersed")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이미 해산된 파티입니다.")
 
     await party.disperse()
 
@@ -543,21 +541,22 @@ async def leave_karaoke_party(auth_data: LoginDep, party_id: int):
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     party = await KaraokeParty.get_by_id(party_id)
     if not party:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Party not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     if party.leader_id == user.id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Party leader cannot leave. Disperse the party instead."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="파티장은 파티를 나갈 수 없습니다. 대신 파티를 해산해주세요.",
         )
 
     member = await user.get_karaoke_member(party_id)
     if not member or member.pending:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="You are not an active member of this party")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="이 파티의 활성 멤버가 아닙니다.")
 
     await member.leave()
 
@@ -582,26 +581,26 @@ async def kick_karaoke_party_member(auth_data: LoginDep, party_id: int, user_id:
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     party = await KaraokeParty.get_by_id(party_id)
     if not party:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Party not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     if party.leader_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the party leader can kick members")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="파티장만 멤버를 추방할 수 있습니다.")
 
     if user_id == party.leader_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot kick the party leader")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="파티장은 추방할 수 없습니다.")
 
     target_user = await client.get_user(user_id)
     if not target_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User to kick not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="추방할 유저를 찾을 수 없습니다.")
 
     member = await target_user.get_karaoke_member(party_id)
     if not member:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User is not a member of this party")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 유저는 이 파티의 멤버가 아닙니다.")
 
     new_party = await party.kick_members(target_user)
     return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(new_party))
@@ -635,19 +634,19 @@ async def invite_karaoke_party_member(auth_data: LoginDep, party_id: int, body: 
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     party = await KaraokeParty.get_by_id(party_id)
     if not party:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Party not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     if party.leader_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the party leader can invite members")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="파티장만 멤버를 초대할 수 있습니다.")
 
     invite_user = await client.get_user(body.user_id)
     if not invite_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User to invite not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="초대할 유저를 찾을 수 없습니다.")
 
     try:
         await party.invite_user(invite_user)
@@ -671,7 +670,7 @@ async def get_my_party_invites(auth_data: LoginDep):
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     async with client.session as session:
@@ -700,13 +699,13 @@ async def decide_karaoke_party_invite(auth_data: LoginDep, party_id: int, body: 
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied.",
+            detail="권한이 없습니다.",
         )
 
     # noinspection bad-argument-type
     member = await KaraokeMember.get_member(party_id, user.id)
     if not member or not member.pending:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pending invitation not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="대기중인 초대를 찾을 수 없습니다.")
 
     if body.accept:
         await member.accept()

@@ -51,4 +51,4 @@ class ExpiredError(ServiceError):
 class PointInsufficient(ServiceError):
     def __init__(self, user: "User"):
         self.user = user
-        super().__init__(f"User '{user.id} ({user.name})' does not have enough points")
+        super().__init__(f"{user.name}님의 포인트가 부족합니다.")

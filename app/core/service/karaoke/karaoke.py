@@ -150,7 +150,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             lock_query = select(Karaokes).where(col(Karaokes.id) == self.id).with_for_update()
             locked_karaoke = (await session.execute(lock_query)).scalar_one_or_none()
             if locked_karaoke is None or locked_karaoke.status != KaraokeStatus.IN_PROGRESS:
-                raise ValueError("The auction is not in progress.")
+                raise ValueError("경매가 진행중이 아닙니다.")
 
             # 락을 잡은 상태에서 DB 기준 최신(최고) 입찰을 다시 조회합니다.
             # (Redis 캐시는 동시 요청 사이에서 갱신 타이밍이 어긋날 수 있어 신뢰할 수 없습니다)
@@ -159,12 +159,10 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             if highest is None:
                 # 첫 입찰은 최소 입찰가 이상이기만 하면 됩니다.
                 if amount < self.min_point:
-                    raise ValueError(
-                        f"The bid amount must be greater than or equal to the minimum bid ({self.min_point})."
-                    )
+                    raise ValueError(f"입찰 금액은 최소 입찰가({self.min_point}) 이상이어야 합니다.")
             elif amount <= highest.amount:
                 # 이후 입찰은 직전 최고가를 반드시 넘어야 합니다. (동일 금액으로 최고가를 가져갈 수 없음)
-                raise ValueError(f"The bid amount must be greater than the current highest bid ({highest.amount}).")
+                raise ValueError(f"입찰 금액은 현재 최고가({highest.amount})보다 커야 합니다.")
 
             # 차감 대상 유저와 금액 목록 구성
             deductions: list[tuple[User, int]] = []
@@ -237,7 +235,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         async with self.session as session:
             user_party = await leader.get_party(self)
             if user_party is not None:
-                raise ValueError("User is already a leader or member of a party in this auction.")
+                raise ValueError("이미 이 경매에서 파티장이거나 파티에 소속되어 있습니다.")
 
             party = KaraokePartis(auction_id=self.id, leader_id=leader.id)
             session.add(party)
