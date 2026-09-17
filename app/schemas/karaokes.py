@@ -129,3 +129,9 @@ class KaraokeMembers(SQLModel, table=True):
     )
 
     pending: bool = Field(default=True, description="멤버 참여가 수락 대기중인지 여부")
+
+    accepted_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="초대를 수락한 시간 (대기중이면 None). 입찰 취소시 당시 파티원을 복원하는 데 사용됨",
+    )

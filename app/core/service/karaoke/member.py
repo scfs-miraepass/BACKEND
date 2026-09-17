@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING
 from app.schemas import KaraokeMembers
+from app.schemas.core import SchemaCore
 
 from sqlmodel import select
 
@@ -69,6 +70,7 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
             party_obj = await self.get_party()
             member = await session.merge(self._payload)
             member.pending = False
+            member.accepted_at = SchemaCore.now()
 
         self._payload = member
         await self.redis.delete(f"karaoke_members:{self.party_id}")

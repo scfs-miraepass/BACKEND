@@ -66,8 +66,9 @@ class KaraokeBid(ServiceCore[KaraokeBids], _Type):
                 if party is None:
                     raise RuntimeError("It has to be there, but it’s not..!")
 
-                # 파티에 참여한 사용자 가져오기
-                party_members = await party.get_members()
+                # 파티에 참여한 사용자 가져오기 (입찰 이후 새로 합류한 멤버는 제외하고,
+                # 입찰 당시 실제로 비용을 분담했던 인원만 복원합니다)
+                party_members = await party.get_members_before(self.created_at)
 
                 # 얼마나 나워냐 했는지 계산
                 point = self.dutch_pay(self.amount, len(party_members) + 1)

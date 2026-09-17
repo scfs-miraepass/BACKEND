@@ -1,5 +1,7 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 from app.schemas import KaraokePartis, KaraokeMembers
+from app.schemas.core import SchemaCore
 
 from sqlmodel import col, select
 
@@ -57,6 +59,40 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
                     raise NotFound("Party Member User not found!")
 
                 return_obj.append(user)
+
+        return return_obj
+
+    async def get_members_before(self, cutoff: datetime) -> list[User]:
+        """
+        `cutoff` 시점에 이미 초대를 수락하여 파티에 소속되어 있던 유저들을 가져옵니다.
+
+        파티 멤버 구성은 시간이 지나며 바뀔 수 있으므로(입찰 이후 새 멤버가 초대를 수락하는 등),
+        입찰 취소시 `get_members()`(현재 멤버)를 그대로 쓰면 실제 그 입찰 당시 비용을 분담했던
+        인원과 달라질 수 있습니다. `accepted_at`이 없는(이 필드가 추가되기 전에 생성된) 멤버는
+        항상 소속되어 있던 것으로 간주해 포함합니다.
+
+        Args:
+            cutoff: 기준 시각
+
+        Raises:
+            ServiceError.NotFound: 유저 정보를 가져오지 못하거나, 찾지 못할 경우 발생합니다.
+
+        Returns:
+            list[User]
+        """
+        cutoff = SchemaCore.sync_timezone(cutoff)
+        members = await self.get_member_models()
+
+        return_obj: list[User] = []
+        for i in members:
+            if i.accepted_at is not None and SchemaCore.sync_timezone(i.accepted_at) > cutoff:
+                continue
+
+            user = await User.get_by_id(i.user_id)
+            if user is None:
+                raise NotFound("Party Member User not found!")
+
+            return_obj.append(user)
 
         return return_obj
 
