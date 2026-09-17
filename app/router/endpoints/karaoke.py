@@ -1,5 +1,5 @@
 from fastapi import APIRouter, status, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from datetime import date as dt_date, datetime
 from sqlmodel import select, col
 
@@ -41,21 +41,23 @@ class KaraokeResponse(SchemasKaraoke):
     highest_bid: int | None = None
 
 
-class KaraokeFinalBidResponse(BaseModel):
+class KaraokeBidBase(BaseModel):
     id: int
     auction_id: int
     party_id: int | None
     amount: int
     created_at: datetime
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, dt: datetime, _info):
+        return SchemaCore.sync_timezone(dt).isoformat()
+
+
+class KaraokeFinalBidResponse(KaraokeBidBase):
     bidder: User
 
 
-class KaraokeBidHistoryItem(BaseModel):
-    id: int
-    auction_id: int
-    party_id: int | None
-    amount: int
-    created_at: datetime
+class KaraokeBidHistoryItem(KaraokeBidBase):
     bidder: User | None = None
 
 
