@@ -8,7 +8,7 @@ from app.schemas import Karaokes, User, UserPermission, KaraokeBids, KaraokeMemb
 from app.schemas.karaokes import Karaoke as SchemasKaraoke
 from app.schemas.core import SchemaCore
 from app.schemas.response import ResponseModel, ErrorResponse
-from app.core.service.karaoke import KaraokeParty, KaraokeMember
+from app.core.service.karaoke import KaraokeParty, KaraokeMember, KaraokeBid
 from app.core.error import Conflict, PointInsufficient
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -48,6 +48,15 @@ class KaraokeFinalBidResponse(BaseModel):
     amount: int
     created_at: datetime
     bidder: User
+
+
+class KaraokeBidHistoryItem(BaseModel):
+    id: int
+    auction_id: int
+    party_id: int | None
+    amount: int
+    created_at: datetime
+    bidder: User | None = None
 
 
 class KaraokePartyDetail(BaseModel):
@@ -723,24 +732,38 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    async def send_highest(highest_bid: dict | None = None):
+    async def send_highest(highest_bid: KaraokeBid | None = None):
         if karaoke is None:
             return
 
         if highest_bid is None:
-            high_bid = await karaoke.get_highest()
-            if high_bid is not None:
-                highest_bid = high_bid.model_dump(mode="json")
+            highest_bid = await karaoke.get_highest()
 
         bids_history = await karaoke.bids_history()
         target_time = karaoke.start_time if karaoke.status == KaraokeStatus.PENDING else karaoke.end_time
         remaining_time = SchemaCore.remaining_seconds(target_time)
 
+        bidder_cache: dict[int, User | None] = {}
+
+        async def _with_bidder(bid: KaraokeBid) -> dict:
+            if bid.bidder_id not in bidder_cache:
+                bidder_cache[bid.bidder_id] = await client.get_user(bid.bidder_id)
+
+            # noinspection bad-argument-type
+            return KaraokeBidHistoryItem(
+                id=bid.id,
+                auction_id=bid.auction_id,
+                party_id=bid.party_id,
+                amount=bid.amount,
+                created_at=bid.created_at,
+                bidder=bidder_cache[bid.bidder_id],
+            ).model_dump(mode="json")
+
         send_obj = KaraokeSubData(
             type="highest",
             data={
-                "highest_bid": highest_bid,
-                "bids_history": [b.model_dump(mode="json") for b in bids_history],
+                "highest_bid": await _with_bidder(highest_bid) if highest_bid is not None else None,
+                "bids_history": [await _with_bidder(b) for b in bids_history[:5]],
                 "remaining_time": remaining_time,
             },
         )
@@ -760,7 +783,7 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
             f"[WS] pub/sub 이벤트 수신 - 경매 {karaoke_id} / type={body.type} -> {user.name}({user.id})"
         )
         if body.type == "highest":
-            await send_highest(body.data)
+            await send_highest(KaraokeBid(payload=KaraokeBids.model_validate(body.data)))
         else:
             # "status"(상태 변경), "sync"(남은시간 갱신)는 그대로 클라이언트에 전달합니다.
             # 로컬에 들고 있는 karaoke 스냅샷도 최신 상태로 갱신해, 이후 send_highest가
