@@ -55,6 +55,9 @@ class KaraokeBidBase(BaseModel):
 
 class KaraokeFinalBidResponse(KaraokeBidBase):
     bidder: User
+    members: list[User] = Field(
+        default_factory=list, description="파티로 입찰한 경우, 낙찰자(파티장)를 제외한 파티 멤버 목록"
+    )
 
 
 class KaraokeBidHistoryItem(KaraokeBidBase):
@@ -436,6 +439,12 @@ async def get_karaoke_final_bid(auth_data: LoginDep, karaoke_id: int):
     if bidder is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="입찰자 유저를 찾을 수 없습니다.")
 
+    members: list[User] = []
+    if bid.party_id is not None:
+        party = await KaraokeParty.get_by_id(bid.party_id)
+        if party is not None:
+            members = await party.get_members()
+
     # noinspection bad-argument-type
     return ResponseModel[KaraokeFinalBidResponse](
         success=True,
@@ -446,6 +455,7 @@ async def get_karaoke_final_bid(auth_data: LoginDep, karaoke_id: int):
             amount=bid.amount,
             created_at=bid.created_at,
             bidder=bidder,
+            members=members,
         ),
     )
 
