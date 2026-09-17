@@ -20,7 +20,7 @@ from .schemas.response import ErrorResponse
 from .schemas.core import SchemaCore
 
 
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone=ZoneInfo("Asia/Seoul"))
 client = ServiceClient()
 
 # pyproject.toml에서 버전을 동적으로 불러오기
