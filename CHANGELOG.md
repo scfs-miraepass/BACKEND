@@ -1,3 +1,10 @@
+# [1.11.0-dev.2](https://github.com/scfs-miraepass/BACKEND/compare/v1.11.0-dev.1...v1.11.0-dev.2) (2026-09-17)
+
+
+### Bug Fixes
+
+* 스케줄러 타임존이 UTC 등에 맞춰지던 것을 KST으로 고정 ([9dac36d](https://github.com/scfs-miraepass/BACKEND/commit/9dac36d6bf06969283e330709b12d952e1cf7875))
+
 # [1.11.0-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.10.0...v1.11.0-dev.1) (2026-09-17)
 
 
