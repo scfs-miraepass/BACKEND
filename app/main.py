@@ -9,11 +9,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlmodel import select, col
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .core import ServiceClient, settings
+from .core.service.karaoke import Karaoke as KaraokeService
 from .router import router
-from .schemas import UserPermission
+from .schemas import Karaokes, KaraokeStatus, UserPermission
 from .schemas.response import ErrorResponse
 from .schemas.core import SchemaCore
 
@@ -40,6 +42,59 @@ async def reset_grant_limit():
 async def reset_student_limit():
     await client.redis.delete_pattern("point_limit:student:*")
     client.logs.service.info("학생 포인트 제한을 초기화 했습니다.")
+
+
+@scheduler.scheduled_job(CronTrigger(second=0))
+async def process_karaoke_auctions():
+    """
+    노래방 예약 경매의 시작/종료 시간을 확인하여 상태를 자동으로 전환하고,
+    진행 중인 경매는 남은 시간을 sync 채널로 브로드캐스트합니다.
+
+    - `PENDING` 상태이고 시작 시간이 지난 경매는 `IN_PROGRESS`로 변경합니다.
+    - `IN_PROGRESS` 상태이고 종료 시간이 지난 경매는 `CONFIRMED`로 변경합니다.
+    - `IN_PROGRESS` 상태이고 아직 종료 시간이 지나지 않은 경매는 남은 시간을 브로드캐스트합니다.
+
+    매 분 정각에 실행됩니다.
+    """
+    client.logs.service_karaoke.debug("노래방 예약 경매 시작/종료 및 동기화 처리")
+    async with client.session as session:
+        query = select(Karaokes).where(col(Karaokes.status).in_([KaraokeStatus.PENDING, KaraokeStatus.IN_PROGRESS]))
+        result = await session.execute(query)
+        karaokes = list(result.scalars().all())
+
+    change_progress = 0
+    change_confirmed = 0
+    for row in karaokes:
+        karaoke = KaraokeService(row)
+
+        if row.status == KaraokeStatus.PENDING:
+            # start_time/end_time은 시간대 정보가 없는 DATETIME 컬럼이라 DB 서버 시간대 기준의
+            # wall clock으로 저장됩니다. 백엔드 프로세스의 로컬 시계(datetime.now())와 그대로
+            # 비교하면 두 시간대의 시차만큼 어긋나므로, DB 시간대를 붙여 aware끼리 비교합니다.
+            if SchemaCore.sync_timezone(row.start_time) > SchemaCore.now():
+                continue
+
+            await karaoke.set_status(KaraokeStatus.IN_PROGRESS)
+            client.logs.service_karaoke.info(f"노래방 경매 자동 시작 - ID {row.id}({row.date} / {row.time})")
+            change_progress += 1
+
+        elif row.status == KaraokeStatus.IN_PROGRESS:
+            if SchemaCore.sync_timezone(row.end_time) > SchemaCore.now():
+                remaining_time = SchemaCore.remaining_seconds(row.end_time)
+                try:
+                    await karaoke.publish("sync", remaining_time)
+                except Exception:
+                    # 한 경매의 발행이 실패해도 나머지 경매 처리는 계속 진행합니다.
+                    client.logs.service_karaoke.exception(f"노래방 경매 동기화 발행 실패 - ID {row.id}")
+                continue
+
+            await karaoke.set_status(KaraokeStatus.CONFIRMED)
+            client.logs.service_karaoke.info(f"노래방 경매 자동 종료 - ID {row.id}({row.date} / {row.time})")
+            change_confirmed += 1
+
+    client.logs.service_karaoke.debug(
+        f"경매 시작/종료 스케줄 완료됨. {change_progress}개 시작, {change_confirmed}개 종료"
+    )
 
 
 @asynccontextmanager
@@ -125,23 +180,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.get("/")
 async def read_root(_: UserPermission | None = None):
     return {"message": "Hello, World!"}
-
-
-# from .core import SessionDep
-# from .schemas import Users, UserType
-# @app.get("/test")
-# async def test(session: SessionDep):
-#
-#     # 1101~3699 : 학생
-#     # 4000~4999 : 교사
-#     # 5000~ : 서비스
-#
-#     # 테스트 학생
-#     # session.add(Users(id=3601, type=UserType.student, name="홍길동", grade=3, number=6))
-#
-#     # 테스트 서비스
-#     session.add(Users(type=UserType.service, name="카페테리아", id=5000))
-#     await session.commit()
 
 
 app.include_router(router)
