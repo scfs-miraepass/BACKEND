@@ -1,3 +1,83 @@
+# [1.11.0](https://github.com/scfs-miraepass/BACKEND/compare/v1.10.0...v1.11.0) (2026-09-17)
+
+
+### Bug Fixes
+
+* **core:** date 타입 직렬화 및 enum 경고 해결 ([9a8a787](https://github.com/scfs-miraepass/BACKEND/commit/9a8a787efdbcc6e0ac9266d88bfba3e7c5a5de64))
+* **core:** 동시 입찰 레이스 컨디션 수정 및 최종 입찰 조회 기능 추가 ([d5933a0](https://github.com/scfs-miraepass/BACKEND/commit/d5933a09a0b6cfeec17caf8ea302dfc1b9c6d9cd))
+* database.session property를 사용하기 위해 async with에 넣을 경우 TypeError가 발생하던 현상 해결 ([3211254](https://github.com/scfs-miraepass/BACKEND/commit/3211254f9e1735035510cbe88549c57dcd82457f))
+* DB와 백엔드의 시간대 차이로 경매가 즉시 시작/종료되던 현상 해결 ([61377ec](https://github.com/scfs-miraepass/BACKEND/commit/61377ecbba04c5744baee5f5949594c1709fc9bb))
+* **endpoints:** `pydantic.errors.PydanticSchemaGenerationError:` 에러 해결 ([057fa8b](https://github.com/scfs-miraepass/BACKEND/commit/057fa8b106bc7a0cce5194f371c4bfaf9e3c88e7))
+* **endpoints:** payload를 참조해서 발생하는 에러 해결 ([e31322c](https://github.com/scfs-miraepass/BACKEND/commit/e31322c2af76be8d7aa2b0addeca2c27b9462597))
+* **endpoints:** 경매 생성시, 경매 목록 캐시가 제거가 안돼, 기존 캐시가 응답되는 현상 해결 ([5ed5176](https://github.com/scfs-miraepass/BACKEND/commit/5ed51763da751ee30b645a051922927f80beff3a))
+* **karaoke:** final-bid 응답의 created_at에 타임존 오프셋 누락되어 Zod 검증 실패하던 문제 수정 ([17d082e](https://github.com/scfs-miraepass/BACKEND/commit/17d082e4b878e72e3f34836295e66175727d70d0))
+* **karaoke:** 상태가 변경되어도, 변경후 남은 시간을 보내주지 않아서 UI에서 00:00 으로 표기되는 현상 해결 ([6479c45](https://github.com/scfs-miraepass/BACKEND/commit/6479c458286f3836bbf0cd58292a3f88fac8ea75))
+* **karaoke:** 웹소켓 remaining_time 계산 버그 수정 및 코드 정리 ([227a650](https://github.com/scfs-miraepass/BACKEND/commit/227a65018c47c48fd8bf5ba1999698953e3ff7bd))
+* **karaoke:** 입찰 취소 환불 계산이 취소 시점 파티원 기준이라 어긋나던 문제 수정 ([baedad6](https://github.com/scfs-miraepass/BACKEND/commit/baedad602b52c0342bbb67a7bb507c458e564c2a))
+* **karaoke:** 캐시 무효화가 누락/오작동하던 곳 수정 ([9be6bcf](https://github.com/scfs-miraepass/BACKEND/commit/9be6bcfed2e275ef53d58ce3f76b6d080b6d138b))
+* **karaoke:** 코드 리뷰 지적사항 반영 (권한, 강퇴, 락 범위, 중복 로직) ([386a1bb](https://github.com/scfs-miraepass/BACKEND/commit/386a1bb1b4e492944e036a98525ebe4db516648a))
+* **karaoke:** 파티 탈퇴시 DetachedInstanceError로 500 발생하던 문제 수정 ([dc4953d](https://github.com/scfs-miraepass/BACKEND/commit/dc4953d9d1704bea97f98df54734bb176fc67ac0))
+* **karaoke:** 프론트에 그대로 노출되는 커스텀 에러 메시지를 한국어로 변경 ([78fd8e0](https://github.com/scfs-miraepass/BACKEND/commit/78fd8e0be0f8bb06fae44589e2395ad781f0b562))
+* users 생성시, 검색을 위한 index 초성 처리할 때 로그에 quest 로그로 뜨는거 수정 ([905a47f](https://github.com/scfs-miraepass/BACKEND/commit/905a47fd906c402af4eed1dfe5c3461885627ada))
+* **user:** 파티장만 있고 멤버가 없는 파티가 get_party에서 조회되지 않던 문제 해결 ([da61124](https://github.com/scfs-miraepass/BACKEND/commit/da611243fe739f0ab31bdf664c74ee3b01137e22))
+* 권한 비트 충돌 수정 및 파티 해산/강퇴 캐시 무효화 지연 해결 ([89da2a5](https://github.com/scfs-miraepass/BACKEND/commit/89da2a5afe8481e71f7e4c8889e4758c9b6bab1e))
+* 마이그레이션이 되지 않는 현상 해결 ([6b72b3e](https://github.com/scfs-miraepass/BACKEND/commit/6b72b3e4bb80de16c429e5f1e7fec45d0225cdee))
+* 마이그레이션이 되지 않는 현상 해결 ([447dcd7](https://github.com/scfs-miraepass/BACKEND/commit/447dcd7cb2a6351776be2207e3b30ca742fa4595))
+* 스케줄러 타임존이 UTC 등에 맞춰지던 것을 KST으로 고정 ([9dac36d](https://github.com/scfs-miraepass/BACKEND/commit/9dac36d6bf06969283e330709b12d952e1cf7875))
+
+
+### Features
+
+* `ServiceClient.get_karaoke` 추가 ([3f71766](https://github.com/scfs-miraepass/BACKEND/commit/3f7176656dd5588734ee29b55bb78f1beb2bf5a7))
+* `예약 경매 삭제 (DELETE /karaoke/{id})` Endpoint ([83309d1](https://github.com/scfs-miraepass/BACKEND/commit/83309d1c3c9cf86ac27deb4fa7c8686b5723c8e6))
+* `예약 경매 조회 (GET /karaoke/{id})` Endpoint ([d9618e5](https://github.com/scfs-miraepass/BACKEND/commit/d9618e5b479d0004ad20520255dea4cd8686ace9))
+* Core `Karaoke.set_status` 함수 추가 ([65b2a65](https://github.com/scfs-miraepass/BACKEND/commit/65b2a65d9fbd3336d96a5b78be5a748199a97f11))
+* Core `KaraokeParty` 객체 기본 베이스 추가 ([0a3f584](https://github.com/scfs-miraepass/BACKEND/commit/0a3f584645b4ada6ef87c92d8e9bc0dca94f4f8b))
+* Core `KaraokeParty` 소속 유저와 해산 여부 설정 함수 추가 ([75e2bd4](https://github.com/scfs-miraepass/BACKEND/commit/75e2bd44a6c87ac871b6181b72df34d60dcad34a))
+* Core Karaoke 파트 폴더 구조 변경 및 KaraokeBid 기본 코드 추가 ([01ef422](https://github.com/scfs-miraepass/BACKEND/commit/01ef422c0c30c107ec2539c503cc8729007994a2))
+* Core Karaoke.delete 추가 ([be0741b](https://github.com/scfs-miraepass/BACKEND/commit/be0741bd0eb98a1b94b68657736c8ef3d3f554b8))
+* **core:** `KaraokeMember.get_member` 추가 ([5a4ac7d](https://github.com/scfs-miraepass/BACKEND/commit/5a4ac7dad599fc061da7b48e7da5de66e9adb367))
+* **core:** `KaraokeMember.get_party` 추가 ([e998557](https://github.com/scfs-miraepass/BACKEND/commit/e998557b08d7f35f8fc90a523ab23b12cdca38a2))
+* **core:** `KaraokeMember.leave` 추가 ([29db7b0](https://github.com/scfs-miraepass/BACKEND/commit/29db7b059f9f0d7b089d30b40ee27f24c3182ce0))
+* **core:** User, 대기 중인 파티 초대, `get_karaoke_member` 함수 추가 ([0d3ccbf](https://github.com/scfs-miraepass/BACKEND/commit/0d3ccbfd41d1fca75e0dd6dc8a303977c7baf396))
+* **core:** 각 오브젝트 객체에 `get_by_id`을 추가하여 client및 내부에서도 캐시를 이용한 Getting를 할 수 있도록 구성 ([cc0b170](https://github.com/scfs-miraepass/BACKEND/commit/cc0b170b50059f358c0a45f062d1493adbaf39a8))
+* **core:** 노래방 경매 시작/종료 자동 처리 스케줄 추가 ([b065ade](https://github.com/scfs-miraepass/BACKEND/commit/b065ade123b42f1c0a94c66ee8288a7e03c48b77))
+* **core:** 노래방 파티원 초대/퇴장, `get_member_models` 함수 추가 ([2a506b6](https://github.com/scfs-miraepass/BACKEND/commit/2a506b606f657f3b88dfd30981afa2d629942fc2))
+* **core:** 새로운 파티 생성 함수 추가 ([5237034](https://github.com/scfs-miraepass/BACKEND/commit/5237034c921626834507190bf9eab140b3b2361f))
+* **core:** 유저가 참여중인(또는 리더인) 파티 가져오는 함수 추가 ([15d6f16](https://github.com/scfs-miraepass/BACKEND/commit/15d6f1696b2f3489f357d1e7693e7716227b42ef))
+* **core:** 입찰 취소(KaraokeBid.cancel) 함수 추가 ([dfdca89](https://github.com/scfs-miraepass/BACKEND/commit/dfdca89229977c9df21b81ac5664ec9a22d749fc))
+* **core:** 파티 멤버 초대 및 초대 수락/거절 ([ef5eb89](https://github.com/scfs-miraepass/BACKEND/commit/ef5eb8984d073726cfd2d4ba31731b670102a047))
+* **core:** 필요한 곳에 노래방 관련 로그 추가 ([acae176](https://github.com/scfs-miraepass/BACKEND/commit/acae17690c0ae36138c7e30cc52de7b2a077e8a2))
+* Endpoint 파일 생성 ([10591f0](https://github.com/scfs-miraepass/BACKEND/commit/10591f0dd558475ba861a7de0d525faed04ef3de))
+* **endpoints:** 노래방 목록 및 노래방 예약에 최고가 추가 ([a280077](https://github.com/scfs-miraepass/BACKEND/commit/a280077d229bcfea1dce4dac36b58e4324445278))
+* **endpoints:** 노래방 예약 경매 입찰, 파티 초대, 초대 응답(수락/거절) Endpoint 추가 ([1144278](https://github.com/scfs-miraepass/BACKEND/commit/11442780a63721c34f00c8b309786f05cc297019))
+* **endpoints:** 실시간 통신용 웹 소켓 ([fbfc8c3](https://github.com/scfs-miraepass/BACKEND/commit/fbfc8c38591fedab00f3f8b70dd8837eb838b1a0))
+* **endpoints:** 예약 경매 파티 생성 Endpoint ([026961e](https://github.com/scfs-miraepass/BACKEND/commit/026961e485c2e1052dc2776ee1cd40388f515503))
+* **endpoints:** 파티 조회/탈퇴/강퇴 Endpoint 추가 및 삭제시 최고 입찰 환불 처리 ([714c877](https://github.com/scfs-miraepass/BACKEND/commit/714c877ccbc236c76bf181c0cd0a0ccc3536146d))
+* **endpoints:** 파티장 파티 자진 해산 Endpoint 추가 ([53411f6](https://github.com/scfs-miraepass/BACKEND/commit/53411f6e41776de22916bc80b89764141a2542b8))
+* KaraokeBid.party_bidder 제거, party_id 추가 ([47607b6](https://github.com/scfs-miraepass/BACKEND/commit/47607b6f855584b7896ed21ae6ee5af4366e6654))
+* KaraokeParty, KaraokeMember 데이터 스키마 추가 ([ef105fc](https://github.com/scfs-miraepass/BACKEND/commit/ef105fcaf2d7fac6075b78c3da1300808613eaf0))
+* **karaoke:** 경매 남은시간 sync 브로드캐스트 및 입찰 내역 캐시 파싱 수정 ([149085b](https://github.com/scfs-miraepass/BACKEND/commit/149085b2a37b91e50186580664edbc1ae68252ed))
+* **karaoke:** 웹소켓 및 Redis Pub/Sub 로깅 추가 ([045a312](https://github.com/scfs-miraepass/BACKEND/commit/045a31245a6c4f139bb6de48bdd77e8b0b0b834d))
+* **karaoke:** 입찰 기록 웹소켓 응답에 입찰자 User 정보 포함, 최신 5건만 전송 ([6ed87b1](https://github.com/scfs-miraepass/BACKEND/commit/6ed87b140d44af6a52f5c96a89ef1744078cb763))
+* **karaoke:** 최종 입찰 조회 API에 파티 입찰시 파티 멤버 목록 포함 ([340520b](https://github.com/scfs-miraepass/BACKEND/commit/340520b4a93b7da6f90c22cec2bef5570c6d160c))
+* 노래방 경매 생성 Endpoint ([20a2204](https://github.com/scfs-miraepass/BACKEND/commit/20a2204239a3650dc2501e1eef9e79f605c2b6d0))
+* 노래방 경매와 관련되 권한들 추가 ([7939f3a](https://github.com/scfs-miraepass/BACKEND/commit/7939f3afb70b0020f22f26facda259cd48ae4f85))
+* 노래방 관련 스키마들, Class 이름 복수사로 변경 ([3fb98f4](https://github.com/scfs-miraepass/BACKEND/commit/3fb98f4cf088714f6e4533a81592779870c84fb8))
+* 노래방 예약(Karaoke) 데이터 스키마 추가 ([71f5f30](https://github.com/scfs-miraepass/BACKEND/commit/71f5f30d2ce2c07e7ccdf8207ae727f29220d280))
+* 노래방 파티 조회 Endpoint 추가 및 초대/입찰 검증 강화 ([f7aa2e8](https://github.com/scfs-miraepass/BACKEND/commit/f7aa2e893e791c68deb4ec0a7c98e3d92148a30f))
+* 노래방(Karaoke) 예약 서비스 ([226ab45](https://github.com/scfs-miraepass/BACKEND/commit/226ab45af95cfcc07e7f4d505822f01b3160df2f))
+* 예약 경매 목록 조회 (GET /karaoke) Endpoint 완성 ([e7d79d1](https://github.com/scfs-miraepass/BACKEND/commit/e7d79d138d39bb830dcba0d0b61a890df7e7f887))
+* 예약 경매 입찰(KaraokeBid) 데이터 스키마 추가 ([24b7f45](https://github.com/scfs-miraepass/BACKEND/commit/24b7f45913b26aec7bdc050c301195f41e79b7a1))
+* 입찰 함수(add_bid) 완성 ([d9a9eb5](https://github.com/scfs-miraepass/BACKEND/commit/d9a9eb57d13d2344e25c957ea0fd7aba6b8acdca))
+* 포인트 기록 종류에 `노래방 입찰, 입찰 취소` 추가 ([c7e6e16](https://github.com/scfs-miraepass/BACKEND/commit/c7e6e16bef3fd721ceedd887625a6659a0efa293))
+
+
+### Performance Improvements
+
+* **core:** 멤버 강퇴시 set_dispersed 를 사용하도록 변경 ([e1ec93a](https://github.com/scfs-miraepass/BACKEND/commit/e1ec93ac450f97c694c74ae2eb501cede8ddc8db))
+* KaraokeStatus 값 수정 ([1027b25](https://github.com/scfs-miraepass/BACKEND/commit/1027b25bcde236bf78b3f9583f87edfc5e545fc9))
+
 # [1.11.0-dev.2](https://github.com/scfs-miraepass/BACKEND/compare/v1.11.0-dev.1...v1.11.0-dev.2) (2026-09-17)
 
 
