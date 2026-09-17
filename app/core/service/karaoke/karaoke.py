@@ -144,6 +144,11 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         Returns:
             KaraokeBid
         """
+        # 파티원 조회는 경매 Row 락과 무관한 읽기 전용 작업이므로, 락을 쥐고 있는 시간을
+        # 최소화하기 위해 락을 잡기 전에 미리 조회해둡니다.
+        party_members = await party.get_members() if party is not None else []
+        deductions = self.build_dutch_pay_deductions(bidder, amount, party_members)
+
         async with self.session as session:
             # 동시 입찰로 인한 레이스 컨디션(중복 최고가 인정 등)을 막기 위해
             # 경매 Row에 락을 걸어 같은 경매에 대한 입찰 처리를 직렬화합니다.
@@ -163,18 +168,6 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             elif amount <= highest.amount:
                 # 이후 입찰은 직전 최고가를 반드시 넘어야 합니다. (동일 금액으로 최고가를 가져갈 수 없음)
                 raise ValueError(f"입찰 금액은 현재 최고가({highest.amount})보다 커야 합니다.")
-
-            # 차감 대상 유저와 금액 목록 구성
-            deductions: list[tuple[User, int]] = []
-            if party is None:
-                deductions.append((bidder, amount))
-            else:
-                party_members = await party.get_members()
-                point = self.dutch_pay(amount, len(party_members) + 1)
-
-                deductions.append((bidder, point.leader))
-                for member in party_members:
-                    deductions.append((member, point.member))
 
             # 차감할 포인트가 있는지 확인
             for user, deduct_amount in deductions:

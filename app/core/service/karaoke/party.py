@@ -243,7 +243,11 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
         """
 
         async with self.session as session:
-            current_members = await self.get_member_models()
+            # 대기중인 초대까지 포함해 현재 파티에 속한 모든 멤버를 가져옵니다.
+            # get_member_models()는 수락 완료(pending == False) 멤버만 반환하므로,
+            # 대기중인 초대가 새 파티로 이관되지 못하고 유실되는 것을 막기 위해 직접 조회합니다.
+            query = select(KaraokeMembers).where(KaraokeMembers.party_id == self.id)
+            current_members = (await session.execute(query)).scalars().all()
             user_ids = [users.id] if isinstance(users, User) else [user.id for user in users]
 
             # 새로운 파티 객체 생성
@@ -252,11 +256,14 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
 
             await session.flush()
 
-            # 제외될 멤버가 아닌 멤버들만 새 파티에 추가
+            # 제외될 멤버가 아닌 멤버들만 새 파티에 추가 (대기중인 초대 상태도 그대로 유지)
             for member in current_members:
                 if member.user_id not in user_ids:
                     new_member = KaraokeMembers(
-                        party_id=new_party_model.id, user_id=member.user_id, pending=member.pending
+                        party_id=new_party_model.id,
+                        user_id=member.user_id,
+                        pending=member.pending,
+                        accepted_at=member.accepted_at,
                     )
                     session.add(new_member)
 

@@ -56,11 +56,9 @@ class KaraokeBid(ServiceCore[KaraokeBids], _Type):
                 raise RuntimeError("It has to be there, but it’s not..!")
 
             bidder = await self.get_bidder()  # 입찰자 가져오기
-            deductions: list[tuple[User, int]] = []
 
-            if self.party_id is None:
-                deductions.append((bidder, self.amount))
-            else:
+            party_members: list[User] = []
+            if self.party_id is not None:
                 # 파티 객체 가져오기
                 party = await self.get_party()
                 if party is None:
@@ -70,15 +68,7 @@ class KaraokeBid(ServiceCore[KaraokeBids], _Type):
                 # 입찰 당시 실제로 비용을 분담했던 인원만 복원합니다)
                 party_members = await party.get_members_before(self.created_at)
 
-                # 얼마나 나워냐 했는지 계산
-                point = self.dutch_pay(self.amount, len(party_members) + 1)
-
-                # 대표자 금액 추가
-                deductions.append((bidder, point.leader))
-
-                # 각 멤버 금액 추가
-                for member in party_members:
-                    deductions.append((member, point.member))
+            deductions = self.build_dutch_pay_deductions(bidder, self.amount, party_members)
 
             # 실제 포인트 처리
             for user, deduct_amount in deductions:

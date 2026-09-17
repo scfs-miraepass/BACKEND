@@ -1,3 +1,5 @@
+from inspect import isroutine
+from functools import wraps
 from typing import TYPE_CHECKING
 from app.schemas import KaraokeMembers
 from app.schemas.core import SchemaCore
@@ -19,6 +21,22 @@ else:
 
 
 class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
+    def __getattribute__(self, name):
+        # reject()는 DB에서 멤버를 삭제하며 `_payload`를 None으로 비운다.
+        # 삭제된 이후 이 객체의 메서드가 다시 호출되는 것을 막기 위해, KaraokeMember에
+        # 한해서만 메서드 호출 시점에 `_payload`가 살아있는지 확인한다.
+        attr = super().__getattribute__(name)
+        if callable(attr) and isroutine(attr) and not name.startswith("__"):
+
+            @wraps(attr)
+            def wrapper(*args, **kwargs):
+                if super(KaraokeMember, self).__getattribute__("_payload") is None:
+                    raise RuntimeError("This object has been deleted.")
+                return attr(*args, **kwargs)
+
+            return wrapper
+        return attr
+
     @classmethod
     async def get_member(cls, party_id: int, user_id: int) -> "KaraokeMember | None":
         """

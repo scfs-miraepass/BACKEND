@@ -1,6 +1,5 @@
-from inspect import isroutine
-from typing import TypeVar, Type
-from functools import lru_cache, wraps
+from typing import TYPE_CHECKING, TypeVar, Type
+from functools import lru_cache
 from hangulpy import split_hangul_string
 from math import floor
 from dataclasses import dataclass
@@ -9,6 +8,9 @@ from sqlmodel import SQLModel, select
 from .database import DatabaseCore
 from .loggers import LoggerCore
 from .redis import RedisCore
+
+if TYPE_CHECKING:
+    from .service.user import User
 
 T = TypeVar("T")
 
@@ -68,6 +70,26 @@ class BaseCore:
         return DutchPayReturn(member=member_share, leader=leader_share)
 
     @classmethod
+    def build_dutch_pay_deductions(cls, leader: "User", amount: int, members: list["User"]) -> list[tuple["User", int]]:
+        """
+        더치페이 대상 인원(대표자 + 파티원)에게 각자 부담할 금액을 배분합니다.
+        `members`가 비어있으면(개인 입찰) 대표자가 전액을 부담합니다.
+
+        Args:
+            leader: 대표자(입찰자)
+            amount: 분배할 전체 금액
+            members: 대표자를 제외한 파티원 목록
+
+        Returns:
+            list[tuple[User, int]]: (유저, 배분된 금액) 목록. 대표자가 첫 번째 원소입니다.
+        """
+        if not members:
+            return [(leader, amount)]
+
+        point = cls.dutch_pay(amount, len(members) + 1)
+        return [(leader, point.leader)] + [(member, point.member) for member in members]
+
+    @classmethod
     async def _get_item(
         cls,
         _id: int,
@@ -120,18 +142,7 @@ class ServiceCore[T](BaseCore):
         payload = super().__getattribute__("_payload")
         if hasattr(payload, name):
             return getattr(payload, name)
-
-        attr = super().__getattribute__(name)
-        if callable(attr) and isroutine(attr) and not name.startswith("__"):
-
-            @wraps(attr)
-            def wrapper(*args, **kwargs):
-                if super(ServiceCore, self).__getattribute__("_payload") is None:
-                    raise RuntimeError("This object has been deleted.")
-                return attr(*args, **kwargs)
-
-            return wrapper
-        return attr
+        return super().__getattribute__(name)
 
     def __setattr__(self, name, value):
         if name == "_payload":

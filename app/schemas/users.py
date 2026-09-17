@@ -134,7 +134,7 @@ class UserPermission(IntFlag):
         | VIEW_POST
         | VIEW_STAMP
     )
-    ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST | MANAGE_KARAOKE
+    ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST | MANAGE_KARAOKE | VIEW_KARAOKE
 
     @classmethod
     def __get_pydantic_json_schema__(
