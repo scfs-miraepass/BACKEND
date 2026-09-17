@@ -56,12 +56,11 @@ async def process_karaoke_auctions():
 
     매 분 정각에 실행됩니다.
     """
-    client.logs.service_karaoke.debug("노래방 예약 경매 시작/종료 및 sync 처리를 시작하겠습니다.")
+    client.logs.service_karaoke.debug("노래방 예약 경매 시작/종료 및 동기화 처리")
     async with client.session as session:
         query = select(Karaokes).where(col(Karaokes.status).in_([KaraokeStatus.PENDING, KaraokeStatus.IN_PROGRESS]))
         result = await session.execute(query)
         karaokes = list(result.scalars().all())
-    client.logs.service_karaoke.debug(f"{len(karaokes)}개의 예약이 있습니다.")
 
     change_progress = 0
     change_confirmed = 0
@@ -86,7 +85,7 @@ async def process_karaoke_auctions():
                     await karaoke.publish("sync", remaining_time)
                 except Exception:
                     # 한 경매의 발행이 실패해도 나머지 경매 처리는 계속 진행합니다.
-                    client.logs.service_karaoke.exception(f"노래방 경매 sync 발행 실패 - ID {row.id}")
+                    client.logs.service_karaoke.exception(f"노래방 경매 동기화 발행 실패 - ID {row.id}")
                 continue
 
             await karaoke.set_status(KaraokeStatus.CONFIRMED)
@@ -94,7 +93,7 @@ async def process_karaoke_auctions():
             change_confirmed += 1
 
     client.logs.service_karaoke.debug(
-        f"경매 시작/종료 스케줄 완료되었습니다. {change_progress}개 시작, {change_confirmed}개 종료"
+        f"경매 시작/종료 스케줄 완료됨. {change_progress}개 시작, {change_confirmed}개 종료"
     )
 
 
