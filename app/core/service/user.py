@@ -145,6 +145,7 @@ class User(ServiceCore[Users], _Type):
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
             await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
+            await self.redis.delete_pattern(f"ranking_count:{user.type!s}:weekly:*")
         await self.redis.delete_pattern("search_users:*")
 
         self.logs.service_point.info(f"포인트 지급 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
@@ -185,6 +186,7 @@ class User(ServiceCore[Users], _Type):
         await self.redis.delete(f"user:{self.id}")
         if user.type == UserType.teacher or user.type == UserType.student:
             await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
+            await self.redis.delete_pattern(f"ranking_count:{user.type!s}:weekly:*")
         await self.redis.delete_pattern("search_users:*")
 
         self.logs.service_point.info(f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")

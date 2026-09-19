@@ -167,6 +167,8 @@ async def update_users_point(request: AdminPointRequest, auth_data: LoginDep):
 
         await client.redis.delete_pattern("ranking:student:*")
         await client.redis.delete_pattern("ranking:teacher:*")
+        await client.redis.delete_pattern("ranking_count:student:weekly:*")
+        await client.redis.delete_pattern("ranking_count:teacher:weekly:*")
 
 
 @router.post(
@@ -348,6 +350,7 @@ async def update_user(user_id: int, request: AdminUserUpdateRequest, auth_data: 
 
         await client.redis.delete(f"user:{target_user.id}")
         await client.redis.delete_pattern(f"ranking:{target_user.type!s}:*")
+        await client.redis.delete_pattern(f"ranking_count:{target_user.type!s}:weekly:*")
         await client.redis.delete_pattern("search_users:*")
 
     return ResponseModel[User](success=True, data=target_user)
@@ -395,4 +398,5 @@ async def delete_user(user_id: int, auth_data: LoginDep):
     await client.redis.delete(f"point_history_count:{target_user.id}")
     await client.redis.delete_pattern(f"point_history:{target_user.id}:*")
     await client.redis.delete_pattern(f"ranking:{target_user.type!s}:*")
+    await client.redis.delete_pattern(f"ranking_count:{target_user.type!s}:weekly:*")
     await client.redis.delete_pattern("search_users:*")
