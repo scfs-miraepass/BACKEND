@@ -1,3 +1,10 @@
+# [1.12.0-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.11.1-dev.1...v1.12.0-dev.1) (2026-10-06)
+
+
+### Features
+
+* 주간 포인트 랭킹 기능 ([#17](https://github.com/scfs-miraepass/BACKEND/issues/17)) ([99c4866](https://github.com/scfs-miraepass/BACKEND/commit/99c48667db2b8bef3b78cca8f8aee3c90b0166ba))
+
 ## [1.11.1-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.11.0...v1.11.1-dev.1) (2026-10-06)
 
 
