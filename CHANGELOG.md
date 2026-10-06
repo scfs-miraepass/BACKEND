@@ -1,3 +1,10 @@
+## [1.11.1-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.11.0...v1.11.1-dev.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* 포인트 기록 삭제 시 유저가 삭제되던 문제 및 total_point 복원 계산 오류 수정 ([e74796b](https://github.com/scfs-miraepass/BACKEND/commit/e74796ba7851cf7f923dc6d67ca6b707884029e5))
+
 # [1.11.0](https://github.com/scfs-miraepass/BACKEND/compare/v1.10.0...v1.11.0) (2026-09-17)
 
 
