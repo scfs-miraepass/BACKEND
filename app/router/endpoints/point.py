@@ -410,8 +410,12 @@ async def _get_ranking(
         week_key = "all"
 
     type_str = "student" if user_type == UserType.student else "teacher"
-    count_cache_key = f"ranking_count:{type_str}:{period}:{week_key}"
+    count_cache_key = f"ranking_count:{type_str}"
     ranking_cache_key = f"ranking:{type_str}:{period}:{week_key}:{limit}:{offset}"
+
+    conditions: Any = [Users.type == user_type]
+    if user_type == UserType.teacher:
+        conditions.append(col(Users.permissions).op("&")(UserPermission.NO_LIMIT_POINT.value) == 0)
 
     async with client.session as session:
         cached_count = await client.redis.get(count_cache_key)
@@ -419,15 +423,7 @@ async def _get_ranking(
         if cached_count is not None:
             count = int(cached_count)
         else:
-            # 기본 쿼리
-            query = select(func.count()).select_from(Users)
-
-            # 조건 추가
-            conditions: Any = [Users.type == user_type]
-            if user_type == UserType.teacher:
-                conditions.append(col(Users.permissions).op("&")(UserPermission.NO_LIMIT_POINT.value) == 0)
-            query = query.where(*conditions)
-
+            query = select(func.count()).select_from(Users).where(*conditions)
             result = await session.execute(query)
             count = result.scalar() or 0
             await client.redis.set(count_cache_key, count, ttl=60 * 5)  # 5분 캐시
@@ -437,12 +433,8 @@ async def _get_ranking(
         if cached_ranking is not None:
             rankings = [RankingResponse(**item) for item in cached_ranking]
         else:
-            # 서브쿼리 없이 Users 모델 전체와 rank를 바로 선택 (SQLModel / Pydantic 경고 방지 및 성능 개선)
-            conditions: Any = [Users.type == user_type]
-            if user_type == UserType.teacher:
-                conditions.append(col(Users.permissions).op("&")(UserPermission.NO_LIMIT_POINT.value) == 0)
-
             if period == RankingPeriod.weekly:
+                # 차감(사용) 기록은 제외하고 해당 주에 획득한 포인트만 합산
                 weekly_points = (
                     select(
                         PointHistory.user_id,
@@ -451,36 +443,28 @@ async def _get_ranking(
                     .where(
                         PointHistory.created_at >= week_start,
                         PointHistory.created_at < week_end,
+                        PointHistory.changed_amount > 0,
                     )
-                    .group_by(PointHistory.user_id)
+                    .group_by(col(PointHistory.user_id))
                     .subquery()
                 )
                 ranking_point = func.coalesce(weekly_points.c.weekly_point, 0)
-                query = (
-                    select(
-                        Users,
-                        ranking_point.label("ranking_point"),
-                        func.dense_rank().over(order_by=ranking_point.desc()).label("rank"),
-                    )
-                    .outerjoin(weekly_points, weekly_points.c.user_id == Users.id)
-                    .where(*conditions)
-                    .order_by(ranking_point.desc(), col(Users.id).asc())
-                    .limit(limit)
-                    .offset(offset)
-                )
             else:
+                weekly_points = None
                 ranking_point = col(Users.total_point)
-                query = (
-                    select(
-                        Users,
-                        ranking_point.label("ranking_point"),
-                        func.dense_rank().over(order_by=ranking_point.desc()).label("rank"),
-                    )
-                    .where(*conditions)
-                    .order_by(ranking_point.desc(), col(Users.id).asc())
-                    .limit(limit)
-                    .offset(offset)
-                )
+
+            # 서브쿼리 없이 Users 모델 전체와 rank를 바로 선택 (SQLModel / Pydantic 경고 방지 및 성능 개선)
+            query = select(
+                Users,
+                ranking_point.label("ranking_point"),
+                func.dense_rank().over(order_by=ranking_point.desc()).label("rank"),
+            )
+            if weekly_points is not None:
+                query = query.outerjoin(weekly_points, weekly_points.c.user_id == Users.id)
+            # 페이지네이션 시 동일 포인트의 정렬이 변경되지 않도록 tie-breaker (id) 추가
+            query = (
+                query.where(*conditions).order_by(ranking_point.desc(), col(Users.id).asc()).limit(limit).offset(offset)
+            )
 
             result = await session.execute(query)
             rankings = [
@@ -518,6 +502,10 @@ def _get_weekly_ranking_period() -> tuple[datetime, datetime, str]:
     response_model=ResponseModel[list[RankingResponse]],
     responses={
         200: {"description": "정상 처리"},
+        400: {
+            "model": ErrorResponse,
+            "description": "지원하지 않는 랭킹 대상",
+        },
         403: {
             "model": ErrorResponse,
             "description": "권한이 없음",
@@ -539,7 +527,59 @@ async def get_ranking(
     if not user.has_permission(UserPermission.VIEW_RANK):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied.")
 
+    if user_type not in (UserType.student, UserType.teacher):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="type must be student or teacher.",
+        )
+
     return await _get_ranking(user_type, period, response, limit, offset)
+
+
+@router.get(
+    "/ranking/student",
+    response_model=ResponseModel[list[RankingResponse]],
+    responses={
+        200: {"description": "정상 처리"},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
+    },
+    status_code=status.HTTP_200_OK,
+    summary="학생 포인트 랭킹 조회",
+    description="학생들의 누적 포인트를 기준으로 랭킹을 조회합니다. `/point/ranking?type=student`를 사용하세요.",
+    deprecated=True,
+)
+async def get_student_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+    user, _ = auth
+    if not user.has_permission(UserPermission.VIEW_RANK):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied.")
+
+    return await _get_ranking(UserType.student, RankingPeriod.total, response, limit, offset)
+
+
+@router.get(
+    "/ranking/teacher",
+    response_model=ResponseModel[list[RankingResponse]],
+    responses={
+        200: {"description": "정상 처리"},
+        403: {
+            "model": ErrorResponse,
+            "description": "권한이 없음",
+        },
+    },
+    status_code=status.HTTP_200_OK,
+    summary="교사 포인트 랭킹 조회",
+    description="교사들의 누적 포인트를 기준으로 랭킹을 조회합니다. `/point/ranking?type=teacher`를 사용하세요.",
+    deprecated=True,
+)
+async def get_teacher_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+    user, _ = auth
+    if not user.has_permission(UserPermission.VIEW_RANK):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied.")
+
+    return await _get_ranking(UserType.teacher, RankingPeriod.total, response, limit, offset)
 
 
 @router.get(
