@@ -9,7 +9,7 @@ from app.schemas.karaokes import Karaoke as SchemasKaraoke
 from app.schemas.core import SchemaCore
 from app.schemas.response import ResponseModel, ErrorResponse
 from app.core.service.karaoke import KaraokeParty, KaraokeMember, KaraokeBid
-from app.core.error import Conflict, PointInsufficient
+from app.core.error import Conflict, PointInsufficient, LimitExceeded
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.schemas.object import SubscribeObject, KaraokeSubData
@@ -628,7 +628,10 @@ class KaraokeInviteCreate(BaseModel):
         400: {"model": ErrorResponse, "description": "해산된 파티이거나, 파티장 자신을 초대함"},
         403: {"model": ErrorResponse, "description": "권한 없음 (파티장이 아님)"},
         404: {"model": ErrorResponse, "description": "파티나 초대할 유저를 찾을 수 없음"},
-        409: {"model": ErrorResponse, "description": "이미 이 경매의 파티에 소속되었거나 초대된 유저"},
+        409: {
+            "model": ErrorResponse,
+            "description": "이미 이 경매의 파티에 소속되었거나 초대된 유저또는 최대 초대 초과",
+        },
     },
     status_code=status.HTTP_204_NO_CONTENT,
     summary="파티원 초대",
@@ -660,7 +663,7 @@ async def invite_karaoke_party_member(auth_data: LoginDep, party_id: int, body: 
 
     try:
         await party.invite_user(invite_user)
-    except Conflict as e:
+    except (Conflict, LimitExceeded) as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
