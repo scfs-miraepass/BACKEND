@@ -112,6 +112,11 @@ class RedisKey:
 class Keys:
     class Auth:
         SESSION = RedisKey("session:{session_id}", settings.service.session.expire_seconds, "로그인 세션 → user_id")
+        USER_SESSIONS = RedisKey(
+            "session:user:{user_id}",
+            settings.service.session.expire_seconds,
+            "유저의 로그인 세션 ID 목록 (Set). 비밀번호 변경, 유저 삭제 시 모든 세션 종료에 사용",
+        )
 
     class User:
         ITEM = RedisKey("user:item:{user_id}", settings.service.session.expire_seconds, "유저 데이터")

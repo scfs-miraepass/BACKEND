@@ -16,6 +16,7 @@ from app.core import ServiceClient
 from app.core.cache_events import on_user_cache_changed, on_user_created, on_user_deleted
 from app.core.config import settings
 from app.core.redis_keys import DAY, HOUR, MINUTE, BoundKey, KeyPattern, Keys
+from app.core.sessions import revoke_user_sessions
 from app.core.service import History
 from app.schemas.point import PointHistory, PointHistoryType
 from app.schemas.users import Users, UserType, UserPermission
@@ -245,6 +246,7 @@ def delete_user(
             await session.commit()  # Commit before clearing cache
 
             await on_user_deleted(user_id, user.type)
+            await revoke_user_sessions(user_id)
             print(f"'{user.name}' 사용자(ID: {user.id})가 성공적으로 삭제되었습니다.")
 
     asyncio.run(run_with_client(_delete_user()))
@@ -276,6 +278,7 @@ def reset_password(
             await session.commit()  # Commit before clearing cache
 
             await on_user_cache_changed(user_id)
+            await revoke_user_sessions(user_id)
             print(f"'{user.name}' 사용자(ID: {user.id})의 비밀번호가 None으로 초기화되었습니다.")
 
     asyncio.run(run_with_client(_reset_password()))

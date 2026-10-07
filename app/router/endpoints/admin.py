@@ -6,6 +6,7 @@ from sqlmodel import col, func, select, update, delete
 
 from app.core import LoginDep, ServiceClient
 from app.core.cache_events import on_points_changed, on_user_created, on_user_deleted, on_user_profile_changed
+from app.core.sessions import revoke_user_sessions
 from app.schemas import (
     PointHistory,
     PointHistoryType,
@@ -386,3 +387,4 @@ async def delete_user(user_id: int, auth_data: LoginDep):
         client.logs.service.info(f"관리자(ID: {user.id})가 사용자(ID: {user_id})를 삭제했습니다.")
 
     await on_user_deleted(target_user.id, target_user.type)
+    await revoke_user_sessions(target_user.id)

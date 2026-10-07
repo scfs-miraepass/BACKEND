@@ -182,6 +182,53 @@ class RedisCore(_Type):
         return value
 
     @classmethod
+    async def sadd(cls, key: BoundKey, *members: str):
+        """Set에 값을 추가하고, Set의 TTL을 Key에 정의된 TTL로 갱신합니다."""
+        _require_key(key)
+        if key.ttl is None:
+            raise ValueError(f"'{key}'는 기본 TTL이 없어 Set으로 사용할 수 없습니다.")
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{key}'에 값을 추가할 수 없습니다.")
+            return
+
+        try:
+            async with cls.redis_instance.pipeline(transaction=True) as pipe:
+                pipe.sadd(key, *members)
+                pipe.expire(key, key.ttl)
+                await pipe.execute()
+            LoggerCore.redis.debug(f"'{key}'에 {len(members)}개의 값을 추가했습니다.")
+        except Exception as e:
+            LoggerCore.redis.error(f"'{key}'에 값을 추가하는데 실패했습니다: {e}", exc_info=True)
+
+    @classmethod
+    async def srem(cls, key: BoundKey, *members: str):
+        """Set에서 값을 제거합니다."""
+        _require_key(key)
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{key}'에서 값을 제거할 수 없습니다.")
+            return
+
+        try:
+            await cls.redis_instance.srem(key, *members)
+            LoggerCore.redis.debug(f"'{key}'에서 {len(members)}개의 값을 제거했습니다.")
+        except Exception as e:
+            LoggerCore.redis.error(f"'{key}'에서 값을 제거하는데 실패했습니다: {e}", exc_info=True)
+
+    @classmethod
+    async def smembers(cls, key: BoundKey) -> set[str]:
+        """Set의 모든 값을 가져옵니다. 실패한 경우 빈 Set을 반환합니다."""
+        _require_key(key)
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{key}'의 값을 가져올 수 없습니다.")
+            return set()
+
+        try:
+            return set(await cls.redis_instance.smembers(key))
+        except Exception as e:
+            LoggerCore.redis.error(f"'{key}'의 값을 가져오는데 실패했습니다: {e}", exc_info=True)
+            return set()
+
+    @classmethod
     async def get_version(cls, key: BoundKey) -> int:
         """버전 Key의 현재 값을 가져옵니다. 값이 없으면 0을 반환합니다."""
         value = await cls.get(key)

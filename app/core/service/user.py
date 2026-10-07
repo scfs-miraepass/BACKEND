@@ -28,6 +28,7 @@ from ..core import ServiceCore
 from ..error import Forbidden
 from ..redis_keys import Keys
 from ..security import get_password_hash
+from ..sessions import revoke_user_sessions
 from .history import History
 from .post import Post
 from .quest import Quest
@@ -67,7 +68,8 @@ class User(ServiceCore[Users], _Type):
 
     async def update_password(self, _new: str | None):
         """
-        사용자의 비밀번호를 업데이트 합니다
+        사용자의 비밀번호를 업데이트 합니다.
+        비밀번호가 변경되면 해당 사용자의 모든 로그인 세션이 종료됩니다.
 
         Args:
             _new: 새로운 비밀번호, None의 경우 초기 비밀번호 셋팅 상태로 설정합니다.
@@ -81,6 +83,7 @@ class User(ServiceCore[Users], _Type):
             user.password = get_password_hash(_new) if isinstance(_new, str) else None
         self._payload = user
         await on_user_cache_changed(self.id)
+        await revoke_user_sessions(self.id)
 
     async def create_history(
         self,
