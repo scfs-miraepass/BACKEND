@@ -42,7 +42,18 @@ else:
     _Type = object
 
 
+USER_CACHE_EXCLUDE = frozenset({"password"})
+"""유저 캐시(`Keys.User.ITEM`)에 저장하지 않는 필드"""
+
+
 class User(ServiceCore[Users], _Type):
+    def __getattribute__(self, name):
+        # 캐시에서 불러온 유저는 비밀번호 해시를 갖고 있지 않습니다.
+        # 이 경우 password가 None(비밀번호 미설정)으로 잘못 읽히지 않도록 접근 자체를 막습니다.
+        if name == "password" and "password" not in super().__getattribute__("_payload").__dict__:
+            raise RuntimeError("캐시에서 불러온 유저에는 비밀번호가 없습니다. cache=False로 다시 조회해야 합니다.")
+        return super().__getattribute__(name)
+
     @classmethod
     async def get_by_id(cls, user_id: int, **kwargs) -> User | None:
         """
@@ -59,6 +70,7 @@ class User(ServiceCore[Users], _Type):
             wrapper_cls=cls,
             model_cls=Users,
             key=Keys.User.ITEM(user_id=user_id),
+            cache_exclude=USER_CACHE_EXCLUDE,
             **kwargs,
         )
 

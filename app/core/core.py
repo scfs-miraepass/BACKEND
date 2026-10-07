@@ -100,6 +100,7 @@ class BaseCore:
         cache: bool = False,
         save_cache: bool = True,
         lock: bool = False,
+        cache_exclude: frozenset[str] = frozenset(),
     ) -> TWrapper | None:
         """
         ID로 데이터를 조회해 `wrapper_cls`로 감싸 반환합니다.
@@ -112,11 +113,17 @@ class BaseCore:
             cache: 캐시 사용 여부 (lock이 True 일경우 무시됨)
             save_cache: 조회 후 캐시 저장 여부
             lock: 조회후 Row-level Lock를 설정 여부
+            cache_exclude: 캐시에 저장하지 않을 필드 (비밀번호 해시 등 민감한 값)
         """
         if cache and not lock:
             cached = await RedisCore.get(key)
             if cached:
-                return wrapper_cls(payload=model_cls.model_validate(cached))
+                payload = model_cls.model_validate({**dict.fromkeys(cache_exclude), **cached})
+                # 캐시에 없는 필드는 객체에서 제거해 '불러오지 않은 값'으로 둡니다.
+                # None으로 남겨두면 이 객체를 session.merge()할 때 DB의 실제 값이 None으로 덮어써집니다.
+                for name in cache_exclude:
+                    payload.__dict__.pop(name, None)
+                return wrapper_cls(payload=payload)
 
         async with DatabaseCore.session() as session:
             if lock:
@@ -127,7 +134,7 @@ class BaseCore:
                 payload = await session.get(model_cls, _id)
 
         if save_cache and payload is not None:
-            await RedisCore.set(key, payload.model_dump())
+            await RedisCore.set(key, payload.model_dump(exclude=set(cache_exclude)))
         return wrapper_cls(payload=payload)
 
 

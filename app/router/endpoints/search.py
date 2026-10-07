@@ -5,6 +5,7 @@ from sqlmodel import col, select
 
 from app.core import LoginDep, ServiceClient
 from app.core.redis_keys import Keys
+from app.core.service.user import USER_CACHE_EXCLUDE
 from app.schemas import User, UserPermission, Users, UserSearch, UserType
 from app.schemas.response import ErrorResponse, ResponseModel
 
@@ -27,7 +28,7 @@ async def _load_users(user_ids: list[int]) -> list[User]:
         async with client.session as session:
             result = await session.execute(select(Users).where(col(Users.id).in_(missing)))
             for row in result.scalars().all():
-                await client.redis.set(Keys.User.ITEM(user_id=row.id), row.model_dump())
+                await client.redis.set(Keys.User.ITEM(user_id=row.id), row.model_dump(exclude=set(USER_CACHE_EXCLUDE)))
                 users[row.id] = User.model_validate(row.model_dump())
 
     # 조회 사이에 삭제된 유저는 제외합니다.
