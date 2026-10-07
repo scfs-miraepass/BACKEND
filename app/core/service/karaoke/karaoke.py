@@ -5,7 +5,13 @@ from json import loads, dumps
 
 from redis.asyncio.client import PubSub
 
-from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType, KaraokePartis
+from app.schemas import (
+    Karaokes,
+    KaraokeStatus,
+    KaraokeBids,
+    PointHistoryType,
+    KaraokePartis,
+)
 from app.schemas.core import SchemaCore
 from app.schemas.object import SubscribeObject, KaraokeSubData, KaraokePubType
 
@@ -78,7 +84,9 @@ class Karaoke(ServiceCore[Karaokes], _Type):
 
         await on_karaoke_deleted(self.id, self.date)
 
-        self.logs.service_karaoke.info(f"노래방 예약 삭제 - ID {self.id}({self.date} / {self.time})")
+        self.logs.service_karaoke.info(
+            f"노래방 예약 삭제 - ID {self.id}({self.date} / {self.time})"
+        )
 
     async def set_status(self, _status: KaraokeStatus):
         """
@@ -124,12 +132,18 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             KaraokeBid | None
         """
         async with self.session as session:
-            query = select(KaraokeBids).where(KaraokeBids.auction_id == self.id).order_by(col(KaraokeBids.id).desc())
+            query = (
+                select(KaraokeBids)
+                .where(KaraokeBids.auction_id == self.id)
+                .order_by(col(KaraokeBids.id).desc())
+            )
             row = (await session.execute(query)).scalars().first()
 
         return KaraokeBid(payload=row) if row is not None else None
 
-    async def add_bid(self, bidder: User, amount: int, party: KaraokeParty | None = None) -> KaraokeBid:
+    async def add_bid(
+        self, bidder: User, amount: int, party: KaraokeParty | None = None
+    ) -> KaraokeBid:
         """
         노래방 경매에 입찰합니다.
 
@@ -153,9 +167,14 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         async with self.session as session:
             # 동시 입찰로 인한 레이스 컨디션(중복 최고가 인정 등)을 막기 위해
             # 경매 Row에 락을 걸어 같은 경매에 대한 입찰 처리를 직렬화합니다.
-            lock_query = select(Karaokes).where(col(Karaokes.id) == self.id).with_for_update()
+            lock_query = (
+                select(Karaokes).where(col(Karaokes.id) == self.id).with_for_update()
+            )
             locked_karaoke = (await session.execute(lock_query)).scalar_one_or_none()
-            if locked_karaoke is None or locked_karaoke.status != KaraokeStatus.IN_PROGRESS:
+            if (
+                locked_karaoke is None
+                or locked_karaoke.status != KaraokeStatus.IN_PROGRESS
+            ):
                 raise ValueError("경매가 진행중이 아닙니다.")
 
             # 락을 잡은 상태에서 DB 기준 최신(최고) 입찰을 다시 조회합니다.
@@ -165,10 +184,14 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             if highest is None:
                 # 첫 입찰은 최소 입찰가 이상이기만 하면 됩니다.
                 if amount < self.min_point:
-                    raise ValueError(f"입찰 금액은 최소 입찰가({self.min_point}) 이상이어야 합니다.")
+                    raise ValueError(
+                        f"입찰 금액은 최소 입찰가({self.min_point}) 이상이어야 합니다."
+                    )
             elif amount <= highest.amount:
                 # 이후 입찰은 직전 최고가를 반드시 넘어야 합니다. (동일 금액으로 최고가를 가져갈 수 없음)
-                raise ValueError(f"입찰 금액은 현재 최고가({highest.amount})보다 커야 합니다.")
+                raise ValueError(
+                    f"입찰 금액은 현재 최고가({highest.amount})보다 커야 합니다."
+                )
 
             # 차감할 포인트가 있는지 확인
             for user, deduct_amount in deductions:
@@ -189,7 +212,10 @@ class Karaoke(ServiceCore[Karaokes], _Type):
 
             # 입찰 기록 생성
             obj = KaraokeBids(
-                auction_id=self.id, bidder_id=bidder.id, party_id=party.id if party is not None else None, amount=amount
+                auction_id=self.id,
+                bidder_id=bidder.id,
+                party_id=party.id if party is not None else None,
+                amount=amount
             )
             session.add(obj)
             await session.flush()
@@ -199,7 +225,9 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         # 최고가 TTL은 종료 시간까지로 하며, 최소 60초
         # end_time은 DB 시간대 기준의 naive 값이므로 시간대를 맞춘 뒤 계산해야 합니다.
         # (맞추지 않으면 남은 시간이 항상 음수가 되어 TTL이 늘 최소값 60초로 떨어집니다)
-        remaining = (SchemaCore.sync_timezone(self.end_time) - SchemaCore.now()).total_seconds()
+        remaining = (
+            SchemaCore.sync_timezone(self.end_time) - SchemaCore.now()
+        ).total_seconds()
         ttl = max(60, int(remaining) + 60)
 
         await self.redis.set(Keys.Karaoke.HIGHEST(karaoke_id=self.id), obj.model_dump(), ttl=ttl)  # 최고 입찰 갱신
@@ -227,7 +255,9 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         async with self.session as session:
             user_party = await leader.get_party(self)
             if user_party is not None:
-                raise ValueError("이미 이 경매에서 파티장이거나 파티에 소속되어 있습니다.")
+                raise ValueError(
+                    "이미 이 경매에서 파티장이거나 파티에 소속되어 있습니다."
+                )
 
             party = KaraokePartis(auction_id=self.id, leader_id=leader.id)
             session.add(party)
@@ -247,7 +277,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
     ) -> tuple[Task, PubSub]: ...
 
     async def subscribe(
-        self, callback: Callable[[SubscribeObject[KaraokeSubData]], Awaitable] | None = None
+        self,
+        callback: Callable[[SubscribeObject[KaraokeSubData]], Awaitable] | None = None,
     ) -> PubSub | tuple[Task, PubSub]:
         pubsub = self.redis.pubsub()
         await pubsub.subscribe(self.channel)
@@ -306,7 +337,10 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         cached_bids = await self.redis.get(cache_key)
 
         if cached_bids is not None:
-            bids_history = [KaraokeBid(payload=KaraokeBids.model_validate(item)) for item in cached_bids]
+            bids_history = [
+                KaraokeBid(payload=KaraokeBids.model_validate(item))
+                for item in cached_bids
+            ]
         else:
             async with self.session as session:
                 query = (
