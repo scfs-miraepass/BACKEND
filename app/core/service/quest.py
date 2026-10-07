@@ -3,10 +3,10 @@ from typing import TYPE_CHECKING, TypedDict, Unpack
 
 from sqlmodel import col, delete, func, select
 
-from app.schemas import PointHistoryType, QuestCompletion, Quests, Users
+from app.schemas import PointHistoryType, QuestAccept, QuestCompletion, Quests, Users
 
 from ..core import ServiceCore
-from ..error import ExpiredError, LimitExceeded
+from ..error import ExpiredError, LimitExceeded, NotFound
 
 if TYPE_CHECKING:
     from .user import User
@@ -29,6 +29,8 @@ class Quest(ServiceCore[Quests], _Type):
         await self.redis.delete(f"quest:{self.id}")
         await self.redis.delete("quests_count")
         await self.redis.delete_pattern("quests:*")
+        await self.redis.delete(f"quest_acceptances:{self.id}")
+        await self.redis.delete_pattern(f"quest_accepted:{self.id}:*")
 
     async def delete(self):
         """
@@ -71,6 +73,10 @@ class Quest(ServiceCore[Quests], _Type):
             raise ExpiredError("Quest duration ended.")
 
         async with self.session as session:
+            accepted = await self.has_accepted(user)
+            if not accepted:
+                raise NotFound("Not accepted.")
+
             count = await self.complete_count(user)
             if count >= self.max_repeat:
                 raise LimitExceeded("Maximum participation limit reached.")
@@ -87,9 +93,9 @@ class Quest(ServiceCore[Quests], _Type):
             )
             session.add(QuestCompletion(quest_id=self.id, user_id=user.id))
 
-        self.logs.service_quest.info(
-            f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료"
-        )
+        await self.redis.delete(f"quest_completed_count:{self.id}:{user.id}")
+
+        self.logs.service_quest.info(f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료")
 
     async def complete_count(self, user: User) -> int:
         """
@@ -101,6 +107,11 @@ class Quest(ServiceCore[Quests], _Type):
         Returns:
             Int
         """
+        cache_key = f"quest_completed_count:{self.id}:{user.id}"
+        cached = await self.redis.get(cache_key)
+        if cached is not None:
+            return int(cached)
+
         async with self.session as session:
             query = (
                 select(func.count())
@@ -112,4 +123,106 @@ class Quest(ServiceCore[Quests], _Type):
             )
             result = await session.execute(query)
             count = result.scalar_one()
+
+        await self.redis.set(cache_key, count, ttl=60 * 5)
         return count
+
+    async def list_acceptances(self) -> list[Users]:
+        """
+        수락한 유저 목록을 반환합니다.
+
+        Returns:
+            List[Users]
+        """
+        cache_key = f"quest_acceptances:{self.id}"
+        cached = await self.redis.get(cache_key)
+        if cached is not None:
+            return [Users(**item) for item in cached]
+
+        async with self.session as session:
+            query = (
+                select(Users)
+                .join(QuestAccept, col(QuestAccept.user_id) == Users.id)
+                .where(col(QuestAccept.quest_id) == self.id)
+            )
+            result = await session.execute(query)
+            users = list(result.scalars().all())
+
+        await self.redis.set(cache_key, [item.model_dump() for item in users], ttl=60 * 5)
+        return users
+
+    async def has_accepted(self, user: User) -> bool:
+        """
+        해당 유저가 퀘스트를 수락했는지 여부를 반환합니다.
+
+        Args:
+            user: 유저
+
+        Returns:
+            Bool
+        """
+        cache_key = f"quest_accepted:{self.id}:{user.id}"
+        cached = await self.redis.get(cache_key)
+        if cached is not None:
+            return cached in ("1", 1, True, "true")
+
+        async with self.session as session:
+            query = (
+                select(func.count())
+                .select_from(QuestAccept)
+                .where(
+                    QuestAccept.quest_id == self.id,
+                    QuestAccept.user_id == user.id,
+                )
+            )
+            result = await session.execute(query)
+            count = result.scalar_one()
+
+        has_acc = count > 0
+        await self.redis.set(cache_key, "1" if has_acc else "0", ttl=60 * 5)
+        return has_acc
+
+    async def accept(self, user: User):
+        """
+        학생이 퀘스트를 수락하도록 기록합니다. 중복 수락은 허용하지 않습니다.
+
+        Args:
+            user: 유저
+
+        Raises:
+            ServiceError.LimitExceeded: 이미 수락하였을 경우 발생합니다.
+        """
+        async with self.session as session:
+            accepted = await self.has_accepted(user)
+            if accepted:
+                raise LimitExceeded("Already accepted.")
+
+            session.add(QuestAccept(quest_id=self.id, user_id=user.id))
+            await session.flush()
+
+        await self._cache_clear()
+        self.logs.service_quest.info(f"퀘스트 수락 - {user.id}({user.name}) 가 {self.id} 수락")
+
+    async def cancel_accept(self, user: User):
+        """
+        해당 유저가 퀘스트 수락을 취소처리 합니다.
+
+        Args:
+            user: 유저
+
+        Raises:
+            ServiceError.NotFound: 수락하지 않았을 경우 발생합니다.
+        """
+        async with self.session as session:
+            accepted = await self.has_accepted(user)
+            if not accepted:
+                raise NotFound("Not accepted.")
+
+            exc = delete(QuestAccept).where(
+                col(QuestAccept.quest_id) == self.id,
+                col(QuestAccept.user_id) == user.id,
+            )
+            await session.execute(exc)
+
+        await self._cache_clear()
+        self.logs.service_quest.info(f"퀘스트 수락 취소 - {user.id}({user.name}) 가 {self.id} 취소")
