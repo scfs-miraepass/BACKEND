@@ -4,6 +4,8 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from app.core import LoginDep, ServiceClient, settings
+from app.core.cache_events import on_user_cache_changed
+from app.core.redis_keys import Keys
 from app.core.security import verify_password
 from app.schemas import UserType
 from app.schemas.response import ErrorResponse, ResponseModel
@@ -61,20 +63,14 @@ async def login(
 ):
     user = await client.get_user(form.id, cache=True)
 
-    if (
-        not user
-        or not user.password
-        or not verify_password(form.password, user.password)
-    ):
+    if not user or not user.password or not verify_password(form.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
 
     session_id = str(uuid4())
-    await client.redis.set(
-        f"session:{session_id}", user.id, ttl=settings.service.session.expire_seconds
-    )
+    await client.redis.set(Keys.Auth.SESSION(session_id=session_id), user.id)
     _set_session_cookie(response, session_id)
 
     return ResponseModel[User](success=True, data=user)
@@ -90,12 +86,13 @@ async def login(
 async def logout(response: Response, request: Request):
     session_id = request.cookies.get(settings.service.session.cookie_name)
     if session_id:
-        user_id = await client.redis.get(f"session:{session_id}")
+        session_key = Keys.Auth.SESSION(session_id=session_id)
+        user_id = await client.redis.get(session_key)
         # Redis에서 세션 삭제
-        await client.redis.delete(f"session:{session_id}")
+        await client.redis.delete(session_key)
         if user_id:
             # 유저 정보 캐시도 함께 삭제 (선택 사항이지만 보안상 권장)
-            await client.redis.delete(f"user:{user_id}")
+            await on_user_cache_changed(user_id)
 
     # 쿠키 삭제
     response.delete_cookie(settings.service.session.cookie_name)
@@ -122,17 +119,16 @@ async def get_current_user(
     user, session_id = auth_data
 
     # 1. 현재 세션의 남은 TTL(수명) 확인
-    current_ttl = await client.redis.ttl(f"session:{session_id}")
+    session_key = Keys.Auth.SESSION(session_id=session_id)
+    current_ttl = await client.redis.ttl(session_key)
 
     # 2. 남은 시간이 설정된 만료 시간의 50% 미만일 때만 연장 (조건부 갱신)
     # (current_ttl이 정상적인 양수일 때만 동작하도록 예외 처리 포함)
     if 0 <= current_ttl < (settings.service.session.expire_seconds * 0.5):
         # 3. Redis 파이프라인을 사용하여 네트워크 왕복(RTT) 최소화
         async with client.redis.pipeline() as pipe:
-            pipe.expire(
-                f"session:{session_id}", settings.service.session.expire_seconds
-            )
-            pipe.expire(f"user:{user.id}", settings.service.session.expire_seconds)
+            pipe.expire(session_key, settings.service.session.expire_seconds)
+            pipe.expire(Keys.User.ITEM(user_id=user.id), settings.service.session.expire_seconds)
             await pipe.execute()
 
         # 쿠키 갱신 (만료 시간 초기화)
@@ -214,7 +210,7 @@ async def change_password(form: ChangePasswordForm, auth_data: LoginDep):
     # 새 비밀번호 해싱 및 저장
     await user.update_password(form.new_password)
 
-    await client.redis.delete(f"session:{session_id}")
+    await client.redis.delete(Keys.Auth.SESSION(session_id=session_id))
 
 
 @router.get(

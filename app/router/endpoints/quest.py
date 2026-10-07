@@ -1,18 +1,20 @@
 from datetime import datetime
 from math import ceil
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlmodel import func, select
 
 from app.core import LoginDep, ServiceClient
 from app.core.error import ExpiredError, LimitExceeded
+from app.core.redis_keys import Keys
 from app.schemas import Quests, UserPermission
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/quest", tags=["quest"])
 client = ServiceClient()
 QUEST_MAX_POINT_LIMIT = 300
+MAX_PAGE_LIMIT = 100
 
 
 class QuestOperation(BaseModel):
@@ -94,8 +96,8 @@ async def create_quest(
 async def list_quests(
     response: Response,
     auth_data: LoginDep,
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(20, ge=1, le=MAX_PAGE_LIMIT, description=f"페이지 당 데이터 갯수 (최대 {MAX_PAGE_LIMIT})"),
+    offset: int = Query(0, ge=0),
 ):
     _user, _ = auth_data
 
@@ -105,7 +107,7 @@ async def list_quests(
             detail="Permission denied.",
         )
 
-    count_cache_key = "quests_count"
+    count_cache_key = Keys.Quest.COUNT()
     cached_count = await client.redis.get(count_cache_key)
 
     async with client.session as session:
@@ -115,9 +117,9 @@ async def list_quests(
             count_query = select(func.count()).select_from(Quests)
             count_result = await session.execute(count_query)
             count = count_result.scalar() or 0
-            await client.redis.set(count_cache_key, count, ttl=60 * 5)
+            await client.redis.set(count_cache_key, count)
 
-        quests_cache_key = f"quests:{limit}:{offset}"
+        quests_cache_key = Keys.Quest.PAGE(limit=limit, offset=offset)
         cached_quests = await client.redis.get(quests_cache_key)
 
         if cached_quests is not None:
@@ -129,7 +131,7 @@ async def list_quests(
             result = await session.execute(query)
             quests = list(result.scalars().all())
             quests_data = [item.model_dump() for item in quests]
-            await client.redis.set(quests_cache_key, quests_data, ttl=60 * 5)
+            await client.redis.set(quests_cache_key, quests_data)
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
@@ -163,9 +165,7 @@ async def get_quest(quest_id: int, auth_data: LoginDep):
 
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
     return ResponseModel(success=True, data=quest)
 
@@ -191,13 +191,9 @@ async def update_quest(quest_id: int, operation: QuestUpdate, auth_data: LoginDe
     user, _ = auth_data
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
-    if quest.author_id != user.id and not user.has_permission(
-        UserPermission.MANAGE_QUEST
-    ):
+    if quest.author_id != user.id and not user.has_permission(UserPermission.MANAGE_QUEST):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the quest creator can update this quest.",
@@ -232,13 +228,9 @@ async def delete_quest(quest_id: int, auth_data: LoginDep):
     user, _ = auth_data
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
-    if quest.author_id != user.id and not user.has_permission(
-        UserPermission.MANAGE_QUEST
-    ):
+    if quest.author_id != user.id and not user.has_permission(UserPermission.MANAGE_QUEST):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the quest creator can delete this quest.",
@@ -276,16 +268,12 @@ async def complete_quest(quest_id: int, auth_data: LoginDep):
 
     quest = await client.get_quest(quest_id, cache=True)
     if not quest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quest not found.")
 
     try:
         await quest.complete(user)
     except ExpiredError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Quest is expired."
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quest is expired.")
     except LimitExceeded:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

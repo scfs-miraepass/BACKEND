@@ -4,8 +4,10 @@ from sqlmodel import col, delete
 
 from app.schemas import PointHistory, Users
 
+from ..cache_events import on_point_history_deleted
 from ..core import ServiceCore
 from ..error import NotFound
+from ..redis_keys import Keys
 
 if TYPE_CHECKING:
     _Type = PointHistory
@@ -26,7 +28,11 @@ class History(ServiceCore[PointHistory], _Type):
             History | None
         """
         return await cls._get_item(
-            _id=history_id, wrapper_cls=cls, model_cls=PointHistory, prefix="point_history", ttl=60 * 5, **kwargs
+            _id=history_id,
+            wrapper_cls=cls,
+            model_cls=PointHistory,
+            key=Keys.PointHistory.ITEM(history_id=history_id),
+            **kwargs,
         )
 
     async def delete(self, *, revert: bool = True, total_revert: bool = True):
@@ -62,14 +68,7 @@ class History(ServiceCore[PointHistory], _Type):
                 if total_revert and self.changed_amount > 0:
                     user.total_point = max(0, user.total_point - self.changed_amount)
 
-                # 유저 데이터(포인트, 총합 포인트) 값 변경에 따른 캐시 삭제
-                await self.redis.delete(f"user:{user.id}")
-
-        # 포인트 기록 변경에 따른 캐시 삭제 (주간 랭킹은 revert 여부와 관계없이 기록에 의존)
-        await self.redis.delete_pattern("ranking:student:*")
-        await self.redis.delete_pattern("ranking:teacher:*")
-        await self.redis.delete(f"point_history:{self.id}")
-        await self.redis.delete(f"point_history_count:{self.user_id}")
-        await self.redis.delete_pattern(f"point_history:{self.user_id}:*")
+        # 포인트 기록 변경에 따른 캐시 삭제 (주간 랭킹은 revert 여부와 관계없이 기록에 의존하므로 모든 랭킹 삭제)
+        await on_point_history_deleted(self.id, self.user_id)
 
         self.logs.service_post.debug(f"포인트 기록 삭제 - ID {self.id}")

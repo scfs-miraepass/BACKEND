@@ -8,6 +8,7 @@ from sqlmodel import SQLModel, select
 from .database import DatabaseCore
 from .loggers import LoggerCore
 from .redis import RedisCore
+from .redis_keys import BoundKey
 
 if TYPE_CHECKING:
     from .service.user import User
@@ -95,14 +96,25 @@ class BaseCore:
         _id: int,
         wrapper_cls: Type[TWrapper],
         model_cls: Type[TModel],
-        prefix: str,
+        key: BoundKey,
         cache: bool = False,
         save_cache: bool = True,
         lock: bool = False,
-        ttl: int = 60,
     ) -> TWrapper | None:
+        """
+        ID로 데이터를 조회해 `wrapper_cls`로 감싸 반환합니다.
+
+        Args:
+            _id: 조회할 데이터의 ID
+            wrapper_cls: 반환할 서비스 클래스
+            model_cls: 조회할 모델 클래스
+            key: 캐시 Key (예: `Keys.User.ITEM(user_id=_id)`)
+            cache: 캐시 사용 여부 (lock이 True 일경우 무시됨)
+            save_cache: 조회 후 캐시 저장 여부
+            lock: 조회후 Row-level Lock를 설정 여부
+        """
         if cache and not lock:
-            cached = await RedisCore.get(f"{prefix}:{_id}")
+            cached = await RedisCore.get(key)
             if cached:
                 return wrapper_cls(payload=model_cls.model_validate(cached))
 
@@ -115,7 +127,7 @@ class BaseCore:
                 payload = await session.get(model_cls, _id)
 
         if save_cache and payload is not None:
-            await RedisCore.set(f"{prefix}:{getattr(payload, 'id')}", payload.model_dump(), ttl=ttl)
+            await RedisCore.set(key, payload.model_dump())
         return wrapper_cls(payload=payload)
 
 

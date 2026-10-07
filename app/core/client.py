@@ -1,6 +1,7 @@
 from app.schemas import Posts, Quests
 
 from .core import BaseCore
+from .redis_keys import Keys
 from .service import History, Karaoke, Post, Quest, User
 
 
@@ -60,8 +61,7 @@ class ServiceClient(BaseCore):
             _id=_id,
             wrapper_cls=Post,
             model_cls=Posts,
-            prefix="post",
-            ttl=60 * 60 * 24,
+            key=Keys.Post.ITEM(post_id=_id),
             cache=cache,
             save_cache=save_cache,
             lock=lock,
@@ -92,8 +92,7 @@ class ServiceClient(BaseCore):
             _id=_id,
             wrapper_cls=Quest,
             model_cls=Quests,
-            prefix="quest",
-            ttl=60 * 5,
+            key=Keys.Quest.ITEM(quest_id=_id),
             cache=cache,
             save_cache=save_cache,
             lock=lock,

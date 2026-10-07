@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import col, func, select
 
 from app.core import LoginDep, ServiceClient
+from app.core.redis_keys import BoundKey, Keys
 from app.schemas.core import SchemaCore
 from app.schemas import PointHistory, PointHistoryType, UserPermission, Users, UserType
 from app.schemas.response import ErrorResponse, ResponseModel
@@ -17,7 +18,9 @@ router = APIRouter(prefix="/point", tags=["users", "point"])
 client = ServiceClient()
 TEACHER_POINT_LIMIT = 1000
 STUDENT_POINT_LIMIT = 1000
+MAX_PAGE_LIMIT = 100
 WEEKLY_RANKING_TIMEZONE = ZoneInfo("Asia/Seoul")
+POINT_LIMIT_TIMEZONE = ZoneInfo("Asia/Seoul")
 
 
 class RankingPeriod(StrEnum):
@@ -46,6 +49,53 @@ class RankingResponse(BaseModel):
     rank: int = Field(description="현재 순위")
 
 
+type LimitReservation = tuple[BoundKey, datetime, int]
+
+
+def _grant_limit_key(user_id: int) -> tuple[BoundKey, datetime]:
+    """교사의 이번 주(월요일 0시 시작) 지급 한도 Key와 만료 시각"""
+    now = datetime.now(POINT_LIMIT_TIMEZONE)
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    return Keys.PointLimit.GRANT(user_id=user_id, week=week_start.date().isoformat()), week_start + timedelta(days=7)
+
+
+def _student_limit_key(user_id: int) -> tuple[BoundKey, datetime]:
+    """학생의 오늘 수령 한도 Key와 만료 시각"""
+    day_start = datetime.now(POINT_LIMIT_TIMEZONE).replace(hour=0, minute=0, second=0, microsecond=0)
+    return Keys.PointLimit.STUDENT(user_id=user_id, date=day_start.date().isoformat()), day_start + timedelta(days=1)
+
+
+async def _remaining_limit(key: BoundKey, limit: int) -> int:
+    used = await client.redis.get(key)
+    return max(0, limit - (used or 0))
+
+
+async def _reserve_limit(key: BoundKey, expire_at: datetime, limit: int, amount: int, *, partial: bool = False) -> int:
+    """
+    한도에서 amount만큼을 원자적으로 사용 처리합니다.
+
+    Args:
+        partial: True이면 남은 한도만큼만 사용하고, False이면 한도를 넘는 경우 아무것도 사용하지 않습니다.
+
+    Returns:
+        int: 실제로 사용 처리된 양
+    """
+    used = await client.redis.incrby(key, amount, expire_at=expire_at)
+    excess = min(amount, max(0, used - limit))
+    if excess == 0:
+        return amount
+
+    rollback = excess if partial else amount
+    await client.redis.incrby(key, -rollback, expire_at=expire_at)
+    return amount - rollback
+
+
+async def _release_limits(reservations: list[LimitReservation]):
+    for key, expire_at, amount in reservations:
+        if amount > 0:
+            await client.redis.incrby(key, -amount, expire_at=expire_at)
+
+
 @router.get(
     "/limit/{target_user_id}",
     responses={
@@ -66,19 +116,14 @@ class RankingResponse(BaseModel):
 )
 async def get_limit(auth_data: LoginDep, target_user_id: int):
     user, _ = auth_data
-    student_limit = await client.redis.get(f"point_limit:student:{target_user_id}")
-    if student_limit is None:
-        student_limit = STUDENT_POINT_LIMIT
+    student_limit = await _remaining_limit(_student_limit_key(target_user_id)[0], STUDENT_POINT_LIMIT)
     if user.has_permission(UserPermission.NO_LIMIT_POINT):
         return ResponseModel[GetLimitResponse](
             success=True,
             data=GetLimitResponse(limit=TEACHER_POINT_LIMIT, target_limit=student_limit),
         )
 
-    limit_key = f"point_limit:grant:{user.id}"
-    limit = await client.redis.get(limit_key)
-    if limit is None:
-        limit = TEACHER_POINT_LIMIT
+    limit = await _remaining_limit(_grant_limit_key(user.id)[0], TEACHER_POINT_LIMIT)
 
     return ResponseModel[GetLimitResponse](success=True, data=GetLimitResponse(limit=limit, target_limit=student_limit))
 
@@ -107,10 +152,7 @@ async def get_limit_session(
     user, _ = auth_data
     if user.has_permission(UserPermission.NO_LIMIT_POINT):
         return ResponseModel[int](success=True, data=TEACHER_POINT_LIMIT)
-    limit_key = f"point_limit:grant:{user.id}"
-    limit = await client.redis.get(limit_key)
-    if limit is None:
-        limit = TEACHER_POINT_LIMIT
+    limit = await _remaining_limit(_grant_limit_key(user.id)[0], TEACHER_POINT_LIMIT)
 
     return ResponseModel[int](success=True, data=limit)
 
@@ -155,66 +197,65 @@ async def grant_points(
             detail="Permission denied.",
         )
 
-    if not user.has_permission(UserPermission.NO_LIMIT_POINT):
-        limit_key = f"point_limit:grant:{user.id}"
-        limit = await client.redis.get(limit_key)
-        if limit is None:
-            limit = TEACHER_POINT_LIMIT
-        use_limit = limit - operation.amount
-        if use_limit < 0:
+    no_limit = user.has_permission(UserPermission.NO_LIMIT_POINT)
+    grant_key, grant_expire = _grant_limit_key(user.id)
+    student_key, student_expire = _student_limit_key(operation.target_user_id)
+
+    # 한도는 지급 전에 원자적으로 먼저 사용 처리하고, 이후 처리에 실패하면 되돌립니다.
+    # (조회 후 저장하는 방식은 동시 요청시 한도를 초과해 지급될 수 있음)
+    reservations: list[LimitReservation] = []
+    if not no_limit:
+        if not await _reserve_limit(grant_key, grant_expire, TEACHER_POINT_LIMIT, operation.amount):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="The teacher's weekly point limit has been exceeded.",
             )
+        reservations.append((grant_key, grant_expire, operation.amount))
 
-        await client.redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 7)
-
-    limit_key = f"point_limit:student:{operation.target_user_id}"
-    limit = await client.redis.get(limit_key)
-    if limit is None:
-        limit = STUDENT_POINT_LIMIT
-    use_limit = limit - operation.amount
-    if use_limit < 0:
+    if not await _reserve_limit(student_key, student_expire, STUDENT_POINT_LIMIT, operation.amount):
+        await _release_limits(reservations)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="The target user's daily point limit has been exceeded.",
         )
+    reservations.append((student_key, student_expire, operation.amount))
 
-    async with client.session:
-        target_user = await client.get_user(operation.target_user_id, lock=True)
-        if target_user is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found.")
+    try:
+        async with client.session:
+            target_user = await client.get_user(operation.target_user_id, lock=True)
+            if target_user is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found.")
 
-        reason = f"{user.name} 선생님" if user.type == UserType.teacher else user.name
+            reason = f"{user.name} 선생님" if user.type == UserType.teacher else user.name
 
-        await target_user.point_grant(
-            amount=operation.amount,
-            reason=reason,
-            memo=operation.memo,
-            type=operation.change_type,
-        )
+            await target_user.point_grant(
+                amount=operation.amount,
+                reason=reason,
+                memo=operation.memo,
+                type=operation.change_type,
+            )
 
-        back_limit_key = f"point_limit:grant:{user.id}"
-        back_limit: int = TEACHER_POINT_LIMIT
-        if user.has_permission(UserPermission.NO_LIMIT_POINT):
-            _ = await client.redis.get(back_limit_key)
-            if _ is not None:
-                back_limit = _
+            # 교사가 포인트를 지급하는 경우, 교사에게도 지급
+            # 한도가 있는 교사는 위에서 이미 주간 한도를 사용했으므로 그대로 지급하고,
+            # 한도가 없는 교사는 지급은 무제한이지만 본인 보상은 주간 한도 내에서만 받습니다.
+            if user.type == UserType.teacher:
+                back_amount = operation.amount
+                if no_limit:
+                    back_amount = await _reserve_limit(
+                        grant_key, grant_expire, TEACHER_POINT_LIMIT, operation.amount, partial=True
+                    )
+                    reservations.append((grant_key, grant_expire, back_amount))
 
-        # 교사가 포인트를 지급하는 경우, 교사에게도 지급
-        if user.type == UserType.teacher:
-            back_amount = min(back_limit, operation.amount)
-            if back_amount > 0:
-                await user.point_grant(
-                    amount=back_amount,
-                    reason=f"{target_user.name} 포인트 지급",
-                    type=PointHistoryType.grant,
-                    memo=operation.memo,
-                )
-
-                if user.has_permission(UserPermission.NO_LIMIT_POINT):
-                    await client.redis.set(back_limit_key, back_limit - back_amount, ttl=60 * 60 * 24 * 7)
-    await client.redis.set(limit_key, use_limit, ttl=60 * 60 * 24 * 1)
+                if back_amount > 0:
+                    await user.point_grant(
+                        amount=back_amount,
+                        reason=f"{target_user.name} 포인트 지급",
+                        type=PointHistoryType.grant,
+                        memo=operation.memo,
+                    )
+    except BaseException:
+        await _release_limits(reservations)
+        raise
 
 
 @router.post(
@@ -300,8 +341,8 @@ async def deduct_points(
 async def get_history_list(
     response: Response,
     auth_data: LoginDep,
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(20, ge=1, le=MAX_PAGE_LIMIT, description=f"페이지 당 데이터 갯수 (최대 {MAX_PAGE_LIMIT})"),
+    offset: int = Query(0, ge=0),
 ):
     user, _ = auth_data
 
@@ -312,7 +353,7 @@ async def get_history_list(
         )
 
     # 1. 총 개수 조회 (캐싱 적용)
-    count_cache_key = f"point_history_count:{user.id}"
+    count_cache_key = Keys.PointHistory.COUNT(user_id=user.id)
     cached_count = await client.redis.get(count_cache_key)
 
     async with client.session as session:
@@ -324,10 +365,10 @@ async def get_history_list(
             result = await session.execute(query)
             count = result.scalar() or 0
             # 캐시 저장 (TTL: 1일)
-            await client.redis.set(count_cache_key, count, ttl=60 * 60 * 24)
+            await client.redis.set(count_cache_key, count)
 
         # 2. 히스토리 목록 조회
-        history_cache_key = f"point_history:{user.id}:{limit}:{offset}"
+        history_cache_key = Keys.PointHistory.PAGE(user_id=user.id, limit=limit, offset=offset)
         cached_history = await client.redis.get(history_cache_key)
 
         if cached_history is not None:
@@ -346,7 +387,7 @@ async def get_history_list(
             historys = list(result.scalars().all())
             # 캐시 저장 (TTL: 1일)
             history_data = [item.model_dump() for item in historys]
-            await client.redis.set(history_cache_key, history_data, ttl=60 * 60 * 24)
+            await client.redis.set(history_cache_key, history_data)
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
@@ -386,7 +427,7 @@ async def get_history(auth_data: LoginDep, target_id: int):
         )
 
     async with client.session:
-        history = await client.get_history(target_id)
+        history = await client.get_history(target_id, cache=True)
         if history is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Point history not found")
 
@@ -410,8 +451,8 @@ async def _get_ranking(
         week_key = "all"
 
     type_str = "student" if user_type == UserType.student else "teacher"
-    count_cache_key = f"ranking_count:{type_str}"
-    ranking_cache_key = f"ranking:{type_str}:{period}:{week_key}:{limit}:{offset}"
+    count_cache_key = Keys.Ranking.COUNT(type=type_str)
+    ranking_cache_key = Keys.Ranking.PAGE(type=type_str, period=period, week=week_key, limit=limit, offset=offset)
 
     conditions: Any = [Users.type == user_type]
     if user_type == UserType.teacher:
@@ -426,7 +467,7 @@ async def _get_ranking(
             query = select(func.count()).select_from(Users).where(*conditions)
             result = await session.execute(query)
             count = result.scalar() or 0
-            await client.redis.set(count_cache_key, count, ttl=60 * 5)  # 5분 캐시
+            await client.redis.set(count_cache_key, count)
 
         cached_ranking = await client.redis.get(ranking_cache_key)
 
@@ -480,7 +521,7 @@ async def _get_ranking(
             ]
 
             ranking_data = [item.model_dump() for item in rankings]
-            await client.redis.set(ranking_cache_key, ranking_data, ttl=60 * 5)  # 5분 캐시
+            await client.redis.set(ranking_cache_key, ranking_data)
 
     max_page = str(ceil(count / limit)) if limit > 0 else "1"
     response.headers["X-MAX-PAGE"] = max_page
@@ -520,8 +561,8 @@ async def get_ranking(
     response: Response,
     user_type: UserType = Query(UserType.student, alias="type", description="랭킹 대상 (student, teacher)"),
     period: RankingPeriod = Query(RankingPeriod.total, description="랭킹 기간 (total, weekly)"),
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(20, ge=1, le=MAX_PAGE_LIMIT, description=f"페이지 당 데이터 갯수 (최대 {MAX_PAGE_LIMIT})"),
+    offset: int = Query(0, ge=0),
 ):
     user, _ = auth
     if not user.has_permission(UserPermission.VIEW_RANK):
@@ -551,7 +592,12 @@ async def get_ranking(
     description="학생들의 누적 포인트를 기준으로 랭킹을 조회합니다. `/point/ranking?type=student`를 사용하세요.",
     deprecated=True,
 )
-async def get_student_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+async def get_student_ranking(
+    auth: LoginDep,
+    response: Response,
+    limit: int = Query(20, ge=1, le=MAX_PAGE_LIMIT),
+    offset: int = Query(0, ge=0),
+):
     user, _ = auth
     if not user.has_permission(UserPermission.VIEW_RANK):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied.")
@@ -574,7 +620,12 @@ async def get_student_ranking(auth: LoginDep, response: Response, limit: int = 2
     description="교사들의 누적 포인트를 기준으로 랭킹을 조회합니다. `/point/ranking?type=teacher`를 사용하세요.",
     deprecated=True,
 )
-async def get_teacher_ranking(auth: LoginDep, response: Response, limit: int = 20, offset: int = 0):
+async def get_teacher_ranking(
+    auth: LoginDep,
+    response: Response,
+    limit: int = Query(20, ge=1, le=MAX_PAGE_LIMIT),
+    offset: int = Query(0, ge=0),
+):
     user, _ = auth
     if not user.has_permission(UserPermission.VIEW_RANK):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied.")

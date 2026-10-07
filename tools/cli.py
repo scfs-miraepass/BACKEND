@@ -13,7 +13,9 @@ from sqlalchemy import desc, select
 from sqlmodel import col
 
 from app.core import ServiceClient
+from app.core.cache_events import on_user_cache_changed, on_user_created, on_user_deleted
 from app.core.config import settings
+from app.core.redis_keys import DAY, HOUR, MINUTE, BoundKey, KeyPattern, Keys
 from app.core.service import History
 from app.schemas.point import PointHistory, PointHistoryType
 from app.schemas.users import Users, UserType, UserPermission
@@ -52,13 +54,9 @@ async def run_with_client(coroutine):
         await client.close()
 
 
-async def clear_user_cache(user_id: int):
-    """특정 사용자의 캐시를 지웁니다."""
-    await client.redis.delete(f"user:{user_id}")
-    await client.redis.delete(f"point_history_count:{user_id}")
-    await client.redis.delete_pattern(f"point_history:{user_id}:*")
-    await client.redis.delete_pattern("search_users:*")
-    print(f"사용자 ID {user_id}의 캐시가 삭제되었습니다.")
+def pad_visual(s: str, width: int) -> str:
+    """한글 등 넓은 문자를 고려해 문자열을 지정한 시각적 너비로 맞춥니다."""
+    return s + " " * max(0, width - get_visual_width(s))
 
 
 @app.command()
@@ -125,6 +123,8 @@ def add_user(
                 session.add(new_user)
                 print(f"ID {current_service_id}의 서비스 사용자 '{name}'이(가) 성공적으로 추가되었습니다.")
 
+        await on_user_created(user_type)
+
     asyncio.run(run_with_client(_add_user()))
 
 
@@ -150,7 +150,6 @@ def manage_point(
                 await user.point_grant(amount=amount, reason=reason, type=history_type)
             else:
                 await user.point_deduct(amount=amount * -1, reason=reason, type=history_type)
-        await client.redis.delete_pattern("search_users:*")
         print(f"사용자 {user_id}의 포인트를 성공적으로 변경했습니다. 현재 포인트: {user.point}")
 
     asyncio.run(run_with_client(_manage_point()))
@@ -245,7 +244,7 @@ def delete_user(
             await session.delete(user)
             await session.commit()  # Commit before clearing cache
 
-            await clear_user_cache(user_id)
+            await on_user_deleted(user_id, user.type)
             print(f"'{user.name}' 사용자(ID: {user.id})가 성공적으로 삭제되었습니다.")
 
     asyncio.run(run_with_client(_delete_user()))
@@ -276,7 +275,7 @@ def reset_password(
             user.password = None
             await session.commit()  # Commit before clearing cache
 
-            await clear_user_cache(user_id)
+            await on_user_cache_changed(user_id)
             print(f"'{user.name}' 사용자(ID: {user.id})의 비밀번호가 None으로 초기화되었습니다.")
 
     asyncio.run(run_with_client(_reset_password()))
@@ -353,6 +352,34 @@ def delete_point_history(
 
 
 # --- Redis Commands ---
+# 아래 명령은 임의의 Key를 다루는 디버깅 도구이므로, 레지스트리를 거치지 않는 unchecked Key를 사용합니다.
+
+
+def format_ttl(ttl: int | None) -> str:
+    if ttl is None:
+        return "직접 지정"
+    for unit, label in ((DAY, "일"), (HOUR, "시간"), (MINUTE, "분")):
+        if ttl >= unit and ttl % unit == 0:
+            return f"{ttl // unit}{label}"
+    return f"{ttl}초"
+
+
+@app.command()
+def redis_keys():
+    """
+    프로젝트에서 사용하는 Redis Key 목록을 보여줍니다. (app/core/redis_keys.py)
+    """
+    headers = ("이름", "Key", "TTL", "설명")
+    rows = [(name, key.template, format_ttl(key.ttl), key.description) for name, key in Keys.all().items()]
+    widths = [max(get_visual_width(row[i]) for row in (headers, *rows)) for i in range(3)]
+
+    def line(row: tuple[str, ...]) -> str:
+        return " | ".join(pad_visual(row[i], widths[i]) for i in range(3)) + f" | {row[3]}"
+
+    print(line(headers))
+    print("-" * (sum(widths) + 9 + 30))
+    for row in rows:
+        print(line(row))
 
 
 @app.command()
@@ -362,7 +389,7 @@ def redis_get(key: str = typer.Argument(..., help="가져올 Redis 키")):
     """
 
     async def _redis_get():
-        value = await client.redis.get(key)
+        value = await client.redis.get(BoundKey.unchecked(key))
         if value is not None:
             print(f"키: {key}")
             print(f"값: {json.dumps(value, indent=2, ensure_ascii=False)}")
@@ -379,7 +406,7 @@ def redis_delete(key: str = typer.Argument(..., help="삭제할 Redis 키")):
     """
 
     async def _redis_delete():
-        await client.redis.delete(key)
+        await client.redis.delete(BoundKey.unchecked(key))
         print(f"키 '{key}'가 삭제되었거나 존재하지 않았습니다.")
 
     asyncio.run(run_with_client(_redis_delete()))
@@ -394,10 +421,8 @@ def redis_delete_pattern(
     """
 
     async def _redis_delete_pattern():
-        # RedisCore doesn't have a direct way to count deleted keys easily without changing it,
-        # but it will log it. We just call it.
-        await client.redis.delete_pattern(pattern)
-        print(f"패턴 '{pattern}' 삭제가 시작되었습니다. 자세한 내용은 로그를 확인하세요.")
+        deleted = await client.redis.delete_pattern(KeyPattern.unchecked(pattern))
+        print(f"패턴 '{pattern}'과 일치하는 키 {deleted}개를 삭제했습니다.")
 
     asyncio.run(run_with_client(_redis_delete_pattern()))
 

@@ -17,9 +17,16 @@ from app.schemas import (
 
 from sqlmodel import col, select
 
-from ..config import settings
+from ..cache_events import (
+    on_point_changed,
+    on_post_changed,
+    on_quest_changed,
+    on_user_cache_changed,
+    on_user_profile_changed,
+)
 from ..core import ServiceCore
 from ..error import Forbidden
+from ..redis_keys import Keys
 from ..security import get_password_hash
 from .history import History
 from .post import Post
@@ -50,8 +57,7 @@ class User(ServiceCore[Users], _Type):
             _id=user_id,
             wrapper_cls=cls,
             model_cls=Users,
-            prefix="user",
-            ttl=settings.service.session.expire_seconds,
+            key=Keys.User.ITEM(user_id=user_id),
             **kwargs,
         )
 
@@ -74,7 +80,7 @@ class User(ServiceCore[Users], _Type):
             user = await session.merge(self._payload)
             user.password = get_password_hash(_new) if isinstance(_new, str) else None
         self._payload = user
-        await self.redis.delete(f"user:{self.id}")
+        await on_user_cache_changed(self.id)
 
     async def create_history(
         self,
@@ -107,10 +113,6 @@ class User(ServiceCore[Users], _Type):
             session.add(obj)
             await session.flush()
 
-        # 포인트 기록 변경에 따른 캐시 삭제
-        await self.redis.delete(f"point_history_count:{self.id}")
-        await self.redis.delete_pattern(f"point_history:{self.id}:*")
-
         self.logs.service_point.debug(
             f"포인트 기록 생성 - ID {obj.id} ({reason[:10] + '...' if len(reason) > 10 else reason})"
         )
@@ -142,10 +144,7 @@ class User(ServiceCore[Users], _Type):
 
             history = await self.create_history(changed=amount, reason=reason, memo=memo, type=type)
 
-        await self.redis.delete(f"user:{self.id}")
-        if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
-        await self.redis.delete_pattern("search_users:*")
+        await on_point_changed(self.id, user.type)
 
         self.logs.service_point.info(f"포인트 지급 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
@@ -182,10 +181,7 @@ class User(ServiceCore[Users], _Type):
 
             history = await self.create_history(changed=(amount * -1), reason=reason, memo=memo, type=type)
 
-        await self.redis.delete(f"user:{self.id}")
-        if user.type == UserType.teacher or user.type == UserType.student:
-            await self.redis.delete_pattern(f"ranking:{user.type!s}:*")
-        await self.redis.delete_pattern("search_users:*")
+        await on_point_changed(self.id, user.type)
 
         self.logs.service_point.info(f"포인트 차감 - {self.name}({self.id}) +{amount} (기록 ID {history.id})")
         self._payload = user
@@ -208,8 +204,7 @@ class User(ServiceCore[Users], _Type):
             session.add(obj)
             await session.flush()
 
-        await self.redis.delete("posts_count")
-        await self.redis.delete_pattern("posts:list:*")
+        await on_post_changed(count=True)
 
         self.logs.service_post.info(
             f"게시글 생성 - ID {obj.id} ({obj.title[:10] + '...' if len(obj.title) > 10 else obj.title}) By. {self.name}({self.id})"
@@ -257,8 +252,7 @@ class User(ServiceCore[Users], _Type):
 
             session.add(obj)
             await session.flush()
-        await self.redis.delete("quests_count")
-        await self.redis.delete_pattern("quests:*")
+        await on_quest_changed()
 
         self.logs.service_quest.info(
             f"퀘스트 생성 - {self.id}({self.name}) 생성. ID {obj.id}({title[:10] if len(title) > 10 else title})"
@@ -298,8 +292,8 @@ class User(ServiceCore[Users], _Type):
             user = await session.merge(self._payload)
             user.permissions = (self.permission | perm).value
 
-        await self.redis.delete(f"user:{self.id}")
         self._payload = user
+        await on_user_profile_changed(self.id, user.type)
 
         self.logs.service.info(f"{self.id}({self.name})의 권한을 추가했습니다. (+{perm.name})")
 
@@ -322,8 +316,8 @@ class User(ServiceCore[Users], _Type):
             user = await session.merge(self._payload)
             user.permissions = (self.permission & ~perm).value
 
-        await self.redis.delete(f"user:{self.id}")
         self._payload = user
+        await on_user_profile_changed(self.id, user.type)
 
         self.logs.service.info(f"{self.id}({self.name})의 권한을 제거했습니다. (-{perm.name})")
 
@@ -364,22 +358,23 @@ class User(ServiceCore[Users], _Type):
 
         return await KaraokeMember.get_member(party_id=party_id, user_id=self.id)
 
-    async def get_party(self, karaoke: "Karaoke") -> "KaraokeParty | None":
+    async def get_party(self, karaoke: "Karaoke", *, cache: bool = False) -> "KaraokeParty | None":
         """
         유저가 해당 노래방 예약 경매에서 참여하거나, 리더로 있는 노래방 파티를 가져옵니다.
 
         Args:
             karaoke: 가져오려는 노래방 예약 경매
+            cache: 파티 데이터 캐시 사용 여부 (조회 전용 경로에서만 사용)
 
         Returns:
             KaraokeParty | None
         """
         from .karaoke.party import KaraokeParty
 
-        cache_key = f"karaoke:{karaoke.id}:member:{self.id}"
+        cache_key = Keys.Karaoke.USER_PARTY(karaoke_id=karaoke.id, user_id=self.id)
         cached = await self.redis.get(cache_key)
         if cached:
-            party = await KaraokeParty.get_by_id(cached)
+            party = await KaraokeParty.get_by_id(cached, cache=cache)
             return party
 
         async with self.session as session:
@@ -398,5 +393,5 @@ class User(ServiceCore[Users], _Type):
         if payload is None:
             return None
 
-        await self.redis.set(cache_key, payload.id, ttl=60 * 5)
+        await self.redis.set(cache_key, payload.id)
         return KaraokeParty(payload)
