@@ -5,7 +5,13 @@ from json import loads, dumps
 
 from redis.asyncio.client import PubSub
 
-from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType, KaraokePartis
+from app.schemas import (
+    Karaokes,
+    KaraokeStatus,
+    KaraokeBids,
+    PointHistoryType,
+    KaraokePartis,
+)
 from app.schemas.core import SchemaCore
 from app.schemas.object import SubscribeObject, KaraokeSubData, KaraokePubType
 
@@ -29,7 +35,11 @@ class Karaoke(ServiceCore[Karaokes], _Type):
     노래방 서비스 관련된 Redis Key는
 
     karaoke:{karaoke.id} - karaoke.id에 대한 노래방 예약 데이터
-    karaoke_list:{karaoke.date} - karaoke.date 날에 소속된 노래방 예약 목록 데이터
+
+    karaoke_list:{karaoke.date}:{limit}:{offset} - karaoke.date 날에 소속된 노래방 예약 목록 데이터 (페이징 처리)
+    karaoke_list:{karaoke.date}:count - karaoke.date 날에 소속된 노래방 예약 목록 데이터의 개수
+    **karaoke.date의 경우 all이 될 수 있으며, 일자 상관없는 예약 목록 데이터 입니다.**
+
     karaoke:{karaoke.id}:highest - karaoke.id 의 최고 입찰 기록
     karaoke_party:{karaoke_party.id} - karaoke_party.id의 파티 데이터
     karaoke_members:{karaoke_party.id} - karaoke_party.id의 파티 멤버 데이터
@@ -50,7 +60,12 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             Karaoke | None
         """
         return await cls._get_item(
-            _id=karaoke_id, wrapper_cls=cls, model_cls=Karaokes, prefix="karaoke", ttl=60 * 5, **kwargs
+            _id=karaoke_id,
+            wrapper_cls=cls,
+            model_cls=Karaokes,
+            prefix="karaoke",
+            ttl=60 * 5,
+            **kwargs,
         )
 
     @property
@@ -74,9 +89,12 @@ class Karaoke(ServiceCore[Karaokes], _Type):
 
         await self.redis.delete(f"karaoke:{self.id}")
         await self.redis.delete_pattern(f"karaoke:{self.id}:*")
-        await self.redis.delete_pattern(f"karaoke_list:{self.date}")
+        await self.redis.delete_pattern(f"karaoke_list:{self.date}*")
+        await self.redis.delete_pattern("karaoke_list:all*")
 
-        self.logs.service_karaoke.info(f"노래방 예약 삭제 - ID {self.id}({self.date} / {self.time})")
+        self.logs.service_karaoke.info(
+            f"노래방 예약 삭제 - ID {self.id}({self.date} / {self.time})"
+        )
 
     async def set_status(self, _status: KaraokeStatus):
         """
@@ -91,7 +109,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             karaoke.status = _status
 
         await self.redis.delete(f"karaoke:{self.id}")
-        await self.redis.delete_pattern(f"karaoke_list:{self.date}")
+        await self.redis.delete_pattern(f"karaoke_list:{self.date}*")
+        await self.redis.delete_pattern("karaoke_list:all*")
         await self.publish("status", data=_status.value)
         self._payload = karaoke
 
@@ -123,12 +142,18 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             KaraokeBid | None
         """
         async with self.session as session:
-            query = select(KaraokeBids).where(KaraokeBids.auction_id == self.id).order_by(col(KaraokeBids.id).desc())
+            query = (
+                select(KaraokeBids)
+                .where(KaraokeBids.auction_id == self.id)
+                .order_by(col(KaraokeBids.id).desc())
+            )
             row = (await session.execute(query)).scalars().first()
 
         return KaraokeBid(payload=row) if row is not None else None
 
-    async def add_bid(self, bidder: User, amount: int, party: KaraokeParty | None = None) -> KaraokeBid:
+    async def add_bid(
+        self, bidder: User, amount: int, party: KaraokeParty | None = None
+    ) -> KaraokeBid:
         """
         노래방 경매에 입찰합니다.
 
@@ -152,9 +177,14 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         async with self.session as session:
             # 동시 입찰로 인한 레이스 컨디션(중복 최고가 인정 등)을 막기 위해
             # 경매 Row에 락을 걸어 같은 경매에 대한 입찰 처리를 직렬화합니다.
-            lock_query = select(Karaokes).where(col(Karaokes.id) == self.id).with_for_update()
+            lock_query = (
+                select(Karaokes).where(col(Karaokes.id) == self.id).with_for_update()
+            )
             locked_karaoke = (await session.execute(lock_query)).scalar_one_or_none()
-            if locked_karaoke is None or locked_karaoke.status != KaraokeStatus.IN_PROGRESS:
+            if (
+                locked_karaoke is None
+                or locked_karaoke.status != KaraokeStatus.IN_PROGRESS
+            ):
                 raise ValueError("경매가 진행중이 아닙니다.")
 
             # 락을 잡은 상태에서 DB 기준 최신(최고) 입찰을 다시 조회합니다.
@@ -164,10 +194,14 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             if highest is None:
                 # 첫 입찰은 최소 입찰가 이상이기만 하면 됩니다.
                 if amount < self.min_point:
-                    raise ValueError(f"입찰 금액은 최소 입찰가({self.min_point}) 이상이어야 합니다.")
+                    raise ValueError(
+                        f"입찰 금액은 최소 입찰가({self.min_point}) 이상이어야 합니다."
+                    )
             elif amount <= highest.amount:
                 # 이후 입찰은 직전 최고가를 반드시 넘어야 합니다. (동일 금액으로 최고가를 가져갈 수 없음)
-                raise ValueError(f"입찰 금액은 현재 최고가({highest.amount})보다 커야 합니다.")
+                raise ValueError(
+                    f"입찰 금액은 현재 최고가({highest.amount})보다 커야 합니다."
+                )
 
             # 차감할 포인트가 있는지 확인
             for user, deduct_amount in deductions:
@@ -188,22 +222,30 @@ class Karaoke(ServiceCore[Karaokes], _Type):
 
             # 입찰 기록 생성
             obj = KaraokeBids(
-                auction_id=self.id, bidder_id=bidder.id, party_id=party.id if party is not None else None, amount=amount
+                auction_id=self.id,
+                bidder_id=bidder.id,
+                party_id=party.id if party is not None else None,
+                amount=amount,
             )
             session.add(obj)
             await session.flush()
 
         await self.redis.delete(f"karaoke:{self.id}")
         await self.redis.delete(f"karaoke:{self.id}:bids_history")  # 기록 캐시 무효화
-        await self.redis.delete_pattern(f"karaoke_list:{self.date}")
+        await self.redis.delete_pattern(f"karaoke_list:{self.date}*")
+        await self.redis.delete_pattern("karaoke_list:all*")
 
         # 최고가 TTL은 종료 시간까지로 하며, 최소 60초
         # end_time은 DB 시간대 기준의 naive 값이므로 시간대를 맞춘 뒤 계산해야 합니다.
         # (맞추지 않으면 남은 시간이 항상 음수가 되어 TTL이 늘 최소값 60초로 떨어집니다)
-        remaining = (SchemaCore.sync_timezone(self.end_time) - SchemaCore.now()).total_seconds()
+        remaining = (
+            SchemaCore.sync_timezone(self.end_time) - SchemaCore.now()
+        ).total_seconds()
         ttl = max(60, int(remaining) + 60)
 
-        await self.redis.set(f"karaoke:{self.id}:highest", obj.model_dump(), ttl=ttl)  # 최고 입찰 갱신
+        await self.redis.set(
+            f"karaoke:{self.id}:highest", obj.model_dump(), ttl=ttl
+        )  # 최고 입찰 갱신
         await self.publish("highest", obj.model_dump(mode="json"))
 
         self.logs.service_karaoke.info(
@@ -228,7 +270,9 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         async with self.session as session:
             user_party = await leader.get_party(self)
             if user_party is not None:
-                raise ValueError("이미 이 경매에서 파티장이거나 파티에 소속되어 있습니다.")
+                raise ValueError(
+                    "이미 이 경매에서 파티장이거나 파티에 소속되어 있습니다."
+                )
 
             party = KaraokePartis(auction_id=self.id, leader_id=leader.id)
             session.add(party)
@@ -248,7 +292,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
     ) -> tuple[Task, PubSub]: ...
 
     async def subscribe(
-        self, callback: Callable[[SubscribeObject[KaraokeSubData]], Awaitable] | None = None
+        self,
+        callback: Callable[[SubscribeObject[KaraokeSubData]], Awaitable] | None = None,
     ) -> PubSub | tuple[Task, PubSub]:
         pubsub = self.redis.pubsub()
         await pubsub.subscribe(f"ws_karaoke_{self.id}")
@@ -259,7 +304,9 @@ class Karaoke(ServiceCore[Karaokes], _Type):
 
         async def listener():
             async for message in pubsub.listen():
-                self.logs.service_karaoke.debug(f"[PubSub] 메시지 수신 - ws_karaoke_{self.id}: {message}")
+                self.logs.service_karaoke.debug(
+                    f"[PubSub] 메시지 수신 - ws_karaoke_{self.id}: {message}"
+                )
                 if isinstance(message["data"], str):
                     message["data"] = KaraokeSubData(**loads(message["data"]))
                 await callback(SubscribeObject.model_validate(message))
@@ -276,7 +323,9 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         """
         await pubsub.unsubscribe(f"ws_karaoke_{self.id}")
         await pubsub.close()
-        self.logs.service_karaoke.debug(f"[PubSub] 채널 구독 해제 - ws_karaoke_{self.id}")
+        self.logs.service_karaoke.debug(
+            f"[PubSub] 채널 구독 해제 - ws_karaoke_{self.id}"
+        )
 
     async def publish(self, pub_type: KaraokePubType, data: Any):
         """
@@ -292,7 +341,9 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         val = dumps(KaraokeSubData(type=pub_type, data=data).model_dump())
 
         await self.redis.publish(f"ws_karaoke_{self.id}", message=val)
-        self.logs.service_karaoke.debug(f"[PubSub] 메시지 발행 - ws_karaoke_{self.id} / type={pub_type}")
+        self.logs.service_karaoke.debug(
+            f"[PubSub] 메시지 발행 - ws_karaoke_{self.id} / type={pub_type}"
+        )
 
     async def bids_history(self) -> list[KaraokeBid]:
         """
@@ -307,7 +358,10 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         cached_bids = await self.redis.get(cache_key)
 
         if cached_bids is not None:
-            bids_history = [KaraokeBid(payload=KaraokeBids.model_validate(item)) for item in cached_bids]
+            bids_history = [
+                KaraokeBid(payload=KaraokeBids.model_validate(item))
+                for item in cached_bids
+            ]
         else:
             async with self.session as session:
                 query = (
@@ -319,6 +373,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
                 payload = res.scalars().all()
                 bids_history = [KaraokeBid(payload=item) for item in payload]
 
-            await self.redis.set(cache_key, [b.model_dump() for b in bids_history], ttl=60 * 5)
+            await self.redis.set(
+                cache_key, [b.model_dump() for b in bids_history], ttl=60 * 5
+            )
 
         return bids_history
