@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import col, delete
 
-from app.schemas import PointHistory, Users, UserType
+from app.schemas import PointHistory, Users
 
 from ..core import ServiceCore
 from ..error import NotFound
@@ -43,7 +43,7 @@ class History(ServiceCore[PointHistory], _Type):
 
         async with self.session as session:
             # history 삭제
-            exc = delete(Users).where(col(Users.id) == self.id)
+            exc = delete(PointHistory).where(col(PointHistory.id) == self.id)
             await session.execute(exc)
 
             # User Point 관련 데이터 Revert 처리
@@ -60,14 +60,14 @@ class History(ServiceCore[PointHistory], _Type):
                 if revert:
                     user.point = max(0, user.point - self.changed_amount)
                 if total_revert and self.changed_amount > 0:
-                    user.total_point -= max(0, user.total_point - self.changed_amount)
+                    user.total_point = max(0, user.total_point - self.changed_amount)
 
                 # 유저 데이터(포인트, 총합 포인트) 값 변경에 따른 캐시 삭제
                 await self.redis.delete(f"user:{user.id}")
-                if user.type == UserType.teacher or user.type == UserType.student:
-                    await self.redis.delete_pattern(f"ranking:{user.type}:*")
 
-        # 포인트 기록 변경에 따른 캐시 삭제
+        # 포인트 기록 변경에 따른 캐시 삭제 (주간 랭킹은 revert 여부와 관계없이 기록에 의존)
+        await self.redis.delete_pattern("ranking:student:*")
+        await self.redis.delete_pattern("ranking:teacher:*")
         await self.redis.delete(f"point_history:{self.id}")
         await self.redis.delete(f"point_history_count:{self.user_id}")
         await self.redis.delete_pattern(f"point_history:{self.user_id}:*")

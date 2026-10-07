@@ -1,3 +1,17 @@
+# [1.12.0-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.11.1-dev.1...v1.12.0-dev.1) (2026-10-06)
+
+
+### Features
+
+* 주간 포인트 랭킹 기능 ([#17](https://github.com/scfs-miraepass/BACKEND/issues/17)) ([99c4866](https://github.com/scfs-miraepass/BACKEND/commit/99c48667db2b8bef3b78cca8f8aee3c90b0166ba))
+
+## [1.11.1-dev.1](https://github.com/scfs-miraepass/BACKEND/compare/v1.11.0...v1.11.1-dev.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* 포인트 기록 삭제 시 유저가 삭제되던 문제 및 total_point 복원 계산 오류 수정 ([e74796b](https://github.com/scfs-miraepass/BACKEND/commit/e74796ba7851cf7f923dc6d67ca6b707884029e5))
+
 # [1.11.0](https://github.com/scfs-miraepass/BACKEND/compare/v1.10.0...v1.11.0) (2026-09-17)
 
 
