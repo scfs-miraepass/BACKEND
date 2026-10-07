@@ -3,6 +3,8 @@
 
 데이터가 변경되었을 때 함께 지워야 하는 캐시를 도메인 이벤트 단위로 모아둔 모듈입니다.
 캐시를 지울 때는 Key를 직접 삭제하지 않고 이 모듈의 함수를 호출해, 무효화 범위가 호출하는 곳마다 달라지지 않도록 합니다.
+
+목록 캐시(랭킹, 포인트 기록, 게시글, 퀘스트 페이지)는 패턴 삭제 대신 버전 Key를 올려 무효화합니다.
 """
 
 from collections.abc import Iterable
@@ -20,7 +22,7 @@ async def _clear_ranking(user_type: str | None, *, count: bool = False):
     for t in types:
         if t not in RANKING_TYPES:
             continue
-        await RedisCore.delete_pattern(Keys.Ranking.PAGE.pattern(type=t))
+        await RedisCore.bump_version(Keys.Ranking.VERSION(type=t))
         if count:
             await RedisCore.delete(Keys.Ranking.COUNT(type=t))
 
@@ -43,7 +45,7 @@ async def on_points_changed(user_ids: Iterable[int], user_type: str | None = Non
     """
     for user_id in user_ids:
         await RedisCore.delete(Keys.User.ITEM(user_id=user_id), Keys.PointHistory.COUNT(user_id=user_id))
-        await RedisCore.delete_pattern(Keys.PointHistory.PAGE.pattern(user_id=user_id))
+        await RedisCore.bump_version(Keys.PointHistory.VERSION(user_id=user_id))
     await _clear_ranking(user_type)
 
 
@@ -86,14 +88,14 @@ async def on_post_changed(post_id: int | None = None, *, count: bool = False):
         await RedisCore.delete(Keys.Post.ITEM(post_id=post_id))
     if count:
         await RedisCore.delete(Keys.Post.COUNT())
-    await RedisCore.delete_pattern(Keys.Post.PAGE)
+    await RedisCore.bump_version(Keys.Post.VERSION())
 
 
 async def on_quest_changed(quest_id: int | None = None):
     if quest_id is not None:
         await RedisCore.delete(Keys.Quest.ITEM(quest_id=quest_id))
     await RedisCore.delete(Keys.Quest.COUNT())
-    await RedisCore.delete_pattern(Keys.Quest.PAGE)
+    await RedisCore.bump_version(Keys.Quest.VERSION())
 
 
 # ---------- 노래방 ----------

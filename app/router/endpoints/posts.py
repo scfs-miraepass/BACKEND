@@ -68,7 +68,8 @@ async def get_posts(
         response.headers["X-MAX-PAGE"] = str(max_page)
 
         # 2. 목록 데이터 조회 (캐싱 적용)
-        list_cache_key = Keys.Post.PAGE(page=page, size=size)
+        list_ver = await client.redis.get_version(Keys.Post.VERSION())
+        list_cache_key = Keys.Post.PAGE(ver=list_ver, page=page, size=size)
         cached_list = await client.redis.get(list_cache_key)
 
         if cached_list is not None:

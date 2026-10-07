@@ -119,7 +119,8 @@ async def list_quests(
             count = count_result.scalar() or 0
             await client.redis.set(count_cache_key, count)
 
-        quests_cache_key = Keys.Quest.PAGE(limit=limit, offset=offset)
+        quests_ver = await client.redis.get_version(Keys.Quest.VERSION())
+        quests_cache_key = Keys.Quest.PAGE(ver=quests_ver, limit=limit, offset=offset)
         cached_quests = await client.redis.get(quests_cache_key)
 
         if cached_quests is not None:

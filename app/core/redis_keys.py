@@ -6,11 +6,20 @@ Key 문자열을 코드에 직접 작성하지 않고, 아래와 같이 정의�
 
     key = Keys.User.ITEM(user_id=user.id)       # -> BoundKey("user:item:1101"), TTL 포함
     await client.redis.set(key, value)          # TTL은 Key에 정의된 값이 기본으로 사용됨
-    await client.redis.delete_pattern(Keys.Ranking.PAGE.pattern(type="student"))
+    await client.redis.delete_pattern(Keys.Karaoke.USER_PARTY.pattern(karaoke_id=1))
 
 명명 규칙: `{도메인}:{종류}:{파라미터...}`
 - 첫 두 구간은 고정 문자열, 이후 구간은 `{파라미터}` 하나씩으로 작성합니다.
 - 단, `session:{session_id}`는 기존 로그인 세션 유지를 위해 예외로 기존 형태를 유지합니다.
+
+버전 Key (목록 캐시)
+- 자주 무효화되는 목록 캐시는 `{ver}` 파라미터를 가지며, 같은 도메인의 `VERSION` Key 값을 사용합니다.
+- 무효화할 때는 패턴 삭제 대신 `bump_version`으로 버전만 올리고, 이전 버전의 캐시는 TTL로 만료되도록 둡니다.
+- `VERSION` Key의 TTL은 목록 캐시의 TTL보다 길거나 같아야 합니다. (버전 Key가 만료되어 0부터 다시 시작해도,
+  같은 버전 번호를 쓰던 예전 캐시는 이미 만료되어 있도록 보장)
+
+    ver = await client.redis.get_version(Keys.Ranking.VERSION(type="student"))
+    key = Keys.Ranking.PAGE(type="student", ver=ver, ...)
 
 전체 목록은 `python tools/cli.py redis-keys` 로 확인할 수 있습니다.
 """
@@ -91,7 +100,7 @@ class RedisKey:
         """
         일부 파라미터만 채운 삭제용 패턴을 만듭니다. 채우지 않은 파라미터는 `*`로 대체됩니다.
 
-        예) `Keys.Ranking.PAGE.pattern(type="student")` -> `ranking:page:student:*:*:*:*`
+        예) `Keys.Karaoke.USER_PARTY.pattern(karaoke_id=1)` -> `karaoke:user_party:1:*`
         """
         self._check_params(params, require_all=False)
         values = {
@@ -122,12 +131,14 @@ class Keys:
     class PointHistory:
         ITEM = RedisKey("point_history:item:{history_id}", 5 * MINUTE, "포인트 기록 단건")
         COUNT = RedisKey("point_history:count:{user_id}", DAY, "유저의 포인트 기록 총 개수")
-        PAGE = RedisKey("point_history:page:{user_id}:{limit}:{offset}", DAY, "유저의 포인트 기록 페이지")
+        VERSION = RedisKey("point_history:ver:{user_id}", HOUR, "유저의 포인트 기록 페이지 캐시 버전")
+        PAGE = RedisKey("point_history:page:{user_id}:{ver}:{limit}:{offset}", HOUR, "유저의 포인트 기록 페이지")
 
     class Ranking:
         COUNT = RedisKey("ranking:count:{type}", 5 * MINUTE, "랭킹 대상 인원 수")
+        VERSION = RedisKey("ranking:ver:{type}", HOUR, "랭킹 페이지 캐시 버전")
         PAGE = RedisKey(
-            "ranking:page:{type}:{period}:{week}:{limit}:{offset}",
+            "ranking:page:{type}:{ver}:{period}:{week}:{limit}:{offset}",
             5 * MINUTE,
             "랭킹 페이지 (week: 주간 시작일 또는 all)",
         )
@@ -138,12 +149,14 @@ class Keys:
     class Post:
         ITEM = RedisKey("post:item:{post_id}", DAY, "게시글 단건")
         COUNT = RedisKey("post:count", DAY, "게시글 총 개수")
-        PAGE = RedisKey("post:page:{page}:{size}", DAY, "게시글 목록 페이지")
+        VERSION = RedisKey("post:ver", DAY, "게시글 목록 페이지 캐시 버전")
+        PAGE = RedisKey("post:page:{ver}:{page}:{size}", DAY, "게시글 목록 페이지")
 
     class Quest:
         ITEM = RedisKey("quest:item:{quest_id}", 5 * MINUTE, "퀘스트 단건")
         COUNT = RedisKey("quest:count", 5 * MINUTE, "퀘스트 총 개수")
-        PAGE = RedisKey("quest:page:{limit}:{offset}", 5 * MINUTE, "퀘스트 목록 페이지")
+        VERSION = RedisKey("quest:ver", HOUR, "퀘스트 목록 페이지 캐시 버전")
+        PAGE = RedisKey("quest:page:{ver}:{limit}:{offset}", 5 * MINUTE, "퀘스트 목록 페이지")
 
     class Karaoke:
         ITEM = RedisKey("karaoke:item:{karaoke_id}", 5 * MINUTE, "노래방 경매 단건")
@@ -191,6 +204,17 @@ def _validate_registry():
         if len(set(key.fields)) != len(key.fields):
             raise ValueError(f"{name}: 파라미터 이름이 중복됩니다. ({key.template})")
         segments[name] = parsed
+
+    # 버전 Key를 사용하는 목록 캐시는 같은 도메인에 충분한 TTL을 가진 VERSION Key가 있어야 합니다.
+    for group_name, group in vars(Keys).items():
+        if not isinstance(group, type):
+            continue
+        for key_name, key in vars(group).items():
+            if not isinstance(key, RedisKey) or "ver" not in key.fields:
+                continue
+            version = getattr(group, "VERSION", None)
+            if not isinstance(version, RedisKey) or version.ttl is None or key.ttl is None or version.ttl < key.ttl:
+                raise ValueError(f"{group_name}.{key_name}: VERSION Key가 없거나 TTL이 목록 캐시보다 짧습니다.")
 
     names = list(segments)
     for i, a in enumerate(names):

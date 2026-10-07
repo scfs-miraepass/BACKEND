@@ -368,7 +368,8 @@ async def get_history_list(
             await client.redis.set(count_cache_key, count)
 
         # 2. 히스토리 목록 조회
-        history_cache_key = Keys.PointHistory.PAGE(user_id=user.id, limit=limit, offset=offset)
+        history_ver = await client.redis.get_version(Keys.PointHistory.VERSION(user_id=user.id))
+        history_cache_key = Keys.PointHistory.PAGE(user_id=user.id, ver=history_ver, limit=limit, offset=offset)
         cached_history = await client.redis.get(history_cache_key)
 
         if cached_history is not None:
@@ -452,7 +453,10 @@ async def _get_ranking(
 
     type_str = "student" if user_type == UserType.student else "teacher"
     count_cache_key = Keys.Ranking.COUNT(type=type_str)
-    ranking_cache_key = Keys.Ranking.PAGE(type=type_str, period=period, week=week_key, limit=limit, offset=offset)
+    ranking_ver = await client.redis.get_version(Keys.Ranking.VERSION(type=type_str))
+    ranking_cache_key = Keys.Ranking.PAGE(
+        type=type_str, ver=ranking_ver, period=period, week=week_key, limit=limit, offset=offset
+    )
 
     conditions: Any = [Users.type == user_type]
     if user_type == UserType.teacher:

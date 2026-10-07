@@ -182,6 +182,34 @@ class RedisCore(_Type):
         return value
 
     @classmethod
+    async def get_version(cls, key: BoundKey) -> int:
+        """버전 Key의 현재 값을 가져옵니다. 값이 없으면 0을 반환합니다."""
+        value = await cls.get(key)
+        return int(value) if value else 0
+
+    @classmethod
+    async def bump_version(cls, key: BoundKey):
+        """
+        버전 Key의 값을 1 올려, 이전 버전으로 저장된 목록 캐시를 무효화합니다.
+        버전 Key의 TTL은 올릴 때마다 Key에 정의된 TTL로 갱신됩니다.
+        """
+        _require_key(key)
+        if key.ttl is None:
+            raise ValueError(f"'{key}'는 버전 Key로 사용하려면 TTL이 정의되어 있어야 합니다.")
+        if cls.redis_instance is None:
+            LoggerCore.redis.warning(f"Redis가 초기화 되지 않았습니다. '{key}'의 버전을 올릴 수 없습니다.")
+            return
+
+        try:
+            async with cls.redis_instance.pipeline(transaction=True) as pipe:
+                pipe.incr(key)
+                pipe.expire(key, key.ttl)
+                version, _ = await pipe.execute()
+            LoggerCore.redis.debug(f"'{key}'의 버전을 {version}(으)로 올렸습니다.")
+        except Exception as e:
+            LoggerCore.redis.error(f"'{key}'의 버전을 올리는데 실패했습니다: {e}", exc_info=True)
+
+    @classmethod
     async def delete(cls, *keys: BoundKey):
         for key in keys:
             _require_key(key)
