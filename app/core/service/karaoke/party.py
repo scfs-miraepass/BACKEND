@@ -1,11 +1,11 @@
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from app.schemas import KaraokePartis, KaraokeMembers
 from app.schemas.core import SchemaCore
 
-from sqlmodel import col, select
+from sqlmodel import col, select, func
 
-from ...error import Conflict, NotFound
+from ...error import Conflict, NotFound, LimitExceeded
 from ...core import ServiceCore
 from ..user import User
 from .member import KaraokeMember
@@ -61,6 +61,26 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
                 return_obj.append(user)
 
         return return_obj
+
+    async def count_members(self, *, pending: bool | None = None) -> int:
+        """
+        현재 이 파티에 소속된 유저의 수를 가져옵니다.
+        파티 대표자 유저는 포함하지 않습니다.
+
+        Returns:
+            int
+        """
+
+        conditions: Any = [KaraokeMembers.party_id == self.id]
+        if pending is not None:
+            conditions.append(KaraokeMembers.pending == pending)
+
+        async with self.session as session:
+            query = select(func.count()).select_from(KaraokeMembers).where(*conditions)
+            result = await session.execute(query)
+            count = result.scalar() or 0
+
+        return count
 
     async def get_members_before(self, cutoff: datetime) -> list[User]:
         """
@@ -195,6 +215,7 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
         Raises:
             ValueError: 해산된 파티에 초대하거나, 파티장 자신을 초대할 경우 발생합니다.
             ServiceError.Conflict: 초대 대상이 이 경매의 파티에 이미 소속/초대되어 있을 경우 발생합니다.
+            ServiceError.LimitExceeded: 최대로 초대할 수 있는 인원이 되어 더 이상 초대하지 못할 경우 발생합니다.
 
         Returns:
             KaraokeMember: 생성된 멤버 객체
@@ -206,9 +227,14 @@ class KaraokeParty(ServiceCore[KaraokePartis], _Type):
             raise ValueError("파티장은 이미 파티에 속해 있습니다.")
 
         async with self.session as session:
+            # 현재 파티인원을 가져와, 초대가 가능한지 처리합니다.
+            member_count = await self.count_members()
+            if (member_count + 1) >= 4:  # 파티장을 포함해 파티원이 4명 이상일경우
+                raise LimitExceeded("파티원은 최대 4명 입니다.")
+
             # 같은 경매의 해산되지 않은 파티 중, 초대 대상이 리더이거나 멤버(대기중 포함)인 파티를 찾습니다.
             query = (
-                select(KaraokePartis.id)
+                select(col(KaraokePartis.id))
                 .outerjoin(KaraokeMembers, col(KaraokeMembers.party_id) == col(KaraokePartis.id))
                 .where(
                     KaraokePartis.auction_id == self.auction_id,
