@@ -24,7 +24,7 @@ Key 문자열을 코드에 직접 작성하지 않고, 아래와 같이 정의�
 전체 목록은 `python tools/cli.py redis-keys` 로 확인할 수 있습니다.
 """
 
-import re
+from re import compile
 from dataclasses import dataclass, field
 from string import Formatter
 
@@ -34,7 +34,7 @@ MINUTE = 60
 HOUR = 60 * MINUTE
 DAY = 24 * HOUR
 
-_GLOB_SPECIAL = re.compile(r"([*?\[\]\\])")
+_GLOB_SPECIAL = compile(r"([*?\[\]\\])")
 
 
 class BoundKey(str):
@@ -48,8 +48,11 @@ class BoundKey(str):
 
     def __new__(cls, value: str, ttl: int | None = None):
         obj = super().__new__(cls, value)
-        obj.ttl = ttl
+        setattr(obj, "ttl", ttl)
         return obj
+
+    def __init__(self, value: str, ttl: int | None = None):
+        super().__init__()
 
     @classmethod
     def unchecked(cls, value: str) -> BoundKey:
@@ -111,70 +114,113 @@ class RedisKey:
 
 class Keys:
     class Auth:
-        SESSION = RedisKey("session:{session_id}", settings.service.session.expire_seconds, "로그인 세션 → user_id")
+        SESSION = RedisKey(
+            "session:{session_id}",
+            ttl=settings.service.session.expire_seconds,
+            description="현재 로그인한 세션 ID(session_id)를 통해 로그인된 유저의 ID를 획득",
+        )
         USER_SESSIONS = RedisKey(
             "session:user:{user_id}",
-            settings.service.session.expire_seconds,
-            "유저의 로그인 세션 ID 목록 (Set). 비밀번호 변경, 유저 삭제 시 모든 세션 종료에 사용",
+            ttl=settings.service.session.expire_seconds,
+            description="유저(user_id)의 로그인 세션 ID 목록",
         )
 
     class User:
-        ITEM = RedisKey("user:item:{user_id}", settings.service.session.expire_seconds, "유저 데이터")
+        ITEM = RedisKey("user:item:{user_id}", ttl=settings.service.session.expire_seconds, description="유저 데이터")
 
     class PointLimit:
         GRANT = RedisKey(
             "point_limit:grant:{user_id}:{week}",
-            None,
-            "교사가 이번 주(월요일 시작일 week)에 사용한 지급/보상 한도. 주가 끝나면 만료",
+            ttl=None,
+            description="교사(user_id)가 해당 주(week; 월요일 시작일)에 사용한 지급/보상 한도",
         )
         STUDENT = RedisKey(
             "point_limit:student:{user_id}:{date}",
-            None,
-            "학생이 date 날에 받은 포인트. 하루가 끝나면 만료",
+            ttl=None,
+            description="학생(user_id)이 하루동안(date) 받은 포인트",
         )
 
     class PointHistory:
-        ITEM = RedisKey("point_history:item:{history_id}", 5 * MINUTE, "포인트 기록 단건")
-        COUNT = RedisKey("point_history:count:{user_id}", DAY, "유저의 포인트 기록 총 개수")
-        VERSION = RedisKey("point_history:ver:{user_id}", HOUR, "유저의 포인트 기록 페이지 캐시 버전")
-        PAGE = RedisKey("point_history:page:{user_id}:{ver}:{limit}:{offset}", HOUR, "유저의 포인트 기록 페이지")
+        ITEM = RedisKey("point_history:item:{history_id}", ttl=5 * MINUTE, description="포인트 기록(history_id) 데이터")
+        COUNT = RedisKey("point_history:count:{user_id}", ttl=DAY, description="유저(user_id)의 포인트 기록 총 개수")
+        VERSION = RedisKey(
+            "point_history:ver:{user_id}", ttl=HOUR, description="유저(user_id)의 포인트 기록 페이지 캐시 버전"
+        )
+        PAGE = RedisKey(
+            "point_history:page:{user_id}:{ver}:{limit}:{offset}",
+            ttl=HOUR,
+            description="""
+                유저(user_id)의 포인트 기록 페이지
+                - ver: 버전
+                - limit: 한 페이지당 최대 데이터 개수
+                - offset: 현재 페이지 위치
+            """,
+        )
 
     class Ranking:
-        COUNT = RedisKey("ranking:count:{type}", 5 * MINUTE, "랭킹 대상 인원 수")
-        VERSION = RedisKey("ranking:ver:{type}", HOUR, "랭킹 페이지 캐시 버전")
+        COUNT = RedisKey("ranking:count:{type}", ttl=5 * MINUTE, description="학생/교사(type) 전체 랭킹 데이터 개수")
+        VERSION = RedisKey("ranking:ver:{type}", ttl=HOUR, description="학생/교사(type) 랭킹 페이지 캐시 버전")
         PAGE = RedisKey(
             "ranking:page:{type}:{ver}:{period}:{week}:{limit}:{offset}",
-            5 * MINUTE,
-            "랭킹 페이지 (week: 주간 시작일 또는 all)",
+            ttl=5 * MINUTE,
+            description="""
+                랭킹 데이터
+                - type: 교사/학생
+                - ver: 버전
+                - period: 랭킹 기간을 뜻합니다. (total / weekly)
+                - week: all의 경우 일자 상관없는 랭킹, 이며 한 주의 경우 주의 시작일의 ISO 포멧 값
+                - limit: 한 페이지당 최대 데이터 개수
+                - offset: 현재 페이지 위치
+            """,
         )
 
     class Search:
-        USERS = RedisKey("search:users:{query}:{types}", 5 * MINUTE, "유저 검색 결과 (유저 ID 목록)")
+        USERS = RedisKey(
+            "search:users:{query}:{types}",
+            ttl=5 * MINUTE,
+            description="""
+                유저 검색 결과 (유저 ID 목록)
+                - query: 검색어
+                - types: 타입 필터링이 있는 경우 타입 필터링이 ,으로 구분해 작성됩니다. 없는경우 공란입니다.
+            """,
+        )
 
     class Post:
-        ITEM = RedisKey("post:item:{post_id}", DAY, "게시글 단건")
-        COUNT = RedisKey("post:count", DAY, "게시글 총 개수")
-        VERSION = RedisKey("post:ver", DAY, "게시글 목록 페이지 캐시 버전")
-        PAGE = RedisKey("post:page:{ver}:{page}:{size}", DAY, "게시글 목록 페이지")
+        ITEM = RedisKey("post:item:{post_id}", ttl=DAY, description="게시글(post_id) 데이터")
+        COUNT = RedisKey("post:count", ttl=DAY, description="게시글 총 개수")
+        VERSION = RedisKey("post:ver", ttl=DAY, description="게시글 목록 페이지 캐시 버전")
+        PAGE = RedisKey("post:page:{ver}:{page}:{size}", ttl=DAY, description="게시글 목록 페이지")
 
     class Quest:
-        ITEM = RedisKey("quest:item:{quest_id}", 5 * MINUTE, "퀘스트 단건")
-        COUNT = RedisKey("quest:count", 5 * MINUTE, "퀘스트 총 개수")
-        VERSION = RedisKey("quest:ver", HOUR, "퀘스트 목록 페이지 캐시 버전")
-        PAGE = RedisKey("quest:page:{ver}:{limit}:{offset}", 5 * MINUTE, "퀘스트 목록 페이지")
+        ITEM = RedisKey("quest:item:{quest_id}", ttl=5 * MINUTE, description="퀘스트(quest_id) 대이터")
+        COUNT = RedisKey("quest:count", ttl=5 * MINUTE, description="퀘스트 총 개수")
+        VERSION = RedisKey("quest:ver", ttl=HOUR, description="퀘스트 목록 페이지 캐시 버전")
+        PAGE = RedisKey("quest:page:{ver}:{limit}:{offset}", ttl=5 * MINUTE, description="퀘스트 목록 페이지")
 
     class Karaoke:
-        ITEM = RedisKey("karaoke:item:{karaoke_id}", 5 * MINUTE, "노래방 경매 단건")
-        LIST = RedisKey("karaoke:list:{date}", 5 * MINUTE, "date(YYYY-MM-DD) 날의 노래방 경매 목록")
-        HIGHEST = RedisKey("karaoke:highest:{karaoke_id}", None, "경매 최고 입찰. TTL은 경매 종료 시각 기준")
-        BIDS = RedisKey("karaoke:bids:{karaoke_id}", 5 * MINUTE, "경매 입찰 기록")
-        USER_PARTY = RedisKey(
-            "karaoke:user_party:{karaoke_id}:{user_id}", 5 * MINUTE, "경매에서 유저가 소속된(리더 포함) 파티 ID"
+        ITEM = RedisKey("karaoke:item:{karaoke_id}", ttl=5 * MINUTE, description="노래방(karaoke_id) 경매 데이터")
+        LIST = RedisKey("karaoke:list:{date}", ttl=5 * MINUTE, description="date(YYYY-MM-DD) 날의 노래방 경매 목록")
+        HIGHEST = RedisKey(
+            "karaoke:highest:{karaoke_id}",
+            ttl=None,
+            description="경매(karaoke_id) 최고 입찰. TTL은 경매 종료 시각 기준으로 자동으로 지정됩니다.",
         )
-        PARTY = RedisKey("karaoke:party:{party_id}", DAY, "노래방 파티 단건")
-        PARTY_MEMBERS = RedisKey("karaoke:party_members:{party_id}", DAY, "파티 멤버 목록 (초대 수락 완료)")
-        PARTY_MEMBER = RedisKey("karaoke:party_member:{party_id}:{user_id}", HOUR, "파티 멤버 단건 (초대 대기 포함)")
-        CHANNEL = RedisKey("karaoke:channel:{karaoke_id}", None, "경매 이벤트 Pub/Sub 채널")
+        BIDS = RedisKey("karaoke:bids:{karaoke_id}", ttl=5 * MINUTE, description="경매(karaoke_id) 입찰 기록")
+        USER_PARTY = RedisKey(
+            "karaoke:user_party:{karaoke_id}:{user_id}",
+            ttl=5 * MINUTE,
+            description="경매(karaoke_id)에서 유저(user_id)가 소속된(리더 포함) 파티 ID",
+        )
+        PARTY = RedisKey("karaoke:party:{party_id}", ttl=DAY, description="노래방(party_id) 파티 데이터")
+        PARTY_MEMBERS = RedisKey(
+            "karaoke:party_members:{party_id}", ttl=DAY, description="파티(party_id) 멤버 목록 (초대 수락 완료)"
+        )
+        PARTY_MEMBER = RedisKey(
+            "karaoke:party_member:{party_id}:{user_id}",
+            ttl=HOUR,
+            description="파티(party_id) 멤버(user_id) 데이터 (초대 대기 포함)",
+        )
+        CHANNEL = RedisKey("karaoke:channel:{karaoke_id}", ttl=None, description="경매 이벤트 Pub/Sub 채널")
 
     @classmethod
     def all(cls) -> dict[str, RedisKey]:
