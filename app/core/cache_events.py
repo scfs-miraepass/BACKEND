@@ -50,10 +50,12 @@ async def on_points_changed(user_ids: Iterable[int], user_type: str | None = Non
 
 
 async def on_point_changed(user_id: int, user_type: str | None = None):
+    """포인트 지급 / 차감과 같이 포인트가 변동되는 경우 호출"""
     await on_points_changed([user_id], user_type)
 
 
 async def on_point_history_deleted(history_id: int, user_id: int, user_type: str | None = None):
+    """포인트 기록이 삭제되는 경우 호출"""
     await RedisCore.delete(Keys.PointHistory.ITEM(history_id=history_id))
     await on_point_changed(user_id, user_type)
 
@@ -66,11 +68,13 @@ async def on_user_profile_changed(user_id: int, user_type: str):
 
 
 async def on_user_created(user_type: str):
+    """새로운 유저가 생성된 경우 호출"""
     await _clear_ranking(user_type, count=True)
     await RedisCore.delete_pattern(Keys.Search.USERS)
 
 
 async def on_user_deleted(user_id: int, user_type: str):
+    """유저가 삭제되는 경우 호출"""
     await on_point_changed(user_id, user_type)
     await on_user_created(user_type)
 
@@ -80,6 +84,8 @@ async def on_user_deleted(user_id: int, user_type: str):
 
 async def on_post_changed(post_id: int | None = None, *, count: bool = False):
     """
+    특정 게시글이 업데이트 될 경우 호출
+
     Args:
         post_id: 변경된 게시글 ID (생성의 경우 None)
         count: 게시글 개수가 변경된 경우(생성/삭제) True
@@ -92,6 +98,7 @@ async def on_post_changed(post_id: int | None = None, *, count: bool = False):
 
 
 async def on_quest_changed(quest_id: int | None = None):
+    """특정 퀘스트가 업데이트 될 경우 호출"""
     if quest_id is not None:
         await RedisCore.delete(Keys.Quest.ITEM(quest_id=quest_id))
     await RedisCore.delete(Keys.Quest.COUNT())
@@ -102,11 +109,12 @@ async def on_quest_changed(quest_id: int | None = None):
 
 
 async def on_karaoke_list_changed(_date: date):
+    """특정 일자의 노래방 목록의 변동이 있을 경우 호출"""
     await RedisCore.delete(Keys.Karaoke.LIST(date=_date))
 
 
 async def on_karaoke_changed(karaoke_id: int, _date: date):
-    """경매 상태 등 경매 데이터가 변경된 경우"""
+    """경매 상태 등 경매 데이터가 변경된 경우 호출"""
     await RedisCore.delete(Keys.Karaoke.ITEM(karaoke_id=karaoke_id), Keys.Karaoke.LIST(date=_date))
 
 
@@ -120,6 +128,7 @@ async def on_karaoke_bid(karaoke_id: int, _date: date):
 
 
 async def on_karaoke_deleted(karaoke_id: int, _date: date):
+    """노래방이 삭제 될 경우 호출"""
     await RedisCore.delete(
         Keys.Karaoke.ITEM(karaoke_id=karaoke_id),
         Keys.Karaoke.HIGHEST(karaoke_id=karaoke_id),
