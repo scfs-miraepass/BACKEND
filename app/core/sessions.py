@@ -21,8 +21,10 @@ async def create_session(user_id: int) -> str:
         str: 생성된 세션 ID
     """
     session_id = str(uuid4())
-    await RedisCore.set(Keys.Auth.SESSION(session_id=session_id), user_id)
-    await RedisCore.sadd(Keys.Auth.USER_SESSIONS(user_id=user_id), session_id)
+    async with RedisCore().pipeline() as pipe:
+        pipe.set(Keys.Auth.SESSION(session_id=session_id), user_id)
+        pipe.sadd(Keys.Auth.USER_SESSIONS(user_id=user_id), session_id)
+        await pipe.execute()
     return session_id
 
 
@@ -48,17 +50,18 @@ async def extend_session(user_id: int, session_id: str):
         await pipe.execute()
 
 
-async def delete_session(session_id: str, user_id: int | None = None):
+async def delete_session(session_id: str):
     """
     세션을 삭제합니다.
 
     Args:
         session_id: 삭제할 세션 ID
-        user_id: 세션의 유저 ID. 알고 있는 경우 유저의 세션 목록에서도 제거합니다.
     """
-    await RedisCore.delete(Keys.Auth.SESSION(session_id=session_id))
-    if user_id is not None:
-        await RedisCore.srem(Keys.Auth.USER_SESSIONS(user_id=user_id), session_id)
+    user_id = await get_session_user_id(session_id)
+    async with RedisCore().pipeline() as pipe:
+        pipe.delete(Keys.Auth.SESSION(session_id=session_id))
+        pipe.srem(Keys.Auth.USER_SESSIONS(user_id=user_id), session_id)
+        await pipe.execute()
 
 
 async def revoke_user_sessions(user_id: int) -> int:

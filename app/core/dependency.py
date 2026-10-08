@@ -24,7 +24,7 @@ async def verify_session(conn: HTTPConnection) -> tuple[User, str]:
 
     user = await client.get_user(user_id, cache=True)
     if not user:
-        await delete_session(session_id, user_id)
+        await delete_session(session_id)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
     return user, session_id

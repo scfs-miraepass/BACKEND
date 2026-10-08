@@ -87,7 +87,7 @@ async def logout(response: Response, request: Request):
     if session_id:
         user_id = await get_session_user_id(session_id)
         # Redis에서 세션 삭제
-        await delete_session(session_id, user_id)
+        await delete_session(session_id)
         if user_id:
             # 유저 정보 캐시도 함께 삭제 (선택 사항이지만 보안상 권장)
             await on_user_cache_changed(user_id)
