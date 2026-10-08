@@ -4,11 +4,36 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlmodel import col, select
 
 from app.core import LoginDep, ServiceClient
+from app.core.redis_keys import Keys
+from app.core.service.user import USER_CACHE_EXCLUDE
 from app.schemas import User, UserPermission, Users, UserSearch, UserType
 from app.schemas.response import ErrorResponse, ResponseModel
 
 router = APIRouter(prefix="/search", tags=["search"])
 client = ServiceClient()
+
+
+async def _load_users(user_ids: list[int]) -> list[User]:
+    """
+    유저 ID 목록의 유저 데이터를 순서대로 가져옵니다.
+    유저 캐시(`Keys.User.ITEM`)를 우선 사용하고, 캐시에 없는 유저만 DB에서 한 번에 조회한 뒤 캐싱합니다.
+    """
+    cached = await client.redis.mget([Keys.User.ITEM(user_id=user_id) for user_id in user_ids])
+    users: dict[int, User] = {
+        user_id: User.model_validate(data) for user_id, data in zip(user_ids, cached, strict=True) if data
+    }
+
+    missing = [user_id for user_id in user_ids if user_id not in users]
+    if missing:
+        async with client.session as session:
+            result = await session.execute(select(Users).where(col(Users.id).in_(missing)))
+            for row in result.scalars().all():
+                await client.redis.set(Keys.User.ITEM(user_id=row.id), row.model_dump(exclude=set(USER_CACHE_EXCLUDE)))
+                users[row.id] = User.model_validate(row.model_dump())
+
+    # 조회 사이에 삭제된 유저는 제외합니다.
+    return [users[user_id] for user_id in user_ids if user_id in users]
+
 
 @router.get(
     "",
@@ -36,6 +61,7 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] | None = Query(N
     - 입력값에 문자가 포함된 경우: 이름을 자모로 분리하여 검색
 
     Redis 캐싱을 적용하여 동일한 검색어에 대한 DB 부하를 줄입니다.
+    검색 결과 캐시에는 유저 ID만 저장하므로, 포인트 등 유저 데이터가 바뀌어도 검색 캐시를 지울 필요가 없습니다.
     """
     user, _ = auth_data
 
@@ -57,14 +83,12 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] | None = Query(N
 
     decomposed_query = client.normalize_and_decompose(q)
     # 캐시 키 생성
-    cache_key = f"search_users:{decomposed_query},{','.join(t)}"
+    cache_key = Keys.Search.USERS(query=decomposed_query, types=",".join(t))
 
-    # Redis 캐시 조회
-    cached_data = await client.redis.get(cache_key)
-    if cached_data is not None:
-        # 캐시된 데이터 반환 (JSON -> Dict List -> Pydantic Model List)
-        # cached_data는 이미 dict 형태의 리스트
-        return ResponseModel(success=True, data=cached_data)
+    # Redis 캐시 조회 (유저 ID 목록)
+    cached_ids = await client.redis.get(cache_key)
+    if cached_ids is not None:
+        return ResponseModel(success=True, data=await _load_users(cached_ids))
 
     async with client.session as session:
         # 1. 숫자만 있는 경우: ID(학번) 검색
@@ -95,10 +119,8 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] | None = Query(N
             # 중복 제거 (Users 객체 기준)
             users = result.scalars().unique().all()
 
-    # DB 조회 결과를 Redis에 캐싱 (TTL: 300초 = 5분)
-    # Users 객체 리스트를 dict 리스트로 변환하여 저장
-    users_data = [user.model_dump() for user in users]
-    await client.redis.set(cache_key, users_data, ttl=300)
+    # 검색 결과(유저 ID 목록)를 Redis에 캐싱
+    await client.redis.set(cache_key, [user.id for user in users])
 
     return ResponseModel(success=True, data=users)
 
@@ -119,9 +141,7 @@ async def search(auth_data: LoginDep, q: str, t: list[UserType] | None = Query(N
 )
 async def teacher_get_by_name(user_name: str):
     async with client.session as session:
-        stmt = select(Users).where(
-            Users.name == user_name, Users.type == UserType.teacher
-        )
+        stmt = select(Users).where(Users.name == user_name, Users.type == UserType.teacher)
         result = await session.execute(stmt)
         teacher = result.scalar_one_or_none()
 

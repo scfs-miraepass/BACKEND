@@ -5,6 +5,7 @@ from sqlmodel import col, delete, func, select
 
 from app.schemas import PointHistoryType, QuestCompletion, Quests, Users
 
+from ..cache_events import on_quest_changed
 from ..core import ServiceCore
 from ..error import ExpiredError, LimitExceeded
 
@@ -26,9 +27,7 @@ class QuestEditParams(TypedDict):
 
 class Quest(ServiceCore[Quests], _Type):
     async def _cache_clear(self):
-        await self.redis.delete(f"quest:{self.id}")
-        await self.redis.delete("quests_count")
-        await self.redis.delete_pattern("quests:*")
+        await on_quest_changed(self.id)
 
     async def delete(self):
         """
@@ -87,9 +86,7 @@ class Quest(ServiceCore[Quests], _Type):
             )
             session.add(QuestCompletion(quest_id=self.id, user_id=user.id))
 
-        self.logs.service_quest.info(
-            f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료"
-        )
+        self.logs.service_quest.info(f"퀘스트 완료 - {user.id}({user.name})가 {self.id} 완료")
 
     async def complete_count(self, user: User) -> int:
         """

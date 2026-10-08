@@ -6,9 +6,11 @@ from app.schemas.core import SchemaCore
 
 from sqlmodel import select
 
+from ...cache_events import on_party_members_changed
 from ...core import ServiceCore
 from ...core import DatabaseCore
 from ...core import RedisCore
+from ...redis_keys import Keys
 from ..user import User
 
 
@@ -46,7 +48,7 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
             party_id: 파티 고유 ID
             user_id: 파티에 소속된 멤버의 유저 ID
         """
-        redis_key = f"karaoke_party_member:{party_id}:{user_id}"
+        redis_key = Keys.Karaoke.PARTY_MEMBER(party_id=party_id, user_id=user_id)
         cached = await RedisCore.get(redis_key)
 
         if cached:
@@ -60,7 +62,7 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
             if payload is None:
                 return None
 
-            await RedisCore.set(redis_key, payload.model_dump(), ttl=60 * 60)
+            await RedisCore.set(redis_key, payload.model_dump())
 
             return cls(payload=payload)
 
@@ -91,9 +93,7 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
             member.accepted_at = SchemaCore.now()
 
         self._payload = member
-        await self.redis.delete(f"karaoke_members:{self.party_id}")
-        await self.redis.delete(f"karaoke_party_member:{self.party_id}:{self.user_id}")
-        await self.redis.delete(f"karaoke:{party_obj.auction_id}:member:{self.user_id}")
+        await on_party_members_changed(self.party_id, party_obj.auction_id, [self.user_id])
         self.logs.service_karaoke.info(
             f"노래방 파티 멤버 초대 수락 - 파티 ID {self.party_id}의 유저 {self.user_id}가 초대를 수락했습니다."
         )
@@ -112,9 +112,7 @@ class KaraokeMember(ServiceCore[KaraokeMembers], _Type):
             await session.delete(member)
 
         self._payload = None
-        await self.redis.delete(f"karaoke_members:{party_id}")
-        await self.redis.delete(f"karaoke_party_member:{party_id}:{user_id}")
-        await self.redis.delete(f"karaoke:{party_obj.auction_id}:member:{user_id}")
+        await on_party_members_changed(party_id, party_obj.auction_id, [user_id])
         self.logs.service_karaoke.info(
             f"노래방 파티 멤버 초대 거절/삭제 - 파티 ID {party_id}의 유저 {user_id}가 초대를 거절/삭제했습니다."
         )

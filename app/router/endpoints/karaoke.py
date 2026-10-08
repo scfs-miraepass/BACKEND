@@ -4,6 +4,8 @@ from datetime import date as dt_date, datetime
 from sqlmodel import select, col
 
 from app.core import ServiceClient, LoginDep
+from app.core.cache_events import on_karaoke_list_changed
+from app.core.redis_keys import Keys
 from app.schemas import Karaokes, User, UserPermission, KaraokeBids, KaraokeMembers, KaraokePartis, KaraokeStatus
 from app.schemas.karaokes import Karaoke as SchemasKaraoke
 from app.schemas.core import SchemaCore
@@ -74,12 +76,12 @@ class KaraokePartyDetail(BaseModel):
     pending_members: list[User] = Field(description="파티에 초대되어 수락 대기중인 멤버 목록")
 
 
-async def _build_party_detail(party: KaraokeParty) -> KaraokePartyDetail:
-    leader = await client.get_user(party.leader_id)
+async def _build_party_detail(party: KaraokeParty, *, cache: bool = False) -> KaraokePartyDetail:
+    leader = await client.get_user(party.leader_id, cache=cache)
     if leader is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티장 유저를 찾을 수 없습니다.")
 
-    members = await party.get_members()
+    members = await party.get_members(cache=cache)
     pending_members = await party.get_pending_members()
 
     # noinspection bad-argument-type
@@ -121,7 +123,7 @@ async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_dat
     if date is None:
         date = dt_date.today()
 
-    cache_key = f"karaoke_list:{date}"
+    cache_key = Keys.Karaoke.LIST(date=date)
     cached = await client.redis.get(cache_key)
     if cached is not None:
         # 캐시가 있는경우 캐시 응답
@@ -145,7 +147,7 @@ async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_dat
             karaoke_responses.append(KaraokeResponse(**dump))
 
         # 캐시 저장
-        await client.redis.set(cache_key, [item.model_dump(mode="json") for item in karaoke_responses], ttl=60 * 5)
+        await client.redis.set(cache_key, [item.model_dump(mode="json") for item in karaoke_responses])
 
     return ResponseModel[list[KaraokeResponse]](success=True, data=karaoke_responses)
 
@@ -209,7 +211,7 @@ async def create_karaoke(body: KaraokeCreate, auth_data: LoginDep):
         session.add(karaoke)
         await session.flush()
 
-    await client.redis.delete_pattern(f"karaoke_list:{body.date}")
+    await on_karaoke_list_changed(body.date)
 
     client.logs.service_karaoke.info(
         f"{user.name}({user.id})님이 {karaoke.id}({karaoke.date} / {karaoke.time}) 노래방 예약을 생성했습니다"
@@ -351,11 +353,11 @@ async def get_my_karaoke_party(auth_data: LoginDep, karaoke_id: int):
     if not karaoke:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="노래방 예약을 찾을 수 없습니다.")
 
-    party = await user.get_party(karaoke)
+    party = await user.get_party(karaoke, cache=True)
     if party is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="이 경매에 소속된 파티가 없습니다.")
 
-    return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(party))
+    return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(party, cache=True))
 
 
 @router.post(
@@ -441,9 +443,9 @@ async def get_karaoke_final_bid(auth_data: LoginDep, karaoke_id: int):
 
     members: list[User] = []
     if bid.party_id is not None:
-        party = await KaraokeParty.get_by_id(bid.party_id)
+        party = await KaraokeParty.get_by_id(bid.party_id, cache=True)
         if party is not None:
-            members = await party.get_members()
+            members = await party.get_members(cache=True)
 
     # noinspection bad-argument-type
     return ResponseModel[KaraokeFinalBidResponse](
@@ -486,7 +488,7 @@ async def get_karaoke_party(auth_data: LoginDep, party_id: int):
             detail="권한이 없습니다.",
         )
 
-    party = await KaraokeParty.get_by_id(party_id)
+    party = await KaraokeParty.get_by_id(party_id, cache=True)
     if not party:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
@@ -494,7 +496,7 @@ async def get_karaoke_party(auth_data: LoginDep, party_id: int):
     if party.leader_id != user.id and await user.get_karaoke_member(party_id) is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="이 파티의 멤버가 아닙니다.")
 
-    return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(party))
+    return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(party, cache=True))
 
 
 @router.delete(
