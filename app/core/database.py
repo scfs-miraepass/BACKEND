@@ -20,7 +20,7 @@ class DatabaseCore:
     async_engine: AsyncEngine | None = None
     AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
 
-    _session_context: ContextVar[AsyncSession] = ContextVar("db_session_context")
+    _session_context: ContextVar[AsyncSession | None] = ContextVar("db_session_context")
 
     def __new__(cls, *args, **kwargs):
         if cls.instance is None:
@@ -33,22 +33,22 @@ class DatabaseCore:
         if cls.AsyncSessionLocal is None:
             raise RuntimeError("Call DatabaseCore.initialize() first.")
 
-        try:
-            existing_session = cls._session_context.get()
+        existing_session = cls._session_context.get(None)
+        if existing_session is not None:
             yield existing_session
+            return
 
-        except LookupError:
-            async with cls.AsyncSessionLocal() as session:
-                token = cls._session_context.set(session)
-                try:
-                    yield session
-                    await session.commit()
-                except Exception:
-                    await session.rollback()
-                    raise
-                finally:
-                    await session.close()
-                    cls._session_context.reset(token)
+        async with cls.AsyncSessionLocal() as session:
+            token = cls._session_context.set(session)
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
+                cls._session_context.reset(token)
 
     @classmethod
     async def initialize(cls) -> None:
