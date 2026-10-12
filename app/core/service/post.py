@@ -4,6 +4,7 @@ from sqlmodel import col, delete, select
 
 from app.schemas import PostContent, Posts
 
+from ..cache_events import on_post_changed
 from ..core import ServiceCore
 
 if TYPE_CHECKING:
@@ -39,9 +40,7 @@ class Post(ServiceCore[Posts], _Type):
             exc = delete(Posts).where(col(Posts.id) == self.id)
             await session.execute(exc)
 
-        await self.redis.delete(f"post:{self.id}")
-        await self.redis.delete("posts_count")
-        await self.redis.delete_pattern("posts:list:*")
+        await on_post_changed(self.id, count=True)
 
         self.logs.service_post.info(
             f"게시글 삭제 - ID {self.id}({self.title[:10] + '...' if len(self.title) > 10 else self.title})"
@@ -67,8 +66,7 @@ class Post(ServiceCore[Posts], _Type):
                     post.content = PostContent(data=content)
             await session.flush()
 
-        await self.redis.delete(f"post:{self.id}")
-        await self.redis.delete_pattern("posts:list:*")
+        await on_post_changed(self.id)
         self._payload = post
 
         self.logs.service_post.info(f"게시글 수정 - ID {self.id}")

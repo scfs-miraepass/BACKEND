@@ -12,8 +12,10 @@ from app.schemas.object import SubscribeObject, KaraokeSubData, KaraokePubType
 from asyncio import create_task, Task
 
 
+from ...cache_events import on_karaoke_bid, on_karaoke_changed, on_karaoke_deleted
 from ...core import ServiceCore
 from ...error import PointInsufficient
+from ...redis_keys import BoundKey, Keys
 from ..user import User
 from .bid import KaraokeBid
 from .party import KaraokeParty
@@ -26,16 +28,9 @@ else:
 
 class Karaoke(ServiceCore[Karaokes], _Type):
     """
-    노래방 서비스 관련된 Redis Key는
+    노래방 예약 경매 서비스
 
-    karaoke:{karaoke.id} - karaoke.id에 대한 노래방 예약 데이터
-    karaoke_list:{karaoke.date} - karaoke.date 날에 소속된 노래방 예약 목록 데이터
-    karaoke:{karaoke.id}:highest - karaoke.id 의 최고 입찰 기록
-    karaoke_party:{karaoke_party.id} - karaoke_party.id의 파티 데이터
-    karaoke_members:{karaoke_party.id} - karaoke_party.id의 파티 멤버 데이터
-    karaoke:{karaoke.id}:member:{user.id} - karaoke.id의 파티 중에 user.id가 소속된 파티 ID
-
-    - key에 들어가는 date요소의 포멧팅은 datetime의 기본 포멧팅인 YYYY-MM-DD으로 할 것.
+    관련된 Redis Key는 `app.core.redis_keys.Keys.Karaoke`에 정의되어 있습니다.
     """
 
     @classmethod
@@ -50,8 +45,17 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             Karaoke | None
         """
         return await cls._get_item(
-            _id=karaoke_id, wrapper_cls=cls, model_cls=Karaokes, prefix="karaoke", ttl=60 * 5, **kwargs
+            _id=karaoke_id,
+            wrapper_cls=cls,
+            model_cls=Karaokes,
+            key=Keys.Karaoke.ITEM(karaoke_id=karaoke_id),
+            **kwargs,
         )
+
+    @property
+    def channel(self) -> BoundKey:
+        """경매 이벤트 Pub/Sub 채널"""
+        return Keys.Karaoke.CHANNEL(karaoke_id=self.id)
 
     @property
     def time_format(self) -> str:
@@ -72,9 +76,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             exc = delete(Karaokes).where(col(Karaokes.id) == self.id)
             await session.execute(exc)
 
-        await self.redis.delete(f"karaoke:{self.id}")
-        await self.redis.delete_pattern(f"karaoke:{self.id}:*")
-        await self.redis.delete_pattern(f"karaoke_list:{self.date}")
+        await on_karaoke_deleted(self.id, self.date)
 
         self.logs.service_karaoke.info(f"노래방 예약 삭제 - ID {self.id}({self.date} / {self.time})")
 
@@ -90,8 +92,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             karaoke = await session.merge(self._payload)
             karaoke.status = _status
 
-        await self.redis.delete(f"karaoke:{self.id}")
-        await self.redis.delete_pattern(f"karaoke_list:{self.date}")
+        await on_karaoke_changed(self.id, self.date)
         await self.publish("status", data=_status.value)
         self._payload = karaoke
 
@@ -106,7 +107,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         Returns:
             KaraokeBid | None
         """
-        bid = await self.redis.get(f"karaoke:{self.id}:highest")
+        bid = await self.redis.get(Keys.Karaoke.HIGHEST(karaoke_id=self.id))
         if bid is None:
             return None
         return KaraokeBid(payload=KaraokeBids.model_validate(bid))
@@ -193,9 +194,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
             session.add(obj)
             await session.flush()
 
-        await self.redis.delete(f"karaoke:{self.id}")
-        await self.redis.delete(f"karaoke:{self.id}:bids_history")  # 기록 캐시 무효화
-        await self.redis.delete_pattern(f"karaoke_list:{self.date}")
+        await on_karaoke_bid(self.id, self.date)
 
         # 최고가 TTL은 종료 시간까지로 하며, 최소 60초
         # end_time은 DB 시간대 기준의 naive 값이므로 시간대를 맞춘 뒤 계산해야 합니다.
@@ -203,7 +202,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         remaining = (SchemaCore.sync_timezone(self.end_time) - SchemaCore.now()).total_seconds()
         ttl = max(60, int(remaining) + 60)
 
-        await self.redis.set(f"karaoke:{self.id}:highest", obj.model_dump(), ttl=ttl)  # 최고 입찰 갱신
+        await self.redis.set(Keys.Karaoke.HIGHEST(karaoke_id=self.id), obj.model_dump(), ttl=ttl)  # 최고 입찰 갱신
         await self.publish("highest", obj.model_dump(mode="json"))
 
         self.logs.service_karaoke.info(
@@ -251,15 +250,15 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         self, callback: Callable[[SubscribeObject[KaraokeSubData]], Awaitable] | None = None
     ) -> PubSub | tuple[Task, PubSub]:
         pubsub = self.redis.pubsub()
-        await pubsub.subscribe(f"ws_karaoke_{self.id}")
-        self.logs.service_karaoke.debug(f"[PubSub] 채널 구독 - ws_karaoke_{self.id}")
+        await pubsub.subscribe(self.channel)
+        self.logs.service_karaoke.debug(f"[PubSub] 채널 구독 - {self.channel}")
 
         if callback is None:
             return pubsub
 
         async def listener():
             async for message in pubsub.listen():
-                self.logs.service_karaoke.debug(f"[PubSub] 메시지 수신 - ws_karaoke_{self.id}: {message}")
+                self.logs.service_karaoke.debug(f"[PubSub] 메시지 수신 - {self.channel}: {message}")
                 if isinstance(message["data"], str):
                     message["data"] = KaraokeSubData(**loads(message["data"]))
                 await callback(SubscribeObject.model_validate(message))
@@ -274,9 +273,9 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         Args:
             pubsub: 구독을 해제할 PubSub 객체
         """
-        await pubsub.unsubscribe(f"ws_karaoke_{self.id}")
+        await pubsub.unsubscribe(self.channel)
         await pubsub.close()
-        self.logs.service_karaoke.debug(f"[PubSub] 채널 구독 해제 - ws_karaoke_{self.id}")
+        self.logs.service_karaoke.debug(f"[PubSub] 채널 구독 해제 - {self.channel}")
 
     async def publish(self, pub_type: KaraokePubType, data: Any):
         """
@@ -291,8 +290,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
 
         val = dumps(KaraokeSubData(type=pub_type, data=data).model_dump())
 
-        await self.redis.publish(f"ws_karaoke_{self.id}", message=val)
-        self.logs.service_karaoke.debug(f"[PubSub] 메시지 발행 - ws_karaoke_{self.id} / type={pub_type}")
+        await self.redis.publish(self.channel, message=val)
+        self.logs.service_karaoke.debug(f"[PubSub] 메시지 발행 - {self.channel} / type={pub_type}")
 
     async def bids_history(self) -> list[KaraokeBid]:
         """
@@ -303,7 +302,7 @@ class Karaoke(ServiceCore[Karaokes], _Type):
         Returns:
             list[KaraokeBid]: 최신순으로 정렬된 입찰 기록 목록
         """
-        cache_key = f"karaoke:{self.id}:bids_history"
+        cache_key = Keys.Karaoke.BIDS(karaoke_id=self.id)
         cached_bids = await self.redis.get(cache_key)
 
         if cached_bids is not None:
@@ -319,6 +318,6 @@ class Karaoke(ServiceCore[Karaokes], _Type):
                 payload = res.scalars().all()
                 bids_history = [KaraokeBid(payload=item) for item in payload]
 
-            await self.redis.set(cache_key, [b.model_dump() for b in bids_history], ttl=60 * 5)
+            await self.redis.set(cache_key, [b.model_dump() for b in bids_history])
 
         return bids_history

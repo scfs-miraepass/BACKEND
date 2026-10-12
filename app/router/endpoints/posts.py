@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import func, select
 
 from app.core import LoginDep, ServiceClient
+from app.core.redis_keys import Keys
 from app.schemas import Posts, UserPermission
 from app.schemas.response import ErrorResponse, ResponseModel
 
@@ -38,9 +39,7 @@ async def get_posts(
     response: Response,
     auth: LoginDep,
     page: int = Query(1, ge=1, description="페이지 번호"),
-    size: int = Query(
-        20, ge=1, le=100, description="페이지 당 게시글 데이터 갯수 (최대 100)"
-    ),
+    size: int = Query(20, ge=1, le=100, description="페이지 당 게시글 데이터 갯수 (최대 100)"),
 ):
     user, _ = auth
 
@@ -51,7 +50,7 @@ async def get_posts(
         )
 
     # 1. 총 게시글 수 조회 (캐싱 적용)
-    count_cache_key = "posts_count"
+    count_cache_key = Keys.Post.COUNT()
     cached_count = await client.redis.get(count_cache_key)
 
     async with client.session as session:
@@ -61,7 +60,7 @@ async def get_posts(
             count_query = select(func.count()).select_from(Posts)
             total_count = (await session.execute(count_query)).scalar_one()
             # 캐시 저장 (TTL: 1일)
-            await client.redis.set(count_cache_key, total_count, ttl=60 * 60 * 24)
+            await client.redis.set(count_cache_key, total_count)
 
         # 최대 페이지 계산 (데이터가 없으면 1페이지)
         max_page = ceil(total_count / size) if total_count > 0 else 1
@@ -69,7 +68,8 @@ async def get_posts(
         response.headers["X-MAX-PAGE"] = str(max_page)
 
         # 2. 목록 데이터 조회 (캐싱 적용)
-        list_cache_key = f"posts:list:{page}:{size}"
+        list_ver = await client.redis.get_version(Keys.Post.VERSION())
+        list_cache_key = Keys.Post.PAGE(ver=list_ver, page=page, size=size)
         cached_list = await client.redis.get(list_cache_key)
 
         if cached_list is not None:
@@ -83,7 +83,7 @@ async def get_posts(
             result = await session.execute(query)
             posts = list(result.scalars().all())
             posts_data = [item.model_dump() for item in posts]
-            await client.redis.set(list_cache_key, posts_data, ttl=60 * 60 * 24)
+            await client.redis.set(list_cache_key, posts_data)
 
     return ResponseModel[list[Posts]](success=True, data=posts)
 
@@ -167,10 +167,7 @@ async def update_post(post_id: int, request: PostUpdateRequest, auth_data: Login
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found.",
         )
-    if (
-        not user.has_permission(UserPermission.MANAGE_POST)
-        and post.author_id != user.id
-    ):
+    if not user.has_permission(UserPermission.MANAGE_POST) and post.author_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",
@@ -204,10 +201,7 @@ async def delete_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found.",
         )
-    if (
-        not user.has_permission(UserPermission.MANAGE_POST)
-        and post.author_id != user.id
-    ):
+    if not user.has_permission(UserPermission.MANAGE_POST) and post.author_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied.",

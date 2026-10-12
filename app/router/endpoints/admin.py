@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from sqlmodel import col, func, select, update, delete
 
 from app.core import LoginDep, ServiceClient
+from app.core.cache_events import on_points_changed, on_user_created, on_user_deleted, on_user_profile_changed
+from app.core.sessions import revoke_user_sessions
 from app.schemas import (
     PointHistory,
     PointHistoryType,
@@ -160,13 +162,7 @@ async def update_users_point(request: AdminPointRequest, auth_data: LoginDep):
             f"관리자(ID: {user.id})가 사용자들({target_ids})의 포인트를 {request.amount}만큼 일괄 변경했습니다. (사유: {request.reason})"
         )
 
-        for uid in target_ids:
-            await client.redis.delete(f"user:{uid}")
-            await client.redis.delete(f"point_history_count:{uid}")
-            await client.redis.delete_pattern(f"point_history:{uid}:*")
-
-        await client.redis.delete_pattern("ranking:student:*")
-        await client.redis.delete_pattern("ranking:teacher:*")
+    await on_points_changed(target_ids)
 
 
 @router.post(
@@ -250,6 +246,7 @@ async def create_user(request: AdminUserCreateRequest, auth_data: LoginDep):
             f"관리자(ID: {user.id})가 새 사용자(ID: {new_user.id}, 유형: {new_user.type})를 생성했습니다."
         )
 
+    await on_user_created(new_user.type)
     return ResponseModel[User](success=True, data=new_user)
 
 
@@ -346,10 +343,7 @@ async def update_user(user_id: int, request: AdminUserUpdateRequest, auth_data: 
             f"관리자(ID: {user.id})가 사용자(ID: {target_user.id})의 정보를 수정했습니다: {update_data}"
         )
 
-        await client.redis.delete(f"user:{target_user.id}")
-        await client.redis.delete_pattern(f"ranking:{target_user.type!s}:*")
-        await client.redis.delete(f"ranking_count:{target_user.type!s}")
-        await client.redis.delete_pattern("search_users:*")
+        await on_user_profile_changed(target_user.id, target_user.type)
 
     return ResponseModel[User](success=True, data=target_user)
 
@@ -392,9 +386,5 @@ async def delete_user(user_id: int, auth_data: LoginDep):
 
         client.logs.service.info(f"관리자(ID: {user.id})가 사용자(ID: {user_id})를 삭제했습니다.")
 
-    await client.redis.delete(f"user:{target_user.id}")
-    await client.redis.delete(f"point_history_count:{target_user.id}")
-    await client.redis.delete_pattern(f"point_history:{target_user.id}:*")
-    await client.redis.delete_pattern(f"ranking:{target_user.type!s}:*")
-    await client.redis.delete(f"ranking_count:{target_user.type!s}")
-    await client.redis.delete_pattern("search_users:*")
+    await on_user_deleted(target_user.id, target_user.type)
+    await revoke_user_sessions(target_user.id)
