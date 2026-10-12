@@ -35,9 +35,7 @@ class KaraokeCreate(BaseModel):
     time: int = Field(ge=1, le=8, description="시간 (1~7교시, 점심시간 8)")
 
     start_time: datetime = Field(description="경매 시작 시간")
-    end_time: datetime = Field(
-        description="경매 종료 시간, 'start_time' 시간보다 앞서 있으면 안됩니다."
-    )
+    end_time: datetime = Field(description="경매 종료 시간, 'start_time' 시간보다 앞서 있으면 안됩니다.")
 
     min_point: int = Field(default=0, description="최소 입찰가")
 
@@ -85,9 +83,7 @@ class KaraokePartyDetail(BaseModel):
     dispersed: bool
     leader: User
     members: list[User] = Field(description="파티에 소속된 멤버 목록 (초대 수락 완료)")
-    pending_members: list[User] = Field(
-        description="파티에 초대되어 수락 대기중인 멤버 목록"
-    )
+    pending_members: list[User] = Field(description="파티에 초대되어 수락 대기중인 멤버 목록")
 
 
 async def _build_party_detail(party: KaraokeParty, *, cache: bool = False) -> KaraokePartyDetail:
@@ -142,7 +138,7 @@ async def get_list_karaoke(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="권한이 없습니다.",
         )
-    _date = 'all' if date is None else date
+    _date = "all" if date is None else date
 
     page_ver = await client.redis.get_version(Keys.Karaoke.VERSION(date=_date))
     cache_key = Keys.Karaoke.PAGE(date=_date, ver=page_ver, limit=limit, offset=offset)
@@ -152,7 +148,6 @@ async def get_list_karaoke(
         # 캐시가 있는경우 캐시 응답
         response.headers["X-CACHED"] = "true"
         return ResponseModel[list[KaraokeResponse]](success=True, data=[KaraokeResponse(**item) for item in cached])
-
 
     cache_count_key = Keys.Karaoke.COUNT(date=_date)
     cached_count = await client.redis.get(cache_count_key)
@@ -237,9 +232,7 @@ async def create_karaoke(body: KaraokeCreate, auth_data: LoginDep):
 
     async with client.session as session:
         # 해당 일자, 해당 시간에 이미 경매가 생성되어 있는지 확인
-        query = select(Karaokes).where(
-            Karaokes.date == body.date, Karaokes.time == body.time
-        )
+        query = select(Karaokes).where(Karaokes.date == body.date, Karaokes.time == body.time)
         result = await session.execute(query)
         if result.scalar_one_or_none():
             raise HTTPException(
@@ -443,9 +436,7 @@ async def get_my_karaoke_party(auth_data: LoginDep, karaoke_id: int):
     summary="예약 경매 입찰",
     description="진행중인 노래방 예약 경매에 입찰합니다.",
 )
-async def create_karaoke_bid(
-    auth_data: LoginDep, karaoke_id: int, body: KaraokeBidCreate
-):
+async def create_karaoke_bid(auth_data: LoginDep, karaoke_id: int, body: KaraokeBidCreate):
     user, _ = auth_data
 
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
@@ -578,15 +569,11 @@ async def get_karaoke_party(auth_data: LoginDep, party_id: int):
 
     party = await KaraokeParty.get_by_id(party_id, cache=True)
     if not party:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     # 파티장 본인이거나, 파티에 소속(초대 대기중 포함)된 유저만 조회할 수 있습니다.
     if party.leader_id != user.id and await user.get_karaoke_member(party_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="이 파티의 멤버가 아닙니다."
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="이 파티의 멤버가 아닙니다.")
 
     return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(party, cache=True))
 
@@ -615,9 +602,7 @@ async def disperse_karaoke_party(auth_data: LoginDep, party_id: int):
 
     party = await KaraokeParty.get_by_id(party_id)
     if not party:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     if party.leader_id != user.id:
         raise HTTPException(
@@ -626,9 +611,7 @@ async def disperse_karaoke_party(auth_data: LoginDep, party_id: int):
         )
 
     if party.dispersed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="이미 해산된 파티입니다."
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이미 해산된 파티입니다.")
 
     await party.disperse()
 
@@ -663,9 +646,7 @@ async def leave_karaoke_party(auth_data: LoginDep, party_id: int):
 
     party = await KaraokeParty.get_by_id(party_id)
     if not party:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     if party.leader_id == user.id:
         raise HTTPException(
@@ -711,9 +692,7 @@ async def kick_karaoke_party_member(auth_data: LoginDep, party_id: int, user_id:
 
     party = await KaraokeParty.get_by_id(party_id)
     if not party:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     if party.leader_id != user.id:
         raise HTTPException(
@@ -742,9 +721,7 @@ async def kick_karaoke_party_member(auth_data: LoginDep, party_id: int, user_id:
         )
 
     new_party = await party.kick_members(target_user)
-    return ResponseModel[KaraokePartyDetail](
-        success=True, data=await _build_party_detail(new_party)
-    )
+    return ResponseModel[KaraokePartyDetail](success=True, data=await _build_party_detail(new_party))
 
 
 class KaraokeInviteCreate(BaseModel):
@@ -778,9 +755,7 @@ class KaraokeInviteCreate(BaseModel):
         "이미 같은 경매의 파티에 소속되었거나 초대 대기중인 유저는 초대할 수 없습니다."
     ),
 )
-async def invite_karaoke_party_member(
-    auth_data: LoginDep, party_id: int, body: KaraokeInviteCreate
-):
+async def invite_karaoke_party_member(auth_data: LoginDep, party_id: int, body: KaraokeInviteCreate):
     user, _ = auth_data
 
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
@@ -791,9 +766,7 @@ async def invite_karaoke_party_member(
 
     party = await KaraokeParty.get_by_id(party_id)
     if not party:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="파티를 찾을 수 없습니다.")
 
     if party.leader_id != user.id:
         raise HTTPException(
@@ -834,9 +807,7 @@ async def get_my_party_invites(auth_data: LoginDep):
         )
 
     async with client.session as session:
-        query = select(KaraokeMembers).where(
-            KaraokeMembers.user_id == user.id, KaraokeMembers.pending == True
-        )
+        query = select(KaraokeMembers).where(KaraokeMembers.user_id == user.id, KaraokeMembers.pending == True)
         exc = await session.execute(query)
         invites = list(exc.scalars().all())
 
@@ -855,9 +826,7 @@ async def get_my_party_invites(auth_data: LoginDep):
     summary="파티원 초대장 수락 및 거절",
     description="받은 파티원 초대장을 수락하거나 거절합니다.",
 )
-async def decide_karaoke_party_invite(
-    auth_data: LoginDep, party_id: int, body: KaraokeInviteAction
-):
+async def decide_karaoke_party_invite(auth_data: LoginDep, party_id: int, body: KaraokeInviteAction):
     user, _ = auth_data
 
     if not user.has_permission(UserPermission.JOIN_KARAOKE):
@@ -887,22 +856,16 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
     user, _ = auth_data
 
     await websocket.accept()
-    client.logs.service_karaoke.info(
-        f"[WS] 연결 수락 - 경매 {karaoke_id} / {user.name}({user.id})"
-    )
+    client.logs.service_karaoke.info(f"[WS] 연결 수락 - 경매 {karaoke_id} / {user.name}({user.id})")
 
     if not user.has_permission(UserPermission.VIEW_KARAOKE):
-        client.logs.service_karaoke.warning(
-            f"[WS] 연결 거부(권한 없음) - 경매 {karaoke_id} / {user.name}({user.id})"
-        )
+        client.logs.service_karaoke.warning(f"[WS] 연결 거부(권한 없음) - 경매 {karaoke_id} / {user.name}({user.id})")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
     karaoke = await client.get_karaoke(karaoke_id, cache=True)
     if karaoke is None:
-        client.logs.service_karaoke.warning(
-            f"[WS] 연결 거부(경매 없음) - 경매 {karaoke_id} / {user.name}({user.id})"
-        )
+        client.logs.service_karaoke.warning(f"[WS] 연결 거부(경매 없음) - 경매 {karaoke_id} / {user.name}({user.id})")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -914,11 +877,7 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
             highest_bid = await karaoke.get_highest()
 
         bids_history = await karaoke.bids_history()
-        target_time = (
-            karaoke.start_time
-            if karaoke.status == KaraokeStatus.PENDING
-            else karaoke.end_time
-        )
+        target_time = karaoke.start_time if karaoke.status == KaraokeStatus.PENDING else karaoke.end_time
         remaining_time = SchemaCore.remaining_seconds(target_time)
 
         bidder_cache: dict[int, User | None] = {}
@@ -940,18 +899,14 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
         send_obj = KaraokeSubData(
             type="highest",
             data={
-                "highest_bid": await _with_bidder(highest_bid)
-                if highest_bid is not None
-                else None,
+                "highest_bid": await _with_bidder(highest_bid) if highest_bid is not None else None,
                 "bids_history": [await _with_bidder(b) for b in bids_history[:5]],
                 "remaining_time": remaining_time,
             },
         )
 
         await websocket.send_json(send_obj.model_dump(mode="json"))
-        client.logs.service_karaoke.debug(
-            f"[WS] highest 전송 - 경매 {karaoke_id} / {user.name}({user.id})"
-        )
+        client.logs.service_karaoke.debug(f"[WS] highest 전송 - 경매 {karaoke_id} / {user.name}({user.id})")
 
     # 기본적으로 처음 WS 연결시, highest에 대한 데이터를 전달합니다.
     await send_highest()
@@ -965,9 +920,7 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
             f"[WS] pub/sub 이벤트 수신 - 경매 {karaoke_id} / type={body.type} -> {user.name}({user.id})"
         )
         if body.type == "highest":
-            await send_highest(
-                KaraokeBid(payload=KaraokeBids.model_validate(body.data))
-            )
+            await send_highest(KaraokeBid(payload=KaraokeBids.model_validate(body.data)))
         else:
             # "status"(상태 변경), "sync"(남은시간 갱신)는 그대로 클라이언트에 전달합니다.
             # 로컬에 들고 있는 karaoke 스냅샷도 최신 상태로 갱신해, 이후 send_highest가
@@ -981,22 +934,14 @@ async def karaoke_websocket(websocket: WebSocket, auth_data: LoginDep, karaoke_i
                 await send_highest()
 
     listener_task, pubsub = await karaoke.subscribe(redis_callback)
-    client.logs.service_karaoke.info(
-        f"[WS] 구독 시작 - 경매 {karaoke_id} / {user.name}({user.id})"
-    )
+    client.logs.service_karaoke.info(f"[WS] 구독 시작 - 경매 {karaoke_id} / {user.name}({user.id})")
     try:
         while True:
             msg = await websocket.receive_text()
-            client.logs.service_karaoke.debug(
-                f"[WS] 메시지 수신 - 경매 {karaoke_id} / {user.name}({user.id}): {msg}"
-            )
+            client.logs.service_karaoke.debug(f"[WS] 메시지 수신 - 경매 {karaoke_id} / {user.name}({user.id}): {msg}")
     except WebSocketDisconnect:
-        client.logs.service_karaoke.info(
-            f"[WS] 연결 종료 - 경매 {karaoke_id} / {user.name}({user.id})"
-        )
+        client.logs.service_karaoke.info(f"[WS] 연결 종료 - 경매 {karaoke_id} / {user.name}({user.id})")
     finally:
         listener_task.cancel()
         await karaoke.unsubscribe(pubsub)
-        client.logs.service_karaoke.info(
-            f"[WS] 구독 해제 - 경매 {karaoke_id} / {user.name}({user.id})"
-        )
+        client.logs.service_karaoke.info(f"[WS] 구독 해제 - 경매 {karaoke_id} / {user.name}({user.id})")
