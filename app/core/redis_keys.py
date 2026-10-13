@@ -199,7 +199,11 @@ class Keys:
 
     class Karaoke:
         ITEM = RedisKey("karaoke:item:{karaoke_id}", ttl=5 * MINUTE, description="노래방(karaoke_id) 경매 데이터")
-        LIST = RedisKey("karaoke:list:{date}", ttl=5 * MINUTE, description="date(YYYY-MM-DD) 날의 노래방 경매 목록")
+        VERSION = RedisKey(
+            "karaoke:ver:{date}", ttl=HOUR, description="date(YYYY-MM-DD) 날의 노래방 경매 목록 버전 **karaoke.date의 경우 all이 될 수 있으며, 일자 상관없는 예약 목록 데이터 입니다."
+        )
+        PAGE = RedisKey("karaoke:page:{date}:{ver}:{limit}:{offset}", ttl=5 * MINUTE, description="date(YYYY-MM-DD) 날의 노래방 경매 목록 페이지 **karaoke.date의 경우 all이 될 수 있으며, 일자 상관없는 예약 목록 데이터 입니다.")
+        COUNT = RedisKey("karaoke:count:{date}", ttl=5 * MINUTE, description="date(YYYY-MM-DD) 날의 노래방 경매 개수 개수 **karaoke.date의 경우 all이 될 수 있으며, 일자 상관없는 예약 목록 데이터 입니다.")
         HIGHEST = RedisKey(
             "karaoke:highest:{karaoke_id}",
             ttl=None,
