@@ -109,7 +109,7 @@ async def _build_party_detail(party: KaraokeParty, *, cache: bool = False) -> Ka
     },
     status_code=status.HTTP_200_OK,
     summary="예약 목록 조회",
-    description="현재 예약할 수 있는 목록을 조회합니다",
+    description="노래방 경매 목록을 조회합니다. date를 지정하면 해당 날짜의 목록만, 지정하지 않으면 전체 목록을 반환합니다.",
 )
 async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_date | None = None):
     user, _ = auth_data
@@ -120,10 +120,8 @@ async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_dat
             detail="권한이 없습니다.",
         )
 
-    if date is None:
-        date = dt_date.today()
-
-    cache_key = Keys.Karaoke.LIST(date=date)
+    # date가 주어지지 않으면 날짜에 상관없이 전체 경매 목록을 반환한다.
+    cache_key = Keys.Karaoke.LIST(date=date) if date is not None else Keys.Karaoke.LIST_ALL()
     cached = await client.redis.get(cache_key)
     if cached is not None:
         # 캐시가 있는경우 캐시 응답
@@ -132,7 +130,9 @@ async def get_list_karaoke(response: Response, auth_data: LoginDep, date: dt_dat
 
     async with client.session as session:
         response.headers["X-CACHED"] = "false"
-        query = select(Karaokes).where(Karaokes.date == date).order_by(col(Karaokes.time))
+        query = select(Karaokes).order_by(col(Karaokes.date), col(Karaokes.time))
+        if date is not None:
+            query = query.where(Karaokes.date == date)
         result = await session.execute(query)
         karaokes = list(result.scalars().all())
 

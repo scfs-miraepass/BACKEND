@@ -200,6 +200,7 @@ class Keys:
     class Karaoke:
         ITEM = RedisKey("karaoke:item:{karaoke_id}", ttl=5 * MINUTE, description="노래방(karaoke_id) 경매 데이터")
         LIST = RedisKey("karaoke:list:{date}", ttl=5 * MINUTE, description="date(YYYY-MM-DD) 날의 노래방 경매 목록")
+        LIST_ALL = RedisKey("karaoke:list_all", ttl=5 * MINUTE, description="날짜에 상관없는 전체 노래방 경매 목록")
         HIGHEST = RedisKey(
             "karaoke:highest:{karaoke_id}",
             ttl=None,

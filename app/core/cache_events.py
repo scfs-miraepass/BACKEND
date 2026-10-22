@@ -109,13 +109,15 @@ async def on_quest_changed(quest_id: int | None = None):
 
 
 async def on_karaoke_list_changed(_date: date):
-    """특정 일자의 노래방 목록의 변동이 있을 경우 호출"""
-    await RedisCore.delete(Keys.Karaoke.LIST(date=_date))
+    """특정 일자의 노래방 목록의 변동이 있을 경우 호출 (전체 목록 캐시도 함께 무효화)"""
+    await RedisCore.delete(Keys.Karaoke.LIST(date=_date), Keys.Karaoke.LIST_ALL())
 
 
 async def on_karaoke_changed(karaoke_id: int, _date: date):
     """경매 상태 등 경매 데이터가 변경된 경우 호출"""
-    await RedisCore.delete(Keys.Karaoke.ITEM(karaoke_id=karaoke_id), Keys.Karaoke.LIST(date=_date))
+    await RedisCore.delete(
+        Keys.Karaoke.ITEM(karaoke_id=karaoke_id), Keys.Karaoke.LIST(date=_date), Keys.Karaoke.LIST_ALL()
+    )
 
 
 async def on_karaoke_bid(karaoke_id: int, _date: date):
@@ -124,6 +126,7 @@ async def on_karaoke_bid(karaoke_id: int, _date: date):
         Keys.Karaoke.ITEM(karaoke_id=karaoke_id),
         Keys.Karaoke.BIDS(karaoke_id=karaoke_id),
         Keys.Karaoke.LIST(date=_date),
+        Keys.Karaoke.LIST_ALL(),
     )
 
 
@@ -134,6 +137,7 @@ async def on_karaoke_deleted(karaoke_id: int, _date: date):
         Keys.Karaoke.HIGHEST(karaoke_id=karaoke_id),
         Keys.Karaoke.BIDS(karaoke_id=karaoke_id),
         Keys.Karaoke.LIST(date=_date),
+        Keys.Karaoke.LIST_ALL(),
     )
     await RedisCore.delete_pattern(Keys.Karaoke.USER_PARTY.pattern(karaoke_id=karaoke_id))
 
