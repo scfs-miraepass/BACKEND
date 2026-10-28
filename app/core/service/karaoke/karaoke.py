@@ -5,7 +5,13 @@ from json import loads, dumps
 
 from redis.asyncio.client import PubSub
 
-from app.schemas import Karaokes, KaraokeStatus, KaraokeBids, PointHistoryType, KaraokePartis
+from app.schemas import (
+    Karaokes,
+    KaraokeStatus,
+    KaraokeBids,
+    PointHistoryType,
+    KaraokePartis,
+)
 from app.schemas.core import SchemaCore
 from app.schemas.object import SubscribeObject, KaraokeSubData, KaraokePubType
 
@@ -247,7 +253,8 @@ class Karaoke(ServiceCore[Karaokes], _Type):
     ) -> tuple[Task, PubSub]: ...
 
     async def subscribe(
-        self, callback: Callable[[SubscribeObject[KaraokeSubData]], Awaitable] | None = None
+        self,
+        callback: Callable[[SubscribeObject[KaraokeSubData]], Awaitable] | None = None,
     ) -> PubSub | tuple[Task, PubSub]:
         pubsub = self.redis.pubsub()
         await pubsub.subscribe(self.channel)

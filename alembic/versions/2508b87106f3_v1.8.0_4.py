@@ -1,4 +1,4 @@
-"""v1.8.0.dev4 (users.is_admin drop, users.permissions add)
+"""v1.8.0 #4 (users.is_admin drop, users.permissions add)
 
 Revision ID: 2508b87106f3
 Revises: f91d6fc43436
@@ -46,15 +46,7 @@ class UserPermission(IntFlag):
     VIEW_STAMP = 2**15
     VIEW_QUEST = 2**16
 
-    STUDENT = (
-        VIEW_RANK
-        | VIEW_POINT
-        | VIEW_POINT_HISTORY
-        | JOIN_QUEST
-        | VIEW_POST
-        | VIEW_STAMP
-        | VIEW_QUEST
-    )
+    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | JOIN_QUEST | VIEW_POST | VIEW_STAMP | VIEW_QUEST
     TEACHER = (
         GRANT_POINT
         | CREATE_QUEST
@@ -102,11 +94,7 @@ def upgrade() -> None:
         if i[2]:
             permissions |= UserPermission.ADMIN
 
-        conn.execute(
-            users.update()
-            .where(users.c.id == i[0])
-            .values(permissions=permissions.value)
-        )
+        conn.execute(users.update().where(users.c.id == i[0]).values(permissions=permissions.value))
     log.info("Users permission migration completed")
 
     op.drop_column("users", "is_admin")
@@ -138,9 +126,7 @@ def downgrade() -> None:
     before = conn.execute(sa.select(users.c.id, users.c.permissions)).all()
     for i in before:
         conn.execute(
-            users.update()
-            .where(users.c.id == i[0])
-            .values(is_admin=UserPermission.ADMIN in UserPermission(i[1]))
+            users.update().where(users.c.id == i[0]).values(is_admin=UserPermission.ADMIN in UserPermission(i[1]))
         )
     log.info("Users permission migration completed")
 

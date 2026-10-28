@@ -1,9 +1,8 @@
-"""v1.11.0.dev1 (Karaoke Tables)
+"""v1.11.0 (Karaoke Tables)
 
 Revision ID: 1fb6fa59d8c8
 Revises: 2508b87106f3
 Create Date: 2026-09-18 02:53:15.790048
-
 """
 
 from collections.abc import Sequence

@@ -103,7 +103,8 @@ class UserPermission(IntFlag):
     VIEW_QUEST = 2**16
     """퀘스트를 볼 수 있는 권한"""
 
-    JOIN_KARAOKE = 2**18
+    _JOIN_KARAOKE = 2**18
+    JOIN_KARAOKE = _JOIN_KARAOKE | SEARCH_USER
     """노래방 경매를 참여 할 수 있는 권한"""
 
     MANAGE_KARAOKE = 2**19
@@ -112,27 +113,17 @@ class UserPermission(IntFlag):
     VIEW_KARAOKE = 2**20
     """노래방 경매를 확인할 수 있는 권한"""
 
-    STUDENT = (
-        VIEW_RANK
-        | VIEW_POINT
-        | VIEW_POINT_HISTORY
-        | JOIN_QUEST
-        | VIEW_POST
-        | VIEW_STAMP
-        | VIEW_QUEST
-        | VIEW_KARAOKE
-        | JOIN_KARAOKE
-        | SEARCH_USER  # 노래방 파티원을 초대하려면 유저 검색이 필요함
-    )
+    STUDENT = VIEW_RANK | VIEW_POINT | VIEW_POINT_HISTORY | VIEW_POST | VIEW_KARAOKE | JOIN_KARAOKE
     TEACHER = (
         GRANT_POINT
-        | CREATE_QUEST
         | VIEW_RANK
         | VIEW_POINT
         | VIEW_POINT_HISTORY
         | VIEW_USER_POINT
         | VIEW_POST
         | VIEW_STAMP
+        | VIEW_KARAOKE
+        | JOIN_KARAOKE
     )
     ADMIN = MANAGE_USER | MANAGE_POST | MANAGE_QUEST | CREATE_POST | MANAGE_KARAOKE | VIEW_KARAOKE
 
