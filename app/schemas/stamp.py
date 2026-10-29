@@ -18,20 +18,16 @@ class StampType(StrEnum):
     - 부스 이름은 추후 수정될 수 있습니다.
     """
 
-    BOOTH_1 = "쓰레기 투호"
-    BOOTH_3 = "철권 한판"
-    BOOTH_5 = "큐피트의 다트"
-    BOOTH_6 = "제기찰겨? 날찰겨?"
-    BOOTH_7 = "팔씨름 최강자전"
-    BOOTH_8 = "부적꾸미기"
-    BOOTH_9 = "누르기 챌린지"
-    BOOTH_11 = "공놀이 괴물"
-    BOOTH_12 = "철면피 노래방"
-    BOOTH_13 = "절대음감"
-    BOOTH_15 = "런닝맨"
-    BOOTH_16 = "의자뺏기"
-    BOOTH_17 = "단체줄넘기"
-    BOOTH_18 = "수학 키캡"
+    BOOTH_1 = "보석 십자수"
+    BOOTH_3 = "페이스 페인팅"
+    BOOTH_5 = "수학 문제 풀이" # 추후 이름 수정
+    BOOTH_6 = "일러스트"
+    BOOTH_7 = "주짓수"
+    BOOTH_8 = "환경 퀴즈 맞추기"
+    BOOTH_9 = "인권 키링"
+    BOOTH_11 = "인권 나무"
+    BOOTH_12 = "문제 다트"
+    BOOTH_13 = "암호표 해독"
 
 
 class Stamps(SQLModel, table=True):

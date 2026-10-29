@@ -15,8 +15,8 @@ router = APIRouter(
 client = ServiceClient()
 
 STAMP_POINT = 50
-BONUS_POINT = 500
-BONUS_STAMP_COUNT = 10
+BONUS_POINT = 0 # 보너스 없을 예정.
+BONUS_STAMP_COUNT = 100 # 보너스 없을 예정. 코드 비활성화보다 이게 좋을 것 같아서 이렇게
 
 
 class StampCreate(BaseModel):
