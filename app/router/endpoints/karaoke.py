@@ -169,7 +169,8 @@ async def get_list_karaoke(
         if date is not None:
             query = query.where(Karaokes.date == date)
 
-        query = query.order_by(col(Karaokes.time).desc()).limit(limit).offset(offset)
+        # 전체 목록(date 미지정)에서도 같은 날짜끼리 묶이도록 날짜를 1차 정렬 기준으로 둔다.
+        query = query.order_by(col(Karaokes.date).desc(), col(Karaokes.time).desc()).limit(limit).offset(offset)
         result = await session.execute(query)
         karaokes = list(result.scalars().all())
 
