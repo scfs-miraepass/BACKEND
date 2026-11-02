@@ -15,8 +15,8 @@ router = APIRouter(
 client = ServiceClient()
 
 STAMP_POINT = 50
-BONUS_POINT = 0 # 보너스 없을 예정.
-BONUS_STAMP_COUNT = 100 # 보너스 없을 예정. 코드 비활성화보다 이게 좋을 것 같아서 이렇게
+BONUS_POINT = 0  # 보너스 없을 예정.
+BONUS_STAMP_COUNT = 0  # 스템프 보너스 개수
 
 
 class StampCreate(BaseModel):
@@ -60,9 +60,7 @@ async def create_stamp(
     async with client.session as session:
         user = await client.get_user(stamp_data.user_id, cache=True)
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         # 2. 스탬프 중복 수령 확인
         existing_stamp = (
@@ -92,22 +90,19 @@ async def create_stamp(
 
         # 5. 보너스 포인트 지급 조건 확인
         # 현재 세션에 추가된 스탬프를 포함하여 개수를 세어야 하므로, DB 쿼리 후 +1
-        user_stamps_count = (
-            await session.execute(
-                select(func.count(Stamps.id)).where(Stamps.user_id == user.id)
-            )
-        ).one()[0]
-        if user_stamps_count == BONUS_STAMP_COUNT:
-            await user.point_grant(
-                amount=BONUS_POINT,
-                reason="스탬프 10개 달성 보너스",
-                memo="7월 13일 '탄소중립 동아리 페스티벌'",
-                type=PointHistoryType.stamp_bonus,
-            )
+        if BONUS_POINT > 0 and BONUS_STAMP_COUNT > 0:
+            user_stamps_count = (
+                await session.execute(select(func.count(Stamps.id)).where(Stamps.user_id == user.id))
+            ).one()[0]
+            if user_stamps_count == BONUS_STAMP_COUNT:
+                await user.point_grant(
+                    amount=BONUS_POINT,
+                    reason="스탬프 10개 달성 보너스",
+                    memo="7월 13일 '탄소중립 동아리 페스티벌'",
+                    type=PointHistoryType.stamp_bonus,
+                )
 
-    client.logs.service.info(
-        f"{user.id}({user.name})가 '{stamp_data.stamp_type.value}' 스탬프를 받았습니다."
-    )
+    client.logs.service.info(f"{user.id}({user.name})가 '{stamp_data.stamp_type.value}' 스탬프를 받았습니다.")
 
 
 @router.get(
