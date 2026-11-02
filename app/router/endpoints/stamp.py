@@ -84,7 +84,7 @@ async def create_stamp(
         await user.point_grant(
             amount=STAMP_POINT,
             reason=f"'{stamp_data.stamp_type.value}' 스탬프",
-            memo="7월 13일 '탄소중립 동아리 페스티벌'",
+            memo="11월 3일 '학생의 날'",
             type=PointHistoryType.stamp,
         )
 
@@ -98,7 +98,7 @@ async def create_stamp(
                 await user.point_grant(
                     amount=BONUS_POINT,
                     reason="스탬프 10개 달성 보너스",
-                    memo="7월 13일 '탄소중립 동아리 페스티벌'",
+                    memo="11월 3일 '학생의 날'",
                     type=PointHistoryType.stamp_bonus,
                 )
 
